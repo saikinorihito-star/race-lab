@@ -1,7 +1,7 @@
 import {exampleHorses, runRace, summarizeRaces, validateHorses, STYLES} from './engine.mjs';
 import {getHorseAppearance,getFrameNumber} from './appearance.mjs';
 import {renderFrame,interpolateRaceFrame} from './visual.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,safeRacePositions} from './course.mjs';
 const $ = (id) => document.getElementById(id);
 const STORE = 'race-lab-demo-v01';
 const DEFAULTS = {horses:exampleHorses(), distance:2200, scenario:'normal'};
@@ -23,14 +23,17 @@ function setStatus(text,error=false){$('status').textContent=text;$('status').st
 const HUD_SVG_NS='http://www.w3.org/2000/svg';
 const hudMarkers=new Map(),hudEntries=new Map();
 let hudReady=false,hudLastPaint=0,hudRankKey='';
+let hudCameraDot=null,hudCameraSight=null;
 function hudSvg(tag,attrs={}){
  const el=document.createElementNS(HUD_SVG_NS,tag);
  for(const [k,v] of Object.entries(attrs))el.setAttribute(k,String(v));
  return el;
 }
-function hudXY(s,offset){
- const p=coursePoint(s,offset);
+function hudPoint(p){
  return {x:164+(p.x+48)*4.52,y:112+p.z*1.50};
+}
+function hudXY(s,offset){
+ return hudPoint(coursePoint(s,offset));
 }
 function hudPath(offset,reverse=false){
  const parts=[];
@@ -65,13 +68,19 @@ function initializeHud(){
   text.textContent=item[1];svg.append(text);
  }
  const note=hudSvg('text',{x:23,y:36,fill:'#c9e9d6','font-size':20,'font-weight':800});
- note.textContent='馬群位置  /  左回り';svg.append(note);
+ note.textContent='馬群の実位置  /  左回り';svg.append(note);
+ // Show the precise 3D camera location and the direction it faces.
+ hudCameraSight=hudSvg('line',{stroke:'#ffd276','stroke-width':3,
+  'stroke-dasharray':'6 4','stroke-linecap':'round','pointer-events':'none'});
+ hudCameraDot=hudSvg('circle',{r:9,fill:'#ffd276',stroke:'#102a23',
+  'stroke-width':3,'pointer-events':'none'});
+ svg.append(hudCameraSight,hudCameraDot);
  for(const horse of state.horses){
   const a=getHorseAppearance(horse.id);
   const group=hudSvg('g');
-  group.append(hudSvg('circle',{r:15,fill:a.helmet,stroke:'#fff','stroke-width':2.4}));
-  const text=hudSvg('text',{y:5,fill:a.helmetNumberColor,
-   'font-size':16,'font-weight':900,'text-anchor':'middle'});
+  group.append(hudSvg('circle',{r:8,fill:a.helmet,stroke:'#fff','stroke-width':1.5}));
+  const text=hudSvg('text',{y:3.4,fill:a.helmetNumberColor,
+   'font-size':9.5,'font-weight':900,'text-anchor':'middle'});
   text.textContent=String(horse.id);group.append(text);
   svg.append(group);hudMarkers.set(horse.id,group);
  }
@@ -113,23 +122,35 @@ function updateRaceHud(){
   ?state.currentT>=state.race.elapsed?'最終着順':'現在順位・馬名'
   :'出走馬一覧（馬番順）';
 
- // Spread overlapping symbols for legibility; the order below remains exact.
- const occupied=[];
- for(const h of ranked){
-  const offset=INSIDE_MARGIN+h.lane*LANE_WIDTH;
-  const s=state.race?leadS-Math.max(0,leader-h.x)*1.17:0;
-  const point=hudXY(s,offset);
-  let x=point.x,y=point.y;
-  for(let attempt=0;attempt<24;attempt++){
-   if(!occupied.some(p=>Math.hypot(p.x-x,p.y-y)<30))break;
-   x-=13;y+=(h.id+attempt)%2===0?7:-7;
-  }
-  x=Math.max(22,Math.min(876,x));y=Math.max(18,Math.min(209,y));
-  occupied.push({x,y});
+ // Exactly the same collision-safe display positions as the 3D renderer.
+ // Do not artificially spread, clamp or stretch the horse markers.
+ const placement=safeRacePositions(frame.horses,leader,distance);
+ const cameraView=state.view==='three'&&threeView?.getViewState
+   ?threeView.getViewState():null;
+ const shown=new Set(cameraView?.visibleIds||[]);
+ if(cameraView){
+   const a=hudPoint(cameraView.camera),b=hudPoint(cameraView.target);
+   hudCameraSight.setAttribute('x1',a.x.toFixed(2));
+   hudCameraSight.setAttribute('y1',a.y.toFixed(2));
+   hudCameraSight.setAttribute('x2',b.x.toFixed(2));
+   hudCameraSight.setAttribute('y2',b.y.toFixed(2));
+   hudCameraDot.setAttribute('cx',a.x.toFixed(2));
+   hudCameraDot.setAttribute('cy',a.y.toFixed(2));
+   hudCameraSight.setAttribute('visibility','visible');
+   hudCameraDot.setAttribute('visibility','visible');
+ }else{
+   hudCameraSight.setAttribute('visibility','hidden');
+   hudCameraDot.setAttribute('visibility','hidden');
+ }
+ // Paint back-runners first, so the leading horses are visible above their pack.
+ for(const h of [...ranked].reverse()){
+  const point=placement.get(h.id).point;
+  const xy=hudPoint(point);
   const dot=hudMarkers.get(h.id);
-  dot.setAttribute('transform','translate('+x.toFixed(1)+' '+y.toFixed(1)+')');
-  const horse=state.horses.find(item=>item.id===h.id);
-  dot.setAttribute('aria-label',h.id+'番 '+(horse?.name||''));
+  dot.setAttribute('transform','translate('+xy.x.toFixed(2)+' '+xy.y.toFixed(2)+')');
+  dot.setAttribute('opacity',cameraView&&!shown.has(h.id)?'.40':'1');
+  dot.setAttribute('aria-label',h.id+'番 '+(state.horses.find(v=>v.id===h.id)?.name||''));
+  $('overview-map').append(dot);
  }
  const nameKey=state.horses.map(h=>h.id+':'+h.name).join('|');
  const rankKey=(state.race?'race:':'before:')+ranked.map(h=>h.id).join(',')+'|'+nameKey;
