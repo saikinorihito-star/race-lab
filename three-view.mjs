@@ -2,7 +2,7 @@
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 import {gallopCycle,gallopLegPose} from './gait.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,safeRacePositions} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
  const THREE = await import(THREE_URL);
@@ -327,7 +327,7 @@ export async function createThreeView(host){
  }
  const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i}));
  let disposed=false;
- let cameraReady=false,lastLeadS=0;
+ let cameraReady=false,lastLeadS=0,lastCameraRace=null,lastCameraTime=null;
  let viewState=null;
  const cameraAim=new THREE.Vector3();
  function render(race,horses,time){
@@ -339,7 +339,7 @@ export async function createThreeView(host){
    const raceDistance=race?.distance||2200;
    const leadS=lengthAtMetres(lead,raceDistance);
    const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,2);
-   const displayed=safeRacePositions(frame.horses,lead,raceDistance);
+   const displayed=raceDisplayPositions(race,frame,raceDistance);
    // Use wall-clock time for leg cadence so 8x replay does not become frantic.
    const motionTime=performance.now()*.001;
    for(const model of models){
@@ -356,7 +356,9 @@ export async function createThreeView(host){
      const point=displayed.get(item.id).point;
      model.group.position.set(point.x,.018,point.z);
      model.group.rotation.y=point.yaw;
-     model.group.visible=gap<92;
+     // Never abruptly hide a runner when it falls 92m behind the leader.
+     // Let camera clipping and distance fog handle out-of-frame horses.
+     model.group.visible=true;
      model.shadow.visible=model.group.visible;
      const shouldLabel=!!race && leaders.some(v=>v.id===model.id);
      model.nameLabel.sprite.visible=shouldLabel;
@@ -429,12 +431,18 @@ export async function createThreeView(host){
    const wanted=startCamera.lerp(followCamera,ease);
    const wantedAim=startAim.lerp(followAim,ease);
    // Gentle smoothing prevents abrupt camera shifts during lane changes.
-   if(!cameraReady||Math.abs(lastLeadS-focusS)>10){
+   // Smooth continuous tracking throughout the race. Snap only when loading
+   // a new race or explicitly seeking the video (not during normal playback).
+   const raceTime=Number(frame.t)||0;
+   const delta=lastCameraTime===null?0:raceTime-lastCameraTime;
+   const manuallySeeked=lastCameraTime!==null && (delta<-.25||delta>2.0);
+   if(!cameraReady||race!==lastCameraRace||manuallySeeked){
      camera.position.copy(wanted);cameraAim.copy(wantedAim);cameraReady=true;
    }else{
-     camera.position.lerp(wanted,.18);cameraAim.lerp(wantedAim,.18);
+     const follow=Math.min(.36,1-Math.exp(-Math.max(0,delta)*1.2));
+     camera.position.lerp(wanted,follow);cameraAim.lerp(wantedAim,follow);
    }
-   lastLeadS=focusS;
+   lastLeadS=focusS;lastCameraRace=race;lastCameraTime=raceTime;
    camera.lookAt(cameraAim);
    camera.updateMatrixWorld();
    // Share the ACTUAL 3D camera position and frustum with the upper overview.
