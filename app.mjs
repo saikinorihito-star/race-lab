@@ -1,15 +1,17 @@
 import {exampleHorses, runRace, summarizeRaces, validateHorses, STYLES} from './engine.mjs';
 import {getHorseAppearance,getFrameNumber} from './appearance.mjs';
 import {renderFrame,interpolateRaceFrame} from './visual.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,TOKYO_TURF,TOKYO_TURF_DISTANCES,HOME_STRAIGHT_METRES} from './course.mjs';
 const $ = (id) => document.getElementById(id);
 const STORE = 'race-lab-demo-v01';
-const DEFAULTS = {horses:exampleHorses(),count:18,distance:2200,scenario:'normal'};
+const DEFAULTS = {horses:exampleHorses(),count:18,distance:2400,course:'A',scenario:'normal'};
+const validDistance=value=>TOKYO_TURF_DISTANCES.includes(Number(value))?Number(value):2400;
+const validCourse=value=>TOKYO_TURF[value]?value:'A';
 function restore() {
   try {
     const data=JSON.parse(localStorage.getItem(STORE));
     if(!data || data.horses?.length!==18)return structuredClone(DEFAULTS);
-    return {horses:data.horses,count:Number.isInteger(data.count)&&data.count>=2&&data.count<=18?data.count:18,distance:data.distance||2200,scenario:data.scenario||'normal'};
+    return {horses:data.horses,count:Number.isInteger(data.count)&&data.count>=2&&data.count<=18?data.count:18,distance:validDistance(data.distance),course:validCourse(data.course),scenario:data.scenario||'normal'};
   } catch {return structuredClone(DEFAULTS);}
 }
 const saved=restore();
@@ -18,7 +20,7 @@ const canvas=$('race-canvas');
 let threeView=null;
 function activeHorses(){return [...state.horses].sort((a,b)=>a.id-b.id).slice(0,state.count);}
 const picker=$('horse-picker');
-function persist(){try {localStorage.setItem(STORE,JSON.stringify({horses:state.horses,count:state.count,distance:state.distance,scenario:state.scenario}));}catch{setStatus('保存できません。端末のブラウザー設定を確認してください。',true)}}
+function persist(){try {localStorage.setItem(STORE,JSON.stringify({horses:state.horses,count:state.count,distance:state.distance,course:state.course,scenario:state.scenario}));}catch{setStatus('保存できません。端末のブラウザー設定を確認してください。',true)}}
 function setStatus(text,error=false){$('status').textContent=text;$('status').style.color=error?'#ffc2a3':'#9baec4';}
 // Race broadcast HUD: live course overview above the image, all horses below.
 const HUD_SVG_NS='http://www.w3.org/2000/svg';
@@ -31,16 +33,16 @@ function hudSvg(tag,attrs={}){
  return el;
 }
 function hudPoint(p){
- return {x:164+(p.x+48)*4.52,y:112+p.z*1.50};
+ return {x:450+p.x*1.55,y:112+p.z*.86};
 }
 function hudXY(s,offset){
- return hudPoint(coursePoint(s,offset));
+ return hudPoint(coursePoint(s,offset,state.course));
 }
 function hudPath(offset,reverse=false){
  const parts=[];
- for(let i=0;i<=96;i++){
-  const j=reverse?96-i:i;
-  const p=hudXY(j*HALF_LAP_LENGTH/96,offset);
+ for(let i=0;i<=192;i++){
+  const j=reverse?192-i:i;
+  const p=hudXY(j*TOKYO_TURF[state.course].lap/192,offset);
   parts.push((i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1));
  }
  return parts.join(' ');
@@ -60,7 +62,7 @@ function initializeHud(){
   svg.append(hudSvg('path',{d:hudPath(offset),fill:'none',
    stroke:'#e4efe4','stroke-width':3.6}));
  }
- for(const item of [[0,'START'],[HALF_LAP_LENGTH,'GOAL']]){
+ for(const item of [[-state.distance,'START'],[0,'GOAL']]){
   const a=hudXY(item[0],0),b=hudXY(item[0],TRACK_OUTER_OFFSET);
   svg.append(hudSvg('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,
    stroke:'#f6f4d4','stroke-width':4}));
@@ -69,7 +71,7 @@ function initializeHud(){
   text.textContent=item[1];svg.append(text);
  }
  const note=hudSvg('text',{x:23,y:36,fill:'#c9e9d6','font-size':20,'font-weight':800});
- note.textContent='馬群の実位置  /  左回り';svg.append(note);
+ note.textContent='馬群位置  /  東京芝・左回り';svg.append(note);
  // Show the precise 3D camera location and the direction it faces.
  hudCameraSight=hudSvg('line',{stroke:'#ffd276','stroke-width':3,
   'stroke-dasharray':'6 4','stroke-linecap':'round','pointer-events':'none'});
@@ -125,7 +127,7 @@ function updateRaceHud(){
 
  // Exactly the same collision-safe display positions as the 3D renderer.
  // Do not artificially spread, clamp or stretch the horse markers.
- const placement=raceDisplayPositions(state.race,frame,distance);
+ const placement=raceDisplayPositions(state.race,frame,distance,state.course);
  const cameraView=state.view==='three'&&threeView?.getViewState
    ?threeView.getViewState():null;
  const shown=new Set(cameraView?.visibleIds||[]);
@@ -172,6 +174,11 @@ function updateRaceHud(){
  }
 }
 
+function updateCourseInfo(){
+ const spec=TOKYO_TURF[state.course];
+ $('course-data').textContent=`東京芝${state.course}｜1周 ${spec.lap.toLocaleString('ja-JP')}m｜直線 ${HOME_STRAIGHT_METRES}m｜高低差 2.7m｜幅員 ${spec.minWidth}〜${spec.maxWidth}m`;
+ $('overview-course').textContent=`東京芝${state.course}・左回り ${state.distance.toLocaleString('ja-JP')}m`;
+}
 function setColorChip(node,id){
  const a=getHorseAppearance(id,state.count);
  node.style.background=a.helmet;
@@ -277,7 +284,7 @@ function startSimulation(){
  if(state.recording)return;
  const seed=(Date.now()>>>0);
  state.seed=seed;
- try{state.race=runRace(activeHorses(),{distance:state.distance,scenario:state.scenario,seed});}
+ try{state.race=runRace(activeHorses(),{distance:state.distance,course:state.course,scenario:state.scenario,seed});}
  catch(error){setStatus(error.message,true);return;}
  state.stats=null;state.currentT=0;state.playing=false;state.lastTick=null;
  emptyResults();setPlay(true);
@@ -293,7 +300,7 @@ function startSimulation(){
     if(ev.data.type==='result'){state.stats=ev.data.stats;renderStats(state.stats);setStatus('1,000回の試行を集計しました。数値は実データで検証されていない架空モデルの推定値です。');worker.terminate();state.worker=null;}
    };
    worker.onerror=()=>{if(state.worker===worker){worker.terminate();state.worker=null;fallbackStats();}};
-   worker.postMessage({horses:activeHorses(),options:{distance:state.distance,scenario:state.scenario,seed},attempts:1000});
+   worker.postMessage({horses:activeHorses(),options:{distance:state.distance,course:state.course,scenario:state.scenario,seed},attempts:1000});
    return;
   }catch{ /* file: protocol or unsupported module worker — continue on main thread */ }
  }
@@ -303,7 +310,7 @@ function fallbackStats(){
  // Defer so the interface can render the new race before calculating.
  setTimeout(()=>{
   if(!state.race)return;
-  try {state.stats=summarizeRaces(activeHorses(),{distance:state.distance,scenario:state.scenario,seed:state.seed},1000);renderStats(state.stats);setStatus('1,000回の仮想試行を集計しました。実データに基づく予測ではありません。');}
+  try {state.stats=summarizeRaces(activeHorses(),{distance:state.distance,course:state.course,scenario:state.scenario,seed:state.seed},1000);renderStats(state.stats);setStatus('1,000回の仮想試行を集計しました。実データに基づく予測ではありません。');}
   catch(error){setStatus(error.message,true)}
  },35);
 }
@@ -379,7 +386,7 @@ async function exportVideo(){
   $('save-video').disabled=false;$('run').disabled=false;$('save-video').textContent='動画保存';renderCanvas();
  }
 }
-$('distance').value=String(state.distance);$('scenario').value=state.scenario;$('horse-count').value=String(state.count);
+$('distance').value=String(state.distance);$('turf-course').value=state.course;$('scenario').value=state.scenario;$('horse-count').value=String(state.count);updateCourseInfo();
 renderPicker();renderEditor();emptyResults();renderCanvas();
 $('run').addEventListener('click',startSimulation);
 $('reset-horses').addEventListener('click',()=>{
@@ -389,7 +396,8 @@ $('reset-horses').addEventListener('click',()=>{
 });
 $('horse-count').addEventListener('change',e=>changeHorseCount(e.target.value));
 $('horse-number').addEventListener('change',e=>changeHorseNumber(e.target.value));
-$('distance').addEventListener('change',e=>{state.distance=Number(e.target.value);persist();invalidate()});
+$('distance').addEventListener('change',e=>{state.distance=validDistance(e.target.value);persist();resetHud();invalidate();updateCourseInfo()});
+$('turf-course').addEventListener('change',e=>{state.course=validCourse(e.target.value);persist();resetHud();invalidate();updateCourseInfo()});
 $('scenario').addEventListener('change',e=>{state.scenario=e.target.value;persist();invalidate()});
 $('horse-name').addEventListener('change',e=>updateEditedHorse('name',e.target.value));
 $('horse-style').addEventListener('change',e=>updateEditedHorse('style',e.target.value));
@@ -397,7 +405,7 @@ for(const key of ['speed','stamina','kick']){
  $(`horse-${key}`).addEventListener('input',e=>{$(`${key}-value`).textContent=e.target.value;currentHorse()[key]=Number(e.target.value);$('selected-title').textContent=currentHorse().name;persist();if(state.race)invalidate();});
 }
 $('backup-save').addEventListener('click',()=>{
- const content=JSON.stringify({version:2,date:new Date().toISOString(),horses:state.horses,count:state.count,distance:state.distance,scenario:state.scenario},null,2);
+ const content=JSON.stringify({version:3,date:new Date().toISOString(),horses:state.horses,count:state.count,distance:state.distance,course:state.course,scenario:state.scenario},null,2);
  const url=URL.createObjectURL(new Blob([content],{type:'application/json'}));
  const link=document.createElement('a');link.href=url;link.download='race-lab-settings.json';
  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
@@ -410,15 +418,15 @@ $('backup-file').addEventListener('change',async e=>{
   if(file.size>100000)throw new Error('ファイルが大きすぎます。');
   const data=JSON.parse(await file.text());validateHorses(data.horses);
   if(data.horses.length!==18)throw new Error('バックアップには18頭分の保存データが必要です。');
-  if(![1200,1600,2000,2200,2400,3000].includes(Number(data.distance)))throw new Error('距離の設定が不正です。');
+  if(!Number.isFinite(Number(data.distance)))throw new Error('距離の設定が不正です。');
   if(!['normal','high','low'].includes(data.scenario))throw new Error('ペース設定が不正です。');
   if(!confirm('現在の設定をバックアップの内容で上書きしますか？'))return;
   state.horses=data.horses.map(h=>({id:h.id,name:String(h.name).slice(0,24),style:h.style,speed:Number(h.speed),stamina:Number(h.stamina),kick:Number(h.kick)}));
-  state.distance=Number(data.distance);state.scenario=data.scenario;
+  state.distance=validDistance(data.distance);state.course=validCourse(data.course);state.scenario=data.scenario;
   state.count=Number.isInteger(data.count)&&data.count>=2&&data.count<=18?data.count:18;
   state.selected=1;
-  $('distance').value=state.distance;$('scenario').value=state.scenario;$('horse-count').value=String(state.count);
-  persist();resetHud();invalidate();renderPicker();renderEditor();setStatus('バックアップから設定を復元しました。');
+  $('distance').value=state.distance;$('turf-course').value=state.course;$('scenario').value=state.scenario;$('horse-count').value=String(state.count);
+  persist();resetHud();invalidate();renderPicker();renderEditor();updateCourseInfo();setStatus('バックアップから設定を復元しました。');
  }catch(error){setStatus(`復元に失敗しました：${error.message}`,true)}
  finally{e.target.value='';}
 });
