@@ -83,9 +83,15 @@ function drawHorse(ctx,x,y,size,horse,appearance,phase=0){
  // Jockey in a crouch: illustrative silks, cap colored by the frame.
  shape(-2,-41,20,22,appearance.silk,-.38,edge,3.5);
  shape(0,-44,17,5,appearance.silkAccent,-.38,edge,1.1);
- // Trouser and boots.
- shape(-24,-23,13,9,'#f9f8f4',.2,edge,2.4);
- shape(-38,-14,13,5,'#292b31',0,edge,2);
+ // Jockey truly straddles the horse. Folded thighs and calves end in the stirrups.
+ shape(-14,-29,17,11,'#f5f5f1',.28,edge,2.4);
+ ctx.strokeStyle='#f5f5f1';ctx.lineWidth=12;ctx.lineCap='round';
+ ctx.beginPath();ctx.moveTo(-17,-29);ctx.lineTo(-35,-16);ctx.stroke();
+ ctx.strokeStyle=edge;ctx.lineWidth=2.5;ctx.stroke();
+ shape(-35,-16,7,8,'#f7f7f4',.25,edge,1.8);
+ ctx.strokeStyle='#303238';ctx.lineWidth=10;
+ ctx.beginPath();ctx.moveTo(-35,-16);ctx.lineTo(-37,12);ctx.stroke();
+ shape(-36,13,12,5,'#242830',0,edge,2.2);
  // Face and bright helmet.
  shape(10,-77,15,17,'#f0c5a6',0,edge,3);
  shape(8,-89,21,12,appearance.helmet,-.06,edge,3.5);
@@ -108,9 +114,21 @@ function backgroundChase(ctx,t){
  ctx.fillStyle='#315c72';ctx.beginPath();ctx.moveTo(695,120);ctx.lineTo(1000,37);ctx.lineTo(1000,290);ctx.lineTo(760,270);ctx.closePath();ctx.fill();
  ctx.fillStyle='#e8e7e1';for(let j=0;j<6;j++){ctx.beginPath();ctx.moveTo(730+j*12,145+j*10);ctx.lineTo(1000,75+j*24);ctx.lineTo(1000,87+j*24);ctx.lineTo(730+j*12,156+j*10);ctx.fill()}
  const grass=ctx.createLinearGradient(0,260,0,560);grass.addColorStop(0,'#8cc976');grass.addColorStop(1,'#42a16e');ctx.fillStyle=grass;ctx.fillRect(0,260,1000,300);
- ctx.fillStyle='#d6bd8d';ctx.beginPath();ctx.moveTo(0,309);ctx.lineTo(1000,264);ctx.lineTo(1000,285);ctx.lineTo(0,350);ctx.closePath();ctx.fill();
- ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(0,343);ctx.lineTo(1000,276);ctx.stroke();
- ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,528);ctx.lineTo(1000,380);ctx.stroke();
+ // Turf mowing bands and two white rails; no dirt lane.
+ for(let i=0;i<7;i++){
+  const y=290+i*41;
+  ctx.fillStyle=i%2?'rgba(21,86,45,.10)':'rgba(178,227,149,.12)';
+  ctx.fillRect(0,y,1000,41);
+ }
+ ctx.strokeStyle='rgba(252,255,251,.96)';ctx.lineWidth=6;ctx.lineCap='round';
+ for(const y of [302,515]){
+  ctx.beginPath();ctx.moveTo(0,y+8);ctx.lineTo(1000,y-15);ctx.stroke();
+  ctx.lineWidth=3.5;ctx.beginPath();ctx.moveTo(0,y+24);ctx.lineTo(1000,y+1);ctx.stroke();
+  for(let x=0;x<1020;x+=86){
+    ctx.lineWidth=3;ctx.beginPath();
+    ctx.moveTo(x,y+8-x*.023);ctx.lineTo(x,y+32-x*.023);ctx.stroke();
+  }
+ }
  // subtle motion stripes
  ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=2;
  for(let x=-80;x<1050;x+=160){const dx=(x+t*7)%1120;ctx.beginPath();ctx.moveTo(dx,400);ctx.lineTo(dx+65,400);ctx.stroke()}
@@ -124,8 +142,9 @@ function renderChase(ctx,frame,horses,distance){
  for(const h of records){
   const diff=lead-h.x;const x=160+diff*12;
   if(x>1145)continue;
-  const scale=clamp(1.18-diff*.012,.4,1.18);
-  const y=418-(h.lane*31)-diff*.11;
+  const scale=clamp(1.04+h.lane*.014-diff*.008,.52,1.14);
+  // Lane 0 is the inside rail, farther from this side-on camera.
+ const y=336+h.lane*21+diff*.018;
   drawHorse(ctx,x,y,scale,h,getHorseAppearance(h.id),frame.t*4.2+h.id*.34);
  }
  ctx.fillStyle='rgba(7,27,36,.78)';rounded(ctx,22,22,325,57,13);ctx.fill();
