@@ -280,6 +280,8 @@ export async function createThreeView(host){
      jointBetween(riderPivot,[.42,.22,side*.36],[.76,.12,side*.27],silk,.10);
      part(riderPivot,sphere,skin,.76,.12,side*.27,.13,.11,.12);
    }
+   // Reduce mesh footprint relative to collision-safe lane spacing.
+   group.scale.set(.77,.88,.77);
    return {group,legs,headPivot,riderPivot,tailPivot,id,numberTexture};
  }
  const models=Array.from({length:18},(_,i)=>horseModel(i+1));
@@ -345,7 +347,7 @@ export async function createThreeView(host){
      const gap=Math.max(0,lead-item.x);
      // Show the passing positions on the shared curved course.
      // Longitudinal gaps are exaggerated for visibility; ranking and lanes remain unchanged.
-     const renderedS=leadS-gap*.47;
+     const renderedS=leadS-gap*.82;
      const point=coursePoint(renderedS,INSIDE_MARGIN+item.lane*LANE_WIDTH);
      model.group.position.set(point.x,.018,point.z);
      model.group.rotation.y=point.yaw;
@@ -396,8 +398,8 @@ export async function createThreeView(host){
    const focus=coursePoint(leadS,INSIDE_MARGIN+2.0*LANE_WIDTH);
    const outwardX=focus.dz,outwardZ=-focus.dx;
    const wanted=new THREE.Vector3(
-     focus.x+outwardX*19-focus.dx*8,6.65,
-     focus.z+outwardZ*19-focus.dz*8
+     focus.x+outwardX*17-focus.dx*7,6.20,
+     focus.z+outwardZ*17-focus.dz*7
    );
    const wantedAim=new THREE.Vector3(
      focus.x+focus.dx*3,1.65,
