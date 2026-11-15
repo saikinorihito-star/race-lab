@@ -1,6 +1,7 @@
 // Optional low-poly 3D race display. Uses the same synthetic race data as 2D.
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
+import {coursePoint,horseCoursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 // Four-beat transverse gallop: trailing hind -> leading hind -> trailing fore -> leading fore.
 // The right/left lead determines which side touches down first. Each leg gets its
@@ -53,61 +54,62 @@ export async function createThreeView(host){
  const sun=new THREE.DirectionalLight(0xffffff,2.2);
  sun.position.set(-18,35,10);scene.add(sun);
  const material=(color)=>new THREE.MeshLambertMaterial({color});
- const grass=material(0x45a965), turf=material(0x7bc77e);
- const base=new THREE.Mesh(new THREE.PlaneGeometry(330,120),grass);
- base.rotation.x=-Math.PI/2;base.position.y=-0.09;scene.add(base);
- const track=new THREE.Mesh(new THREE.PlaneGeometry(330,37),turf);
- track.rotation.x=-Math.PI/2;track.position.y=-0.05;scene.add(track);
- // The reference shows turf and sandy dirt side-by-side, not one vast empty field.
- // Turf-only course: alternating mowing bands instead of a dirt strip.
- const grassStripeMaterials=[material(0x79c07e),material(0x85cc88)];
- for(let i=0;i<8;i++){
-   const z=-9.8+i*2.3;
-   const stripe=new THREE.Mesh(new THREE.PlaneGeometry(330,2.3),grassStripeMaterials[i%2]);
+ // Shared half-lap: lower straight -> counterclockwise 180° turn -> upper straight.
+ const surroundings=new THREE.Mesh(new THREE.PlaneGeometry(410,260),material(0x317e48));
+ surroundings.rotation.x=-Math.PI/2;surroundings.position.y=-.085;scene.add(surroundings);
+ function strip(offsetA,offsetB,color){
+   const pos=[],indices=[],steps=160;
+   for(let i=0;i<=steps;i++){
+     const s=i*HALF_LAP_LENGTH/steps;
+     const a=coursePoint(s,offsetA),b=coursePoint(s,offsetB);
+     pos.push(a.x,-.035,a.z,b.x,-.035,b.z);
+     if(i<steps){const j=2*i;indices.push(j,j+2,j+1,j+1,j+2,j+3);}
+   }
+   const geometry=new THREE.BufferGeometry();
+   geometry.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+   geometry.setIndex(indices);geometry.computeVertexNormals();
+   const mat=material(color);mat.side=THREE.DoubleSide;
+   const mesh=new THREE.Mesh(geometry,mat);scene.add(mesh);
+ }
+ // All racing surface is turf. Alternate mowing shades across the track width.
+ for(let i=0;i<7;i++)strip(i*2,Math.min(TRACK_OUTER_OFFSET,(i+1)*2),i%2?0x83c77a:0x73bb70);
+ const lineMat=new THREE.MeshBasicMaterial({color:0xf6f6ee});
+ function rail(offset){
+   for(const y of [.52,.94]){
+     const points=Array.from({length:106},(_,i)=>{
+       const p=coursePoint(i*HALF_LAP_LENGTH/105,offset);
+       return new THREE.Vector3(p.x,y,p.z);
+     });
+     const curve=new THREE.CatmullRomCurve3(points);
+     const mesh=new THREE.Mesh(new THREE.TubeGeometry(curve,192,.043,5,false),lineMat);
+     scene.add(mesh);
+   }
+   const postMat=material(0xf8f9f2);
+   for(let d=0;d<=HALF_LAP_LENGTH;d+=5.8){
+     const p=coursePoint(d,offset);
+     const post=new THREE.Mesh(new THREE.CylinderGeometry(.047,.047,1,6),postMat);
+     post.position.set(p.x,.50,p.z);scene.add(post);
+   }
+ }
+ rail(0);rail(TRACK_OUTER_OFFSET);
+ // White starting and finishing lines, independent from the camera.
+ const paint=new THREE.MeshBasicMaterial({color:0xfbfbf4,side:THREE.DoubleSide});
+ for(const d of [0,HALF_LAP_LENGTH]){
+   const a=coursePoint(d,0),b=coursePoint(d,TRACK_OUTER_OFFSET);
+   const dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
+   const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.16,length),paint);
    stripe.rotation.x=-Math.PI/2;
-   stripe.position.set(0,-.034,z+1.15);scene.add(stripe);
+   stripe.rotation.z=-Math.atan2(dx,dz);
+   stripe.position.set((a.x+b.x)*.5,-.020,(a.z+b.z)*.5);
+   scene.add(stripe);
  }
- // The inner rail is z=-9.8; the horses start at z=-7.55 (lane 0).
- const turfBorder=new THREE.Mesh(new THREE.BoxGeometry(330,.025,.055),material(0xf4f6ef));
- turfBorder.position.set(0,.019,-9.8);scene.add(turfBorder);
- // Gentle low-contrast ground movement conveys speed without shaking the camera.
- const speedMarks=[];
- const markGeometry=new THREE.PlaneGeometry(1.2,.075);
- const markMaterial=new THREE.MeshBasicMaterial({color:0xd4eabc,transparent:true,opacity:.13,depthWrite:false});
- for(const z of [-7.2,4.6]){
-   for(let i=0;i<16;i++){
-     const mark=new THREE.Mesh(markGeometry,markMaterial);
-     mark.rotation.x=-Math.PI/2;
-     mark.position.set(-45+i*6,.018,z);
-     scene.add(mark);
-     speedMarks.push({mark,base:-45+i*6,z});
-   }
- }
- // Thin white racecourse fences on the near and far edges.
- const railMat=material(0xfaf9f3);
- for(const z of [-9.8,9]){
-   for(const h of [.46,.90]){
-     const rail=new THREE.Mesh(new THREE.BoxGeometry(280,.082,.085),railMat);
-     rail.position.set(0,h,z);scene.add(rail);
-   }
-   for(let x=-130;x<=130;x+=5){
-     const post=new THREE.Mesh(new THREE.BoxGeometry(.075,1.05,.075),railMat);
-     post.position.set(x,.52,z);scene.add(post);
-   }
- }
- // Push the grandstand into the background so it cannot overpower the horses.
- const building=new THREE.Mesh(new THREE.BoxGeometry(105,7,12),material(0xe9edf1));
- building.position.set(-10,4,-58);scene.add(building);
- const roof=new THREE.Mesh(new THREE.BoxGeometry(110,1.5,16),material(0x233c56));
- roof.position.set(-10,8,-58);scene.add(roof);
- const windows=new THREE.Mesh(new THREE.BoxGeometry(104,2.5,.25),material(0x39596b));
- windows.position.set(-10,5.6,-51.9);scene.add(windows);
- const foliage=material(0x3a8858),trunkMat=material(0x6a523d);
- for(let i=0;i<30;i++){
-   const x=-115+i*8.5;
-   const tree=new THREE.Mesh(new THREE.SphereGeometry(1,7,5),foliage);
-   tree.position.set(x,2.0+(i%3)*.15,-33-(i%4)*1.1);
-   tree.scale.set(1.8,2.1,1.5);scene.add(tree);
+ // Fixed distant scenery provides a sense of rotation without shaking the view.
+ const trees=material(0x256a3d);
+ for(let i=0;i<32;i++){
+   const angle=i*Math.PI*2/32;
+   const x=Math.cos(angle)*117,z=Math.sin(angle)*72;
+   const tree=new THREE.Mesh(new THREE.SphereGeometry(1,7,5),trees);
+   tree.position.set(x,2.4,z);tree.scale.set(2.0,2.1,2.0);scene.add(tree);
  }
  const sphere=new THREE.SphereGeometry(1,18,12);
  const capsule=new THREE.CylinderGeometry(.23,.26,1,8);
