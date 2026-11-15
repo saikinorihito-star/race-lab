@@ -2,7 +2,7 @@
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 import {gallopCycle,gallopLegPose,gallopDynamics} from './gait.mjs';
-import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,getTurfProfile,furlongMarkerPositions,courseHeightMetres,courseSlope} from './course.mjs';
+import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,getTurfProfile,furlongMarkerPositions,courseHeightMetres,courseSlope,raceCoursePoint,startPocket,raceCourseHeightMetres,raceCourseSlope} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
  const THREE = await import(THREE_URL);
@@ -94,15 +94,64 @@ export async function createThreeView(host){
        post.position.set(p.x,groundAt(d)+.50,p.z);trackGroup.add(post);
      }
    }
+   // Kyoto inner/outer routes share the first two bends and back straight.
+   // The alternate line is visible as a subtle rail around turns three/four.
+   if(venue==='kyoto'){
+     const otherLayout=layout==='inner'?'outer':'inner';
+     const other=getTurfProfile(venue,course,otherLayout);
+     const ref=[];
+     for(let j=0;j<=72;j++){
+       const q=1090+(other.lap-other.straight-1090)*j/72;
+       const p=coursePoint(q,0,course,venue,otherLayout);
+       ref.push(new THREE.Vector3(p.x,
+         courseHeightMetres(-q,venue,otherLayout,course)+.78,p.z));
+     }
+     trackGroup.add(new THREE.Mesh(
+       new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ref),94,.033,4,false),
+       material(0xa7c9ce)
+     ));
+   }
+   const pocket=startPocket(venue,layout,distance);
+   if(pocket){
+     const steps=54,start=-distance,finish=-pocket.joinRemaining;
+     // Separate chute surface, same path and exact join as the horses.
+     const coords=[],faces=[];
+     for(let i=0;i<=steps;i++){
+       const metre=start+(finish-start)*i/steps;
+       const height=raceCourseHeightMetres(-metre,distance,venue,layout,course);
+       const a=raceCoursePoint(metre,0,distance,course,venue,layout);
+       const b=raceCoursePoint(metre,TRACK_OUTER_OFFSET,distance,course,venue,layout);
+       coords.push(a.x,height-.031,a.z,b.x,height-.031,b.z);
+       if(i<steps){const j=2*i;faces.push(j,j+2,j+1,j+1,j+2,j+3);}
+     }
+     const geom=new THREE.BufferGeometry();
+     geom.setAttribute('position',new THREE.Float32BufferAttribute(coords,3));
+     geom.setIndex(faces);geom.computeVertexNormals();
+     const mat=material(0x71b770);mat.side=THREE.DoubleSide;
+     trackGroup.add(new THREE.Mesh(geom,mat));
+     for(const offset of [0,TRACK_OUTER_OFFSET]){
+       const points=[];
+       for(let i=0;i<=steps;i++){
+         const metre=start+(finish-start)*i/steps;
+         const p=raceCoursePoint(metre,offset,distance,course,venue,layout);
+         const h=raceCourseHeightMetres(-metre,distance,venue,layout,course);
+         points.push(new THREE.Vector3(p.x,h+.74,p.z));
+       }
+       trackGroup.add(new THREE.Mesh(
+         new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),72,.048,5,false),
+         railMat
+       ));
+     }
+   }
    // Race-specific start line, permanent finish line.
    const paint=new THREE.MeshBasicMaterial({color:0xfbfbf4,side:THREE.DoubleSide});
    for(const d of [-distance,0]){
-     const a=coursePoint(d,0,course,venue,layout),b=coursePoint(d,TRACK_OUTER_OFFSET,course,venue,layout);
+     const a=raceCoursePoint(d,0,distance,course,venue,layout),b=raceCoursePoint(d,TRACK_OUTER_OFFSET,distance,course,venue,layout);
      const dx=b.x-a.x,dz=b.z-a.z;
      const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.20,Math.hypot(dx,dz)),paint);
      stripe.rotation.x=-Math.PI/2;
      stripe.rotation.z=-Math.atan2(dx,dz);
-     stripe.position.set((a.x+b.x)*.5,groundAt(d)-.020,(a.z+b.z)*.5);
+     stripe.position.set((a.x+b.x)*.5,raceCourseHeightMetres(-d,distance,venue,layout,course)-.020,(a.z+b.z)*.5);
      trackGroup.add(stripe);
    }
    // Red/white JRA-style turf furlong posts: 6=600m, 4=400m, 2=200m.
@@ -592,10 +641,10 @@ export async function createThreeView(host){
      const lift=Math.max(0,airborne);
      const thrust=Math.sin(theta-.55);
      const displayedS=displayed.get(item.id).s;
-     const trackHeight=courseHeightMetres(-displayedS,venue,layout,course);
+     const trackHeight=raceCourseHeightMetres(-displayedS,raceDistance,venue,layout,course);
      model.group.position.y=trackHeight+.020+lift*dynamics.bob+thrust*.032;
      // The horse leans into the local grade; the animated stride is additive.
-     const grade=courseSlope(-displayedS,venue,layout,course);
+     const grade=raceCourseSlope(-displayedS,raceDistance,venue,layout,course);
      model.group.rotation.z=-.019+Math.sin(theta+.32)*.075+
        Math.max(-.12,Math.min(.12,grade*2.2));
      model.group.rotation.x=Math.sin(theta*.5+model.id)*.007;
@@ -628,12 +677,12 @@ export async function createThreeView(host){
    const visible=frame.horses.filter(h=>lead-h.x<70);
    const meanLane=visible.length
       ?visible.reduce((sum,h)=>sum+h.lane,0)/visible.length:(entrants-1)/2;
-   const direction=coursePoint(focusS,0,course,venue,layout);
+   const direction=raceCoursePoint(focusS,0,raceDistance,course,venue,layout);
    const insideSign=venue==='kyoto'?-1:1;
    const insideX=insideSign*direction.dz,insideZ=-insideSign*direction.dx;
-   const startCenter=coursePoint(focusS,INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5,course,venue,layout);
-   const trackCenter=coursePoint(focusS,INSIDE_MARGIN+meanLane*LANE_WIDTH,course,venue,layout);
-   const focusHeight=courseHeightMetres(-focusS,venue,layout,course);
+   const startCenter=raceCoursePoint(focusS,INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5,raceDistance,course,venue,layout);
+   const trackCenter=raceCoursePoint(focusS,INSIDE_MARGIN+meanLane*LANE_WIDTH,raceDistance,course,venue,layout);
+   const focusHeight=raceCourseHeightMetres(-focusS,raceDistance,venue,layout,course);
    const startCamera=new THREE.Vector3(
      startCenter.x+direction.dx*(23+entrants*1.12)+insideX*(9+entrants*.5),focusHeight+6.8+entrants*.25,
      startCenter.z+direction.dz*(23+entrants*1.12)+insideZ*(9+entrants*.5)
