@@ -255,8 +255,8 @@ function renderStats(stats){
 }
 function renderCanvas(){
  // WebGL is opt-in; preserve existing 2D views for low-power and offline use.
- if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT);
- else renderFrame(canvas,state.race,activeHorses(),state.currentT,'top');
+ if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT,{course:state.course,distance:state.distance});
+ else renderFrame(canvas,state.race,activeHorses(),state.currentT,'top',{course:state.course,distance:state.distance});
  const end=state.race?.elapsed||0;
  $('seek').value=end?String(Math.min(100,100*state.currentT/end)):'0';
  const duration=(s)=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
