@@ -1,6 +1,6 @@
 import {SCENARIOS} from './engine.mjs';
 import {getHorseAppearance} from './appearance.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile,furlongMarkerPositions} from './course.mjs';
 const BASE_W=1000,BASE_H=560;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 function label(ctx,text,x,y,opts={}){
@@ -41,6 +41,17 @@ function renderTop(ctx,frame,horses,distance,race,course='A',venue='tokyo',layou
    ctx.strokeStyle='#f9f7ea';ctx.lineWidth=4;ctx.beginPath();
    ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
    label(ctx,title,a.x-15,a.y-12,{size:13,bold:true,color:'#fefefe'});
+ }
+ // Realistic furlong-post icons use the same locations as the 3D track.
+ for(const marker of furlongMarkerPositions(course,venue,layout)){
+   const p=toXY(marker.point);
+   ctx.strokeStyle='#d22937';ctx.lineWidth=4;
+   ctx.beginPath();ctx.moveTo(p.x,p.y+9);ctx.lineTo(p.x,p.y+18);ctx.stroke();
+   ctx.fillStyle='#fffdf2';ctx.strokeStyle='#cc2630';ctx.lineWidth=2.3;
+   ctx.beginPath();ctx.arc(p.x,p.y,11,0,Math.PI*2);ctx.fill();ctx.stroke();
+   label(ctx,marker.number,p.x,p.y+4.4,{
+     size:14,bold:true,align:'center',color:'#cf2233'
+   });
  }
  label(ctx,(venue==='kyoto'?'京都芝':'東京芝')+course+'・'+(venue==='kyoto'?'右回り':'左回り'),715,107,{size:23,bold:true,color:'#edffef'});
  label(ctx,venue==='kyoto'?'直線 '+profile.straight+'m / 3コーナー上り・4コーナー下り':'直線 525.9m / 残り460〜300mが上り坂',280,502,{size:18,bold:true,color:'#edffef'});
