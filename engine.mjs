@@ -60,8 +60,8 @@ export function runRace(horses, options = {}) {
     // Six starting corridors, three rows. Horses settle towards the rail once moving.
     const lane=index%6;
     return {...horse,
-      x:-((index/6)|0)*3.1-rng()*.5,
-      lane, targetLane:lane, nextDecision:1.2+rng()*1.4,
+      x:-((index/6)|0)*7.1-rng()*.12,
+      lane, targetLane:lane, nextDecision:.40+rng()*.55,
       form:clamp(normal(rng)*.115,-.32,.32),
       sway:rng()*Math.PI*2,
       finishTime:null, speedNow:0, overtakes:0};
@@ -72,7 +72,7 @@ export function runRace(horses, options = {}) {
   const packFrame=()=>({
     t:Number(t.toFixed(1)),
     horses:states.map(h=>({id:h.id,
-      x:Math.max(0,Math.min(distance,h.x)),
+      x:h.finishTime===null?h.x:distance+Math.max(0,t-h.finishTime)*13.5,
       lane:Number(h.lane.toFixed(3)),
       speed:h.speedNow,finished:h.finishTime!==null}))
   });
@@ -130,7 +130,7 @@ export function runRace(horses, options = {}) {
               Math.abs(other.lane-halfway)<.67);
           }
           // Strong inside preference, relieved only by imminent traffic.
-          const inside=target*(curve?.24:.19);
+          const inside=target*(p<.16?.43:curve?.24:.19);
           const ahead=space.forward<9?(9-space.forward)*.30:0;
           const close=space.forward<3.6?1.15:0;
           const unsafe=alongside?8:0;
@@ -170,7 +170,32 @@ export function runRace(horses, options = {}) {
       h.speedNow=velocity;
       const before=h.x;
       h.x+=velocity*dt;
-      if(h.x>=distance)h.finishTime=t+Math.max(0,distance-before)/velocity;
+      // Finishing times are finalized after the collision safety pass.
+    }
+    // Resolve longitudinal safety on the track after the simultaneous motion proposals.
+    // Adjacent 1.55-m lanes are distinct; a merge is blocked unless clear.
+    const prevX=new Map(snapshot.map(v=>[v.id,v.x]));
+    const order=[...states.filter(h=>h.finishTime===null)].sort((a,b)=>b.x-a.x||a.id-b.id);
+    for(let i=0;i<order.length;i++){
+      const h=order[i],oldX=prevX.get(h.id);
+      for(let j=0;j<i;j++){
+        const ahead=order[j];
+        const lateralMetres=Math.abs(h.lane-ahead.lane)*1.55;
+        if(lateralMetres>=1.23)continue;
+        const required=5.6*Math.sqrt(Math.max(0,1-(lateralMetres/1.23)**2));
+        h.x=Math.min(h.x,ahead.x-required);
+      }
+      h.x=Math.max(oldX,h.x);
+      h.speedNow=Math.max(0,(h.x-oldX)/dt);
+    }
+    // Crossing the finish line is evaluated only after resolving traffic.
+    for(const h of states){
+      if(h.finishTime!==null)continue;
+      const oldX=prevX.get(h.id);
+      if(h.x>=distance){
+        const stepSpeed=Math.max(.01,(h.x-oldX)/dt);
+        h.finishTime=t+Math.max(0,distance-oldX)/stepSpeed;
+      }
     }
     t+=dt;
     if(record && (step%2===1||states.every(h=>h.finishTime!==null)))frames.push(packFrame());
