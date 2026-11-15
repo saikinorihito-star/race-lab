@@ -265,16 +265,24 @@ export async function createThreeView(host){
    model.shadow=shadow;
  }
  // Reference-style black horse nameplates are billboard sprites, drawn in the 3D video as well.
- function makeNameLabel(text){
+ function makeNameLabel(text,id){
    const image=document.createElement('canvas');image.width=512;image.height=104;
    const ctx=image.getContext('2d');
    const safe=String(text||'競走馬').slice(0,12);
    ctx.fillStyle='rgba(10,18,18,.91)';
    ctx.beginPath();ctx.roundRect(14,10,484,84,16);ctx.fill();
    ctx.lineWidth=4;ctx.strokeStyle='#f7f5e8';ctx.stroke();
-   ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
-   ctx.font='bold 51px -apple-system, Hiragino Sans, sans-serif';
-   ctx.fillText(safe,256,55,451);
+   // A small colored frame badge is readable even when helmet details are distant.
+   const appearance=getHorseAppearance(id);
+   ctx.fillStyle=appearance.helmet;
+   ctx.beginPath();ctx.roundRect(27,23,94,58,10);ctx.fill();
+   ctx.strokeStyle='#fafafa';ctx.lineWidth=3;ctx.stroke();
+   ctx.fillStyle=appearance.helmetNumberColor;
+   ctx.textAlign='center';ctx.textBaseline='middle';
+   ctx.font='bold 31px -apple-system, Hiragino Sans, sans-serif';
+   ctx.fillText(appearance.frame+'枠',74,53,89);
+   ctx.fillStyle='#fff';ctx.font='bold 46px -apple-system, Hiragino Sans, sans-serif';
+   ctx.fillText(safe,308,55,346);
    const tex=new THREE.CanvasTexture(image);
    tex.colorSpace=THREE.SRGBColorSpace;
    const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}));
@@ -284,7 +292,7 @@ export async function createThreeView(host){
    return {sprite,tex};
  }
  for(const model of models){
-   const nameLabel=makeNameLabel('');
+   const nameLabel=makeNameLabel('',model.id);
    model.group.add(nameLabel.sprite);
    model.nameLabel=nameLabel;
    model.lastName='';
@@ -315,7 +323,7 @@ export async function createThreeView(host){
          model.group.remove(model.nameLabel.sprite);
          model.nameLabel.sprite.material.dispose();
          model.nameLabel.tex.dispose();
-         model.nameLabel=makeNameLabel(name);
+         model.nameLabel=makeNameLabel(name,model.id);
          model.group.add(model.nameLabel.sprite);
          model.lastName=name;
        }
