@@ -1,7 +1,7 @@
 import {exampleHorses, runRace, summarizeRaces, validateHorses, STYLES} from './engine.mjs';
 import {getHorseAppearance,getFrameNumber} from './appearance.mjs';
 import {renderFrame,interpolateRaceFrame} from './visual.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile,turfDistances,courseSlope,courseHeightMetres,HOME_STRAIGHT_METRES,furlongMarkerPositions} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile,turfDistances,courseSlope,courseHeightMetres,HOME_STRAIGHT_METRES,furlongMarkerPositions,raceCoursePoint,startPocket,raceCourseHeightMetres,raceCourseSlope} from './course.mjs';
 const $ = (id) => document.getElementById(id);
 const STORE = 'race-lab-demo-v01';
 const DEFAULTS = {horses:exampleHorses(),count:18,distance:2400,venue:'tokyo',layout:'outer',course:'A',scenario:'normal'};
@@ -68,7 +68,7 @@ function buildElevationProfile(){
  const height=Math.max(.1,p.elevation);
  const fraction=remaining=>Math.max(0,Math.min(1,1-remaining/state.distance));
  const x=remaining=>left+(right-left)*fraction(remaining);
- const y=remaining=>bottom-7-(courseHeightMetres(remaining,state.venue,state.layout,state.course)/height)*69;
+ const y=remaining=>bottom-7-(raceCourseHeightMetres(remaining,state.distance,state.venue,state.layout,state.course)/height)*69;
  svg.append(hudSvg('rect',{x:0,y:0,width:900,height:154,fill:'#0c2225'}));
  for(const [value,line] of [[0,bottom-7],[height,bottom-76]]){
   svg.append(hudSvg('line',{x1:left,y1:line,x2:right,y2:line,
@@ -113,8 +113,8 @@ function updateElevationProgress(leader,distance){
  const remaining=Math.max(0,Math.min(distance,distance-leader));
  const x=58+792*(1-remaining/distance);
  const p=getTurfProfile(state.venue,state.course,state.layout);
- const elevation=courseHeightMetres(remaining,state.venue,state.layout,state.course);
- const grade=courseSlope(remaining,state.venue,state.layout,state.course);
+ const elevation=raceCourseHeightMetres(remaining,distance,state.venue,state.layout,state.course);
+ const grade=raceCourseSlope(remaining,distance,state.venue,state.layout,state.course);
  const slopeLabel=grade>.001?'↗ 上り':grade<-.001?'↘ 下り':'→ 平坦';
  const y=104-69*(elevation/Math.max(.1,p.elevation));
  elevationPointer.setAttribute('x1',x.toFixed(2));
@@ -140,8 +140,39 @@ function initializeHud(){
   svg.append(hudSvg('path',{d:hudPath(offset),fill:'none',
    stroke:'#e4efe4','stroke-width':3.6}));
  }
+ // Draw the separate start extension before the field joins the oval.
+ const pocket=startPocket(state.venue,state.layout,state.distance);
+ if(pocket){
+  const rim=[];
+  const opposite=[];
+  for(let i=0;i<=36;i++){
+   const t=i/36,s=-state.distance+(state.distance-pocket.joinRemaining)*t;
+   rim.push(hudPoint(raceCoursePoint(s,0,state.distance,state.course,state.venue,state.layout)));
+   opposite.push(hudPoint(raceCoursePoint(s,TRACK_OUTER_OFFSET,state.distance,state.course,state.venue,state.layout)));
+  }
+  const commands=rim.map((p,i)=>(i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')+
+    opposite.reverse().map(p=>' L'+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')+' Z';
+  svg.append(hudSvg('path',{d:commands,fill:'#568f70','fill-opacity':'.82',
+    stroke:'#c2e0d0','stroke-width':2,'stroke-dasharray':'5 4'}));
+ }
+ // For Kyoto, show the alternate 3rd/4th bend as a thin reference track.
+ if(state.venue==='kyoto'){
+   const alternative=state.layout==='inner'?'outer':'inner';
+   const other=getTurfProfile('kyoto',state.course,alternative);
+   const points=[];
+   for(let i=0;i<=64;i++){
+     const s=1090+(other.lap-other.straight-1090)*i/64;
+     points.push(hudPoint(coursePoint(s,0,state.course,'kyoto',alternative)));
+   }
+   svg.append(hudSvg('path',{
+     d:points.map((p,i)=>(i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' '),
+     fill:'none',stroke:'#a5c2ce','stroke-width':2.5,
+     'stroke-dasharray':'6 6','stroke-opacity':'.78'
+   }));
+ }
  for(const item of [[-state.distance,'START'],[0,'GOAL']]){
-  const a=hudXY(item[0],0),b=hudXY(item[0],TRACK_OUTER_OFFSET);
+  const a=hudPoint(raceCoursePoint(item[0],0,state.distance,state.course,state.venue,state.layout)),
+        b=hudPoint(raceCoursePoint(item[0],TRACK_OUTER_OFFSET,state.distance,state.course,state.venue,state.layout));
   svg.append(hudSvg('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,
    stroke:'#f6f4d4','stroke-width':4}));
   const text=hudSvg('text',{x:a.x,y:a.y-10,fill:'#f4f9f4',
@@ -212,8 +243,8 @@ function updateRaceHud(){
  $('overview-remaining').textContent=state.race
   ?remaining===0?'ゴール'
     :state.venue==='tokyo'&&remaining<=460&&remaining>=300?'残り '+remaining.toLocaleString()+'m・上り坂'
-    :state.venue==='kyoto'&&courseSlope(remaining,state.venue,state.layout,state.course)>.0001?'残り '+remaining.toLocaleString()+'m・3コーナー上り'
-    :state.venue==='kyoto'&&courseSlope(remaining,state.venue,state.layout,state.course)<-.0001?'残り '+remaining.toLocaleString()+'m・4コーナー下り'
+    :state.venue==='kyoto'&&raceCourseSlope(remaining,distance,state.venue,state.layout,state.course)>.0001?'残り '+remaining.toLocaleString()+'m・3コーナー上り'
+    :state.venue==='kyoto'&&raceCourseSlope(remaining,distance,state.venue,state.layout,state.course)<-.0001?'残り '+remaining.toLocaleString()+'m・4コーナー下り'
     :remaining<=getTurfProfile(state.venue,state.course,state.layout).straight?'残り '+remaining.toLocaleString()+'m・直線'
     :'残り '+remaining.toLocaleString()+'m'
   :'スタート前';
@@ -274,7 +305,8 @@ function updateCourseInfo(){
  const p=getTurfProfile(state.venue,state.course,state.layout);
  const place=state.venue==='kyoto'?'京都芝':'東京芝';
  const courseLabel=state.venue==='kyoto'?(state.layout==='inner'?'内回り':'外回り'):'左回り';
- $('course-data').textContent=`${place}${state.course}・${courseLabel}｜1周 ${p.lap.toLocaleString('ja-JP')}m｜直線 ${p.straight}m｜高低差 ${p.elevation}m｜幅員 ${p.minWidth}〜${p.maxWidth}m`;
+ const pocket=startPocket(state.venue,state.layout,state.distance);
+ $('course-data').textContent=`${place}${state.course}・${courseLabel}｜1周 ${p.lap.toLocaleString('ja-JP')}m｜直線 ${p.straight}m｜高低差 ${p.elevation}m｜幅員 ${p.minWidth}〜${p.maxWidth}m${pocket?'｜専用発走路あり（模式）':''}`;
  $('overview-course').textContent=`${place}${state.course}・${p.turn==='right'?'右回り':'左回り'} ${state.distance.toLocaleString('ja-JP')}m`;
 }
 function refreshTurfControls(){
