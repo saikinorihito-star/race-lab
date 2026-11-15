@@ -41,7 +41,7 @@ function hudSvg(tag,attrs={}){
  return el;
 }
 function hudPoint(p){
- return {x:450+p.x*1.55,y:112+p.z*.86};
+ return {x:450+p.x*1.48,y:112+p.z*.86};
 }
 function hudXY(s,offset){
  return hudPoint(coursePoint(s,offset,state.course,state.venue,state.layout));
