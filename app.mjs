@@ -1,7 +1,7 @@
 import {exampleHorses, runRace, summarizeRaces, validateHorses, STYLES} from './engine.mjs';
 import {getHorseAppearance,getFrameNumber} from './appearance.mjs';
 import {renderFrame,interpolateRaceFrame} from './visual.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,safeRacePositions} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions} from './course.mjs';
 const $ = (id) => document.getElementById(id);
 const STORE = 'race-lab-demo-v01';
 const DEFAULTS = {horses:exampleHorses(),count:18,distance:2200,scenario:'normal'};
@@ -125,7 +125,7 @@ function updateRaceHud(){
 
  // Exactly the same collision-safe display positions as the 3D renderer.
  // Do not artificially spread, clamp or stretch the horse markers.
- const placement=safeRacePositions(frame.horses,leader,distance);
+ const placement=raceDisplayPositions(state.race,frame,distance);
  const cameraView=state.view==='three'&&threeView?.getViewState
    ?threeView.getViewState():null;
  const shown=new Set(cameraView?.visibleIds||[]);
