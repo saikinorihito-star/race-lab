@@ -1,0 +1,13 @@
+{
+  "name":"Race Lab - 競馬シミュレーター",
+  "short_name":"Race Lab",
+  "lang":"ja",
+  "description":"18頭の架空レースを計算・再生する試作アプリ",
+  "id":"./index.html",
+  "start_url":"./index.html",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#0b121d",
+  "theme_color":"#101c2c",
+  "icons":[{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"},{"src":"./apple-touch-icon.png","sizes":"180x180","type":"image/png"}]
+}

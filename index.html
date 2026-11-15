@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101c2c">
+<meta name="description" content="競馬レース隊列の教育用シミュレーション。18頭の架空モデルでレース展開を再生します。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="stylesheet" href="./styles.css">
+<title>Race Lab | 競馬シミュレーター</title>
+</head>
+<body>
+<div class="app-shell">
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">R<span class="dot">.</span></span><div><strong>RACE LAB</strong><small>競馬レース展開シミュレーター</small></div></div>
+  <span class="beta">DEMO v0.1</span>
+</header>
+<main class="content">
+  <section class="intro">
+    <div><p class="eyebrow">RACE SIMULATION / PROTOTYPE</p><h1>レースを、<span>展開で読む。</span></h1><p class="subtext">18頭の脚質・能力を設定して、仮想レースを再生。条件を変えたときの隊列の違いを確認できます。</p></div>
+    <div class="warning"><span class="warning-icon">!</span><p><b>予想精度の検証前です。</b> すべての能力値・確率は架空モデルによるデモです。実際の競馬結果や的中率を予測・保証するものではありません。</p></div>
+  </section>
+  <section class="workspace">
+    <div class="primary">
+      <article class="panel settings">
+        <div class="panel-head"><h2><span class="step">01</span> レース設定</h2><span class="minor">出走 18頭</span></div>
+        <div class="settings-grid">
+          <label>距離<select id="distance"><option value="1200">芝1200m</option><option value="1600">芝1600m</option><option value="2000">芝2000m</option><option value="2200" selected>芝2200m</option><option value="2400">芝2400m</option><option value="3000">芝3000m</option></select></label>
+          <label>レースペース<select id="scenario"><option value="normal">標準</option><option value="high">ハイペース</option><option value="low">スローペース</option></select></label>
+        </div>
+        <div class="action-row"><button class="btn primary-btn" id="run"><span>▶</span> 予想シミュレーション開始</button><button class="btn secondary-btn" id="reset-horses" title="すべての馬の設定を初期化">初期化</button></div>
+        <p id="status" class="small-status" role="status" aria-live="polite">開始ボタンを押すと1レースを再生し、1,000回の着順分布を集計します。</p>
+      </article>
+      <article class="panel visual-panel">
+        <div class="panel-head"><h2><span class="step">02</span> レース再生</h2><div class="tiny-toggle"><button class="active" data-view="chase" aria-pressed="true">追走ビュー</button><button data-view="top" aria-pressed="false">上空ビュー</button></div></div>
+        <div class="canvas-wrap"><canvas id="race-canvas" width="1000" height="560" aria-label="競走馬の位置関係を示すレースアニメーション"></canvas><div class="canvas-label" id="canvas-label">スタート前</div></div>
+        <div class="playback">
+          <div class="playback-line"><button id="toggle-play" class="play-button" title="再生／一時停止" aria-label="再生">▶</button><input id="seek" type="range" min="0" max="100" value="0" aria-label="再生位置"><span id="play-time" class="time">0:00 / 0:00</span></div>
+          <div class="playback-options"><label>再生速度 <select id="speed"><option value="1">1倍</option><option value="2">2倍</option><option value="4">4倍</option><option value="8" selected>8倍</option><option value="12">12倍</option></select></label><button class="btn secondary-btn" id="save-video">動画保存</button></div>
+        </div>
+        <p class="helptext">現在の表示は軽量な2D/疑似3Dです。本格的な3Dモデル化は次の開発段階です。動画保存はブラウザーの対応状況によって利用できない場合があります。</p>
+      </article>
+      <article class="panel results-panel">
+        <div class="panel-head"><h2><span class="step">03</span> 予想結果</h2><span class="minor">1,000回の仮想試行</span></div>
+        <div class="summary-grid" id="summary"><div class="empty-state">シミュレーションを開始すると、推定勝率と3着以内率が表示されます。</div></div>
+        <div class="result-table-wrap"><table class="result-table" id="results"><thead><tr><th>馬番 / 馬名</th><th>推定勝率</th><th>3着以内率</th><th>平均着順</th></tr></thead><tbody><tr><td colspan="4" class="empty-row">まだ計算されていません</td></tr></tbody></table></div>
+      </article>
+    </div>
+    <aside class="secondary">
+      <article class="panel editor-panel"><div class="panel-head"><h2>出走馬の能力設定</h2><span class="minor">変更は自動保存</span></div>
+        <p class="helptext">馬番を選択すると、名前・脚質・能力値を変更できます。40〜100の数値は架空の設定値です。</p>
+        <div id="horse-picker" class="horse-picker" aria-label="編集する馬番"></div>
+        <div class="selected-horse"><div class="horse-current"><span class="horse-chip" id="selected-number">1</span><div><strong id="selected-title">サンプル01</strong><small>編集対象</small></div></div>
+          <label class="field">馬名<input id="horse-name" type="text" maxlength="24" autocomplete="off"></label>
+          <label class="field">脚質<select id="horse-style"><option value="逃げ">逃げ</option><option value="先行">先行</option><option value="差し">差し</option><option value="追込">追込</option></select></label>
+          <label class="slider-label"><span>スピード</span><output id="speed-value">70</output><input id="horse-speed" type="range" min="40" max="100"></label>
+          <label class="slider-label"><span>スタミナ</span><output id="stamina-value">70</output><input id="horse-stamina" type="range" min="40" max="100"></label>
+          <label class="slider-label"><span>末脚</span><output id="kick-value">70</output><input id="horse-kick" type="range" min="40" max="100"></label>
+        </div>
+        <p class="helptext notes">設定はこの端末のブラウザー内に保存されます。閲覧データを消すと失われる場合があります。</p>
+        <div class="backup-row"><button class="btn secondary-btn" id="backup-save">設定をバックアップ</button><button class="btn secondary-btn" id="backup-load">復元する</button><input id="backup-file" type="file" accept="application/json,.json" hidden></div>
+      </article>
+      <article class="info-panel"><span class="info-heading">HOW IT WORKS</span><p>脚質・速度・スタミナ・末脚と乱数から、仮想的な各馬の位置を計算します。現実の競馬データや騎手・調教師・馬場の情報はまだ取り込んでいません。</p></article>
+    </aside>
+  </section>
+</main>
+<footer>RACE LAB / PROTOTYPE — 学習・研究用の架空シミュレーションです。</footer>
+</div>
+<script type="module" src="./app.mjs"></script>
+</body>
+</html>
