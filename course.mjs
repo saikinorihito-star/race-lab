@@ -145,7 +145,9 @@ export function coursePoint(distanceAfterFinish,offset=0,course='A',venue='tokyo
 // continuous at the join. All other distances use the ordinary oval.
 export function startPocket(venue='tokyo',layout='outer',distance=2400){
  if(venue==='tokyo'&&Number(distance)===1800)
-   return {joinRemaining:1550,kind:'Tokyo 1800m start pocket (schematic)'};
+   return {joinRemaining:1650,lateral:13,kind:'Tokyo 1800m diagonal start pocket (schematic)'};
+ if(venue==='tokyo'&&Number(distance)===1600)
+   return {joinRemaining:1450,lateral:4,kind:'Tokyo 1600m second-corner pocket (schematic)'};
  if(venue==='kyoto'&&Number(distance)===1600&&layout==='inner')
    return {joinRemaining:1200,kind:'Kyoto 1600m inner extension (schematic)'};
  if(venue==='kyoto'&&layout==='outer'&&[1600,1800].includes(Number(distance)))
@@ -157,8 +159,20 @@ export function raceCoursePoint(s,offset=0,raceDistance=2400,course='A',venue='t
  if(pocket&&s<-pocket.joinRemaining){
    const join=coursePoint(-pocket.joinRemaining,offset,course,venue,layout);
    const delta=(s+pocket.joinRemaining)*SCENE_METRE_SCALE;
-   return {x:join.x+join.dx*delta,z:join.z+join.dz*delta,
-      dx:join.dx,dz:join.dz,yaw:join.yaw};
+   // The Tokyo 1800m chute merges diagonally. Fade in the transverse
+   // displacement so the join has no position/tangent teleport.
+   const t=Math.max(0,Math.min(1,(-s-pocket.joinRemaining)/(raceDistance-pocket.joinRemaining)));
+   const lateral=(pocket.lateral||0)*t*t*(3-2*t);
+   const lateralDerivative=(pocket.lateral||0)*6*t*(1-t)/
+       Math.max(1,raceDistance-pocket.joinRemaining);
+   const sideX=-join.dz,sideZ=join.dx;
+   const vx=join.dx*SCENE_METRE_SCALE-sideX*lateralDerivative;
+   const vz=join.dz*SCENE_METRE_SCALE-sideZ*lateralDerivative;
+   const norm=Math.hypot(vx,vz)||1;
+   const dx=vx/norm,dz=vz/norm;
+   return {x:join.x+join.dx*delta+sideX*lateral,
+           z:join.z+join.dz*delta+sideZ*lateral,
+           dx,dz,yaw:-Math.atan2(dz,dx)};
  }
  return coursePoint(s,offset,course,venue,layout);
 }
