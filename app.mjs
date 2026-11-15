@@ -223,27 +223,44 @@ $('toggle-play').addEventListener('click',()=>setPlay(!state.playing));
 $('seek').addEventListener('input',e=>{if(!state.race||state.recording)return;state.currentT=state.race.elapsed*Number(e.target.value)/100;state.lastTick=null;renderCanvas()});
 $('speed').addEventListener('change',e=>state.speed=Number(e.target.value));
 $('save-video').addEventListener('click',exportVideo);
-for(const btn of document.querySelectorAll('[data-view]')){
- btn.addEventListener('click',async()=>{
-  if(state.recording)return;
-  const view=btn.dataset.view;
-  if(view==='three' && !threeView){
-   btn.disabled=true;const old=btn.textContent;btn.textContent='読込中…';
+// Load the 3D view by default; retain the 2D chase as a safe fallback.
+let viewRequest=0;
+let threeLoading=null;
+async function selectView(view){
+ if(state.recording)return;
+ const request=++viewRequest;
+ if(view==='three' && !threeView){
+   const btn=document.querySelector('[data-view="three"]');
+   btn.disabled=true;
+   const previousText=btn.textContent;
+   btn.textContent='3D読込中…';
    try{
-    const module=await import('./three-view.mjs');
-    threeView=await module.createThreeView($('three-host'));
+     if(!threeLoading)threeLoading=import('./three-view.mjs').then(module=>module.createThreeView($('three-host')));
+     const created=await threeLoading;
+     if(!threeView)threeView=created;
    }catch(error){
-    setStatus('3Dビューを読み込めませんでした。通信環境やSafariの設定をご確認ください。2Dビューは引き続き使えます。',true);
-    console.error('3D view initialization failed',error);
-    btn.disabled=false;btn.textContent=old;return;
+     threeLoading=null;
+     if(request===viewRequest)setStatus('3D表示を開始できませんでした。追走ビューで操作できます。接続とSafariを確認してください。',true);
+     console.error('3D view initialization failed',error);
+     return;
+   }finally{
+     btn.disabled=false;
+     btn.textContent=previousText;
    }
-   btn.disabled=false;btn.textContent=old;
-  }
-  state.view=view;
-  $('three-host').hidden=view!=='three';
-  document.querySelectorAll('[data-view]').forEach(b=>{b.classList.toggle('active',b===btn);b.setAttribute('aria-pressed',String(b===btn))});
-  renderCanvas();
+ }
+ if(request!==viewRequest)return; // A newer view selection took precedence.
+ state.view=view;
+ $('three-host').hidden=view!=='three';
+ document.querySelectorAll('[data-view]').forEach(btn=>{
+   const selected=btn.dataset.view===view;
+   btn.classList.toggle('active',selected);
+   btn.setAttribute('aria-pressed',String(selected));
  });
+ renderCanvas();
+}
+for(const btn of document.querySelectorAll('[data-view]')){
+ btn.addEventListener('click',()=>{void selectView(btn.dataset.view);});
 }
 requestAnimationFrame(animate);
+void selectView('three'); // Initial display on every app launch.
 if('serviceWorker' in navigator && location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
