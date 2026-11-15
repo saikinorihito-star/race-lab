@@ -110,7 +110,7 @@ export async function createThreeView(host){
    const stripeRed=material(0xd7242f),stripeWhite=material(0xfff9ed);
    for(const marker of furlongMarkerPositions(course,venue,layout)){
      const post=new THREE.Group();
-     post.position.set(marker.point.x,groundAt(-marker.remaining),marker.point.z);
+     post.position.set(marker.point.x,turfY(-marker.remaining,-3.2),marker.point.z);
      trackGroup.add(post);
      for(let band=0;band<6;band++){
        const segment=new THREE.Mesh(
@@ -160,7 +160,7 @@ export async function createThreeView(host){
          glazed=material(0x24455b),roof=material(0x65727b);
    const finishIn=coursePoint(0,-3.3,course,venue,layout),
          finishOut=coursePoint(0,TRACK_OUTER_OFFSET+3.3,course,venue,layout);
-   const finishH=groundAt(0);
+   const finishH=turfY(0,-3.3);
    const fixture=(geometry,mat,x,y,z)=>{
      const item=new THREE.Mesh(geometry,mat);
      item.position.set(x,y,z);trackGroup.add(item);return item;
@@ -205,7 +205,7 @@ export async function createThreeView(host){
    }
    // Outdoor LED monitor next to the grandstand, angled towards the horses.
    const boardPoint=coursePoint(-115,TRACK_OUTER_OFFSET+22,course,venue,layout);
-   const boardBase=groundAt(-115);
+   const boardBase=turfY(-115,TRACK_OUTER_OFFSET+22);
    for(const dx of [-6.8,6.8]){
      fixture(new THREE.BoxGeometry(.40,11,.52),steelWhite,
        boardPoint.x+dx,boardBase+5.5,boardPoint.z);
