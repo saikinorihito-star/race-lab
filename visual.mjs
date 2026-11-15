@@ -1,6 +1,6 @@
 import {SCENARIOS} from './engine.mjs';
 import {getHorseAppearance} from './appearance.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,TOKYO_TURF,HOME_STRAIGHT_METRES} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile} from './course.mjs';
 const BASE_W=1000,BASE_H=560;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 function label(ctx,text,x,y,opts={}){
@@ -8,19 +8,20 @@ function label(ctx,text,x,y,opts={}){
  ctx.textAlign=opts.align||'left'; ctx.fillStyle=opts.color||'#fff';ctx.fillText(text,x,y);
 }
 function rounded(ctx,x,y,w,h,r=12){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
-function renderTop(ctx,frame,horses,distance,race,course='A'){
- // The same Tokyo turf A-D oval used by the 3D camera.
+function renderTop(ctx,frame,horses,distance,race,course='A',venue='tokyo',layout='outer'){
+ // The same Tokyo/Kyoto turf A-D oval used by the 3D camera.
  ctx.fillStyle='#1b5638';ctx.fillRect(0,0,1000,560);
  const toXY=p=>({x:500+p.x*2.01,y:280+p.z*1.74});
- const lap=TOKYO_TURF[course].lap;
+ const profile=getTurfProfile(venue,course,layout);
+ const lap=profile.lap;
  function band(a,b,color){
    ctx.beginPath();
    for(let i=0;i<=140;i++){
-     const p=toXY(coursePoint(i*lap/140,a,course));
+     const p=toXY(coursePoint(i*lap/140,a,course,venue,layout));
      if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y);
    }
    for(let i=140;i>=0;i--){
-     const p=toXY(coursePoint(i*lap/140,b,course));
+     const p=toXY(coursePoint(i*lap/140,b,course,venue,layout));
      ctx.lineTo(p.x,p.y);
    }
    ctx.closePath();ctx.fillStyle=color;ctx.fill();
@@ -29,23 +30,23 @@ function renderTop(ctx,frame,horses,distance,race,course='A'){
  for(const off of [0,TRACK_OUTER_OFFSET]){
    ctx.strokeStyle='#fcfcf7';ctx.lineWidth=3.8;ctx.beginPath();
    for(let i=0;i<=140;i++){
-     const p=toXY(coursePoint(i*lap/140,off,course));
+     const p=toXY(coursePoint(i*lap/140,off,course,venue,layout));
      if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y);
    }
    ctx.stroke();
  }
  // Start and finish edges are shown as white tick marks.
  for(const [s,title] of [[-distance,'START'],[0,'GOAL']]){
-   const a=toXY(coursePoint(s,0,course)),b=toXY(coursePoint(s,TRACK_OUTER_OFFSET,course));
+   const a=toXY(coursePoint(s,0,course,venue,layout)),b=toXY(coursePoint(s,TRACK_OUTER_OFFSET,course,venue,layout));
    ctx.strokeStyle='#f9f7ea';ctx.lineWidth=4;ctx.beginPath();
    ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
    label(ctx,title,a.x-15,a.y-12,{size:13,bold:true,color:'#fefefe'});
  }
- label(ctx,'東京芝'+course+'・左回り',735,107,{size:23,bold:true,color:'#edffef'});
- label(ctx,'最後の直線 525.9m / 上り坂は残り460〜300m',280,502,{size:18,bold:true,color:'#edffef'});
+ label(ctx,(venue==='kyoto'?'京都芝':'東京芝')+course+'・'+(venue==='kyoto'?'右回り':'左回り'),715,107,{size:23,bold:true,color:'#edffef'});
+ label(ctx,venue==='kyoto'?'直線 '+profile.straight+'m / 3コーナー上り・4コーナー下り':'直線 525.9m / 残り460〜300mが上り坂',280,502,{size:18,bold:true,color:'#edffef'});
  const lead=Math.max(...frame.horses.map(h=>h.x));
  // Shared scene positions: the overhead view and the 3D model are identical.
- const positions=raceDisplayPositions(race,frame,distance,course);
+ const positions=raceDisplayPositions(race,frame,distance,course,venue,layout);
  for(const h of [...frame.horses].sort((a,b)=>a.x-b.x)){
    const point=positions.get(h.id).point;
    const q=toXY(point),a=getHorseAppearance(h.id,horses.length);
@@ -56,7 +57,7 @@ function renderTop(ctx,frame,horses,distance,race,course='A'){
    label(ctx,String(h.id),q.x,q.y+4,{size:12,bold:true,align:'center',color:a.helmetNumberColor});
  }
  ctx.fillStyle='rgba(7,27,29,.85)';rounded(ctx,20,18,553,49,11);ctx.fill();
- label(ctx,'左回り・芝半周コース',37,50,{size:23,bold:true,color:'#fff'});
+ label(ctx,(venue==='kyoto'?'京都':'東京')+'芝'+(venue==='kyoto'?(layout==='inner'?'・内回り':'・外回り'):'・左回り'),37,50,{size:23,bold:true,color:'#fff'});
  ctx.fillStyle='rgba(7,27,29,.85)';rounded(ctx,714,18,265,49,11);ctx.fill();
  label(ctx,'残り '+Math.ceil(Math.max(0,distance-lead))+'m',957,50,{size:23,bold:true,color:'#fff',align:'right'});
 }
@@ -84,7 +85,7 @@ export function renderFrame(canvas,race,horses,time=0,mode='top',options={}){
  const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time) : {t:0,horses:horses.map(h=>({id:h.id,x:0,lane:h.id-1}))};
  ctx.clearRect(0,0,BASE_W,BASE_H);
  // The chase camera was removed; fallback rendering is always the overhead view.
- renderTop(ctx,frame,horses,race?.distance||options.distance||2400,race,race?.course||options.course||'A');
+ renderTop(ctx,frame,horses,race?.distance||options.distance||2400,race,race?.course||options.course||'A',race?.venue||options.venue||'tokyo',race?.layout||options.layout||'outer');
  ctx.fillStyle='rgba(9,25,32,.81)';rounded(ctx,20,506,555,38,10);ctx.fill();
  label(ctx,`${race?SCENARIOS[race.scenario]:'ミドル'}ペース  |  ${race?.distance||options.distance||2400}m  |  経過 ${frame.t.toFixed(0)}秒`,37,533,{size:19,bold:true});
  if(!race){ctx.fillStyle='rgba(10,26,34,.68)';rounded(ctx,320,201,364,98,15);ctx.fill();label(ctx,'シミュレーション待機中',500,261,{size:28,bold:true,align:'center'});}
