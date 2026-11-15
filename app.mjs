@@ -30,7 +30,7 @@ function hudSvg(tag,attrs={}){
 }
 function hudXY(s,offset){
  const p=coursePoint(s,offset);
- return {x:164+(p.x+48)*4.52,y:112-p.z*1.75};
+ return {x:164+(p.x+48)*4.52,y:112-p.z*1.50};
 }
 function hudPath(offset,reverse=false){
  const parts=[];
@@ -100,7 +100,7 @@ function updateRaceHud(){
  initializeHud();
  const frame=state.race?.frames?.length
   ?interpolateRaceFrame(state.race.frames,state.currentT)
-  :{horses:state.horses.map(h=>({id:h.id,x:0,lane:(h.id-1)%6}))};
+  :{horses:state.horses.map(h=>({id:h.id,x:0,lane:h.id-1}))};
  const distance=state.race?.distance||state.distance;
  const leader=Math.max(...frame.horses.map(h=>h.x));
  const leadS=lengthAtMetres(leader,distance);
@@ -117,7 +117,7 @@ function updateRaceHud(){
  const occupied=[];
  for(const h of ranked){
   const offset=INSIDE_MARGIN+h.lane*LANE_WIDTH;
-  const s=state.race?leadS-Math.max(0,leader-h.x)*1.17:-(Math.floor((h.id-1)/6))*6;
+  const s=state.race?leadS-Math.max(0,leader-h.x)*1.17:0;
   const point=hudXY(s,offset);
   let x=point.x,y=point.y;
   for(let attempt=0;attempt<24;attempt++){
