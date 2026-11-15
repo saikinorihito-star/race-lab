@@ -1,6 +1,7 @@
 import {exampleHorses, runRace, summarizeRaces, validateHorses, STYLES} from './engine.mjs';
 import {getHorseAppearance,getFrameNumber} from './appearance.mjs';
-import {renderFrame} from './visual.mjs';
+import {renderFrame,interpolateRaceFrame} from './visual.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET} from './course.mjs';
 const $ = (id) => document.getElementById(id);
 const STORE = 'race-lab-demo-v01';
 const DEFAULTS = {horses:exampleHorses(), distance:2200, scenario:'normal'};
@@ -18,6 +19,132 @@ let threeView=null;
 const picker=$('horse-picker');
 function persist(){try {localStorage.setItem(STORE,JSON.stringify({horses:state.horses,distance:state.distance,scenario:state.scenario}));}catch{setStatus('保存できません。端末のブラウザー設定を確認してください。',true)}}
 function setStatus(text,error=false){$('status').textContent=text;$('status').style.color=error?'#ffc2a3':'#9baec4';}
+// Race broadcast HUD: live course overview above the image, all horses below.
+const HUD_SVG_NS='http://www.w3.org/2000/svg';
+const hudMarkers=new Map(),hudEntries=new Map();
+let hudReady=false,hudLastPaint=0,hudRankKey='';
+function hudSvg(tag,attrs={}){
+ const el=document.createElementNS(HUD_SVG_NS,tag);
+ for(const [k,v] of Object.entries(attrs))el.setAttribute(k,String(v));
+ return el;
+}
+function hudXY(s,offset){
+ const p=coursePoint(s,offset);
+ return {x:164+(p.x+48)*4.52,y:112-p.z*1.75};
+}
+function hudPath(offset,reverse=false){
+ const parts=[];
+ for(let i=0;i<=96;i++){
+  const j=reverse?96-i:i;
+  const p=hudXY(j*HALF_LAP_LENGTH/96,offset);
+  parts.push((i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1));
+ }
+ return parts.join(' ');
+}
+function initializeHud(){
+ if(hudReady)return;
+ const svg=$('overview-map');
+ svg.append(hudSvg('rect',{width:900,height:226,fill:'#08191b'}));
+ svg.append(hudSvg('path',{
+  d:hudPath(0)+' '+hudPath(TRACK_OUTER_OFFSET,true).replace(/^M/,'L')+' Z',
+  fill:'#387b4d'}));
+ for(const offset of [2.4,5.3,8.2,11.1]){
+  svg.append(hudSvg('path',{d:hudPath(offset),fill:'none',
+   stroke:'#80b77e','stroke-opacity':'.32','stroke-width':3}));
+ }
+ for(const offset of [0,TRACK_OUTER_OFFSET]){
+  svg.append(hudSvg('path',{d:hudPath(offset),fill:'none',
+   stroke:'#e4efe4','stroke-width':3.6}));
+ }
+ for(const item of [[0,'START'],[HALF_LAP_LENGTH,'GOAL']]){
+  const a=hudXY(item[0],0),b=hudXY(item[0],TRACK_OUTER_OFFSET);
+  svg.append(hudSvg('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,
+   stroke:'#f6f4d4','stroke-width':4}));
+  const text=hudSvg('text',{x:a.x,y:a.y-10,fill:'#f4f9f4',
+   'font-size':15,'font-weight':700,'text-anchor':'middle'});
+  text.textContent=item[1];svg.append(text);
+ }
+ const note=hudSvg('text',{x:23,y:36,fill:'#c9e9d6','font-size':20,'font-weight':800});
+ note.textContent='馬群位置  /  左回り';svg.append(note);
+ for(const horse of state.horses){
+  const a=getHorseAppearance(horse.id);
+  const group=hudSvg('g');
+  group.append(hudSvg('circle',{r:15,fill:a.helmet,stroke:'#fff','stroke-width':2.4}));
+  const text=hudSvg('text',{y:5,fill:a.helmetNumberColor,
+   'font-size':16,'font-weight':900,'text-anchor':'middle'});
+  text.textContent=String(horse.id);group.append(text);
+  svg.append(group);hudMarkers.set(horse.id,group);
+ }
+ const grid=$('race-standings-list');
+ for(let i=0;i<2;i++){
+  const col=document.createElement('div');col.className='race-standings-column';grid.append(col);
+ }
+ for(const horse of state.horses){
+  const a=getHorseAppearance(horse.id);
+  const row=document.createElement('div');row.className='race-entry';
+  const place=document.createElement('span');place.className='race-place';
+  const chip=document.createElement('span');chip.className='race-frame-chip';
+  chip.style.background=a.helmet;chip.style.color=a.helmetNumberColor;
+  chip.textContent=String(horse.id);
+  const name=document.createElement('span');name.className='race-horse-name';
+  name.textContent=horse.name;
+  row.append(place,chip,name);
+  hudEntries.set(horse.id,{row,place,name});
+ }
+ hudReady=true;
+}
+function updateRaceHud(){
+ const now=performance.now();
+ if(state.playing&&now-hudLastPaint<85)return;
+ hudLastPaint=now;
+ initializeHud();
+ const frame=state.race?.frames?.length
+  ?interpolateRaceFrame(state.race.frames,state.currentT)
+  :{horses:state.horses.map(h=>({id:h.id,x:0,lane:(h.id-1)%6}))};
+ const distance=state.race?.distance||state.distance;
+ const leader=Math.max(...frame.horses.map(h=>h.x));
+ const leadS=lengthAtMetres(leader,distance);
+ const ranked=[...frame.horses].sort((a,b)=>state.race
+  ?b.x-a.x||a.id-b.id:a.id-b.id);
+ const remaining=Math.max(0,Math.ceil(distance-leader));
+ $('overview-remaining').textContent=state.race
+  ?remaining===0?'ゴール':'残り '+remaining.toLocaleString()+'m':'スタート前';
+ $('standings-heading').textContent=state.race
+  ?state.currentT>=state.race.elapsed?'最終着順':'現在順位・馬名'
+  :'出走馬一覧（馬番順）';
+
+ // Spread overlapping symbols for legibility; the order below remains exact.
+ const occupied=[];
+ for(const h of ranked){
+  const offset=INSIDE_MARGIN+h.lane*LANE_WIDTH;
+  const s=state.race?leadS-Math.max(0,leader-h.x)*1.17:-(Math.floor((h.id-1)/6))*6;
+  const point=hudXY(s,offset);
+  let x=point.x,y=point.y;
+  for(let attempt=0;attempt<24;attempt++){
+   if(!occupied.some(p=>Math.hypot(p.x-x,p.y-y)<30))break;
+   x-=13;y+=(h.id+attempt)%2===0?7:-7;
+  }
+  x=Math.max(22,Math.min(876,x));y=Math.max(18,Math.min(209,y));
+  occupied.push({x,y});
+  const dot=hudMarkers.get(h.id);
+  dot.setAttribute('transform','translate('+x.toFixed(1)+' '+y.toFixed(1)+')');
+  const horse=state.horses.find(item=>item.id===h.id);
+  dot.setAttribute('aria-label',h.id+'番 '+(horse?.name||''));
+ }
+ const nameKey=state.horses.map(h=>h.id+':'+h.name).join('|');
+ const rankKey=(state.race?'race:':'before:')+ranked.map(h=>h.id).join(',')+'|'+nameKey;
+ if(rankKey===hudRankKey)return;
+ hudRankKey=rankKey;
+ const columns=$('race-standings-list').children;
+ for(const [i,h] of ranked.entries()){
+  const entry=hudEntries.get(h.id);
+  entry.place.textContent=String(i+1);
+  entry.name.textContent=state.horses.find(item=>item.id===h.id)?.name||'馬番'+h.id;
+  entry.row.classList.toggle('leader',!!state.race&&i<3);
+  columns[i<9?0:1].append(entry.row);
+ }
+}
+
 function setColorChip(node,id){
  const a=getHorseAppearance(id);
  node.style.background=a.helmet;
@@ -88,6 +215,7 @@ function renderCanvas(){
  const duration=(s)=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
  $('play-time').textContent=`${duration(state.currentT)} / ${duration(end)}`;
  $('canvas-label').textContent=state.race ? state.currentT>=end?'ゴール':state.playing?'再生中':'一時停止中':'スタート前';
+ updateRaceHud();
 }
 function setPlay(on){
  if(!state.race || state.recording)return;
