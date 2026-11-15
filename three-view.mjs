@@ -314,6 +314,7 @@ export async function createThreeView(host){
  const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i}));
  let disposed=false;
  let cameraReady=false,lastLeadS=0;
+ let viewState=null;
  const cameraAim=new THREE.Vector3();
  function render(race,horses,time){
    if(disposed)return;
@@ -414,6 +415,24 @@ export async function createThreeView(host){
    }
    lastLeadS=focusS;
    camera.lookAt(cameraAim);
+   camera.updateMatrixWorld();
+   // Share the ACTUAL 3D camera position and frustum with the upper overview.
+   // Its dots therefore match the horses on this exact frame, not a separate
+   // second approximation of race positions.
+   const visibleIds=[];
+   const center=new THREE.Vector3();
+   for(const model of models){
+     if(!model.group.visible)continue;
+     center.set(model.group.position.x,1.40,model.group.position.z).project(camera);
+     if(center.z>=-1&&center.z<=1&&Math.abs(center.x)<=1.03&&Math.abs(center.y)<=1.03){
+       visibleIds.push(model.id);
+     }
+   }
+   viewState={
+     camera:{x:camera.position.x,z:camera.position.z},
+     target:{x:cameraAim.x,z:cameraAim.z},
+     visibleIds
+   };
    renderer.render(scene,camera);
  }
  function dispose(){
@@ -432,5 +451,5 @@ export async function createThreeView(host){
    renderer.dispose();renderer.domElement.remove();
  }
  render(null,null,0);
- return {render,dispose,canvas:renderer.domElement};
+ return {render,dispose,canvas:renderer.domElement,getViewState:()=>viewState};
 }
