@@ -30,7 +30,7 @@ function hudSvg(tag,attrs={}){
 }
 function hudXY(s,offset){
  const p=coursePoint(s,offset);
- return {x:164+(p.x+48)*4.52,y:112-p.z*1.50};
+ return {x:164+(p.x+48)*4.52,y:112+p.z*1.50};
 }
 function hudPath(offset,reverse=false){
  const parts=[];
