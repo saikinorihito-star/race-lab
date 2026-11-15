@@ -3,6 +3,7 @@
  * The model and its parameters are illustrative, NOT calibrated against real races.
  * Independent of rendering, DOM, network and external data providers.
  */
+import {FINAL_STRAIGHT_START} from './course.mjs';
 export const STYLES = ['逃げ', '先行', '差し', '追込'];
 export const SCENARIOS = {normal: '標準', high: 'ハイペース', low: 'スローペース'};
 export const COLORS = ['#f6f7fa','#34373f','#e6575e','#4b83dd','#ecc858','#52a86d','#f18b44','#e285ae','#a5a5a5','#9c7a45','#7b70c7','#31a9b1','#bf576e','#aad85d','#427b83','#d4aa82','#6662a9','#c4c8d1'];
@@ -108,7 +109,7 @@ export function runRace(horses, options = {}) {
       const exertion=late*((Number(h.stamina)-70)*.008+(Number(h.kick)-70)*.015);
       const dynamic=.105*Math.sin(t/8+h.sway)+.055*Math.sin(t/3.7+h.sway*1.8);
       // Speed is a synthetic parameter, not a real-world stride-to-velocity model.
-      const curve=(p>.06&&p<.32)||(p>.55&&p<.79);
+      const curve=p>=.26&&p<FINAL_STRAIGHT_START;
       let desiredSpeed=16.52+(Number(h.speed)-70)*.009+h.form+
         styleEarly*early+styleLate*late+paceEarly*early+paceLate*late+
         exertion-fatigue+dynamic;
@@ -131,14 +132,19 @@ export function runRace(horses, options = {}) {
               Math.abs(other.lane-halfway)<.67);
           }
           // Strong inside preference, relieved only by imminent traffic.
-          const inside=target*(p<.16?.54:curve?.24:.19);
+          // Before the last straight, minimize traveled distance along the inner rail.
+          // Allow an outer pass only if the traffic benefit outweighs a strong cost.
+          const onFinalStraight=p>=FINAL_STRAIGHT_START;
+          const inside=target*(onFinalStraight?.13:2.0)
+            +Math.max(0,target-3)*(onFinalStraight?0:1.0);
           const ahead=space.forward<9?(9-space.forward)*.30:0;
           const close=space.forward<3.6?1.15:0;
           const unsafe=alongside?8:0;
           const rear=space.rear<1.8?.7:0;
           const change=Math.abs(target-h.lane)*.14;
           const hold=Math.abs(target-h.targetLane)*.05;
-          const cost=inside+ahead+close+unsafe+rear+change+hold;
+          const outerDetour=target>base&&!onFinalStraight?3.0:0;
+          const cost=inside+ahead+close+unsafe+rear+change+hold+outerDetour;
           if(cost<bestCost-1e-6 || (Math.abs(cost-bestCost)<1e-6&&target<best)){
             best=target;bestCost=cost;
           }
@@ -166,7 +172,8 @@ export function runRace(horses, options = {}) {
         desiredSpeed=Math.min(desiredSpeed,limitSpeed);
       }
       // An outside path is slightly longer, particularly around bends.
-      desiredSpeed-=h.lane*(curve?.032:.012);
+      // The wide route costs more until the final straight, where horses can spread.
+      desiredSpeed-=Math.min(10,h.lane)*(p<FINAL_STRAIGHT_START?.070:.006);
       // Outer starters briefly tuck behind an inside runner before cutting over.
       const breakIn=clamp(1-Math.max(0,h.x)/120,0,1);
       desiredSpeed-=h.lane*.22*breakIn;
