@@ -409,6 +409,7 @@ $('backup-file').addEventListener('change',async e=>{
  try{
   if(file.size>100000)throw new Error('ファイルが大きすぎます。');
   const data=JSON.parse(await file.text());validateHorses(data.horses);
+  if(data.horses.length!==18)throw new Error('バックアップには18頭分の保存データが必要です。');
   if(![1200,1600,2000,2200,2400,3000].includes(Number(data.distance)))throw new Error('距離の設定が不正です。');
   if(!['normal','high','low'].includes(data.scenario))throw new Error('ペース設定が不正です。');
   if(!confirm('現在の設定をバックアップの内容で上書きしますか？'))return;
