@@ -130,13 +130,13 @@ export function runRace(horses, options = {}) {
               Math.abs(other.lane-halfway)<.67);
           }
           // Strong inside preference, relieved only by imminent traffic.
-          const inside=target*(curve?.090:.056);
+          const inside=target*(curve?.24:.19);
           const ahead=space.forward<9?(9-space.forward)*.30:0;
           const close=space.forward<3.6?1.15:0;
           const unsafe=alongside?8:0;
           const rear=space.rear<1.8?.7:0;
-          const change=Math.abs(target-h.lane)*.19;
-          const hold=Math.abs(target-h.targetLane)*.10;
+          const change=Math.abs(target-h.lane)*.14;
+          const hold=Math.abs(target-h.targetLane)*.05;
           const cost=inside+ahead+close+unsafe+rear+change+hold;
           if(cost<bestCost-1e-6 || (Math.abs(cost-bestCost)<1e-6&&target<best)){
             best=target;bestCost=cost;
