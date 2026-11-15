@@ -171,7 +171,7 @@ function renderChase(ctx,frame,horses,distance){
 function renderTop(ctx,frame,horses,distance){
  // Map of the same left-handed half-oval used in the Three.js scene.
  ctx.fillStyle='#1b5638';ctx.fillRect(0,0,1000,560);
- const toXY=p=>({x:145+(p.x+50)*4.45,y:280-p.z*2.15});
+ const toXY=p=>({x:145+(p.x+50)*4.45,y:280+p.z*2.15});
  function band(a,b,color){
    ctx.beginPath();
    for(let i=0;i<=140;i++){
