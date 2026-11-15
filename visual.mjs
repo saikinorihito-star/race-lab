@@ -8,9 +8,9 @@ function label(ctx,text,x,y,opts={}){
 }
 function rounded(ctx,x,y,w,h,r=12){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
 // Cartoon chase-view counterpart of the shared 3D horse design.
-// The horse faces left on the track; all coat/silk/saddle/helmet colors are shared.
+// Horses face right, matching the chase camera's screen direction and the 3D models.
 function drawHorse(ctx,x,y,size,horse,appearance,phase=0){
- ctx.save();ctx.translate(x,y);ctx.scale(-size,size);
+ ctx.save();ctx.translate(x,y);ctx.scale(size,size);
  const edge=appearance.outline,coat=appearance.coat;
  const shape=(cx,cy,rx,ry,fill,rotation=0,stroke=edge,weight=3.5)=>{
    ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,rotation,0,Math.PI*2);
@@ -100,10 +100,11 @@ function renderChase(ctx,frame,horses,distance){
  backgroundChase(ctx,frame.t);
  const lead=Math.max(...frame.horses.map(h=>h.x));
  const records=frame.horses.map(h=>({...h,meta:horses.find(x=>x.id===h.id)}));
+ // Leaders are to the right, lagging horses to the left. The background scrolls left.
  records.sort((a,b)=>a.x-b.x);
  for(const h of records){
-  const diff=lead-h.x;const x=145+diff*13;
-  if(x>1130)continue;
+  const diff=lead-h.x;const x=780-diff*12;
+  if(x< -145)continue;
   const scale=clamp(1.18-diff*.012,.4,1.18);
   const y=418-(h.lane*31)-diff*.11;
   drawHorse(ctx,x,y,scale,h,getHorseAppearance(h.id),frame.t*4.2+h.id*.34);
