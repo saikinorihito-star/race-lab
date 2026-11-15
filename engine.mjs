@@ -3,7 +3,7 @@
  * The model and its parameters are illustrative, NOT calibrated against real races.
  * Independent of rendering, DOM, network and external data providers.
  */
-import {getTurfProfile,turfDistances,courseSlope} from './course.mjs';
+import {getTurfProfile,turfDistances,raceCourseSlope} from './course.mjs';
 export const STYLES = ['逃げ', '先行', '差し', '追込'];
 export const SCENARIOS = {high: 'ハイ', normal: 'ミドル', low: 'スロー'};
 export const COLORS = ['#f6f7fa','#34373f','#e6575e','#4b83dd','#ecc858','#52a86d','#f18b44','#e285ae','#a5a5a5','#9c7a45','#7b70c7','#31a9b1','#bf576e','#aad85d','#427b83','#d4aa82','#6662a9','#c4c8d1'];
@@ -184,7 +184,7 @@ export function runRace(horses, options = {}) {
       // Schematic gradient effect, NOT fitted to historic finishing times:
       // Tokyo rises in the home straight; Kyoto climbs before turn 3 and
       // descends toward turn 4. The coefficient is illustrative, not official.
-      desiredSpeed-=courseSlope(distance-h.x,venue,layout,course)*6.0;
+      desiredSpeed-=raceCourseSlope(distance-h.x,distance,venue,layout,course)*6.0;
       // Outer starters briefly tuck behind an inside runner before cutting over.
       const breakIn=clamp(1-Math.max(0,h.x)/120,0,1);
       desiredSpeed-=h.lane*.22*breakIn;
