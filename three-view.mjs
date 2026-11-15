@@ -1,7 +1,7 @@
 // Optional low-poly 3D race display. Uses the same synthetic race data as 2D.
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
-import {coursePoint,horseCoursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 // Four-beat transverse gallop: trailing hind -> leading hind -> trailing fore -> leading fore.
 // The right/left lead determines which side touches down first. Each leg gets its
@@ -328,10 +328,14 @@ export async function createThreeView(host){
  }
  const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i%6}));
  let disposed=false;
+ let cameraReady=false,lastLeadS=0;
+ const cameraAim=new THREE.Vector3();
  function render(race,horses,time){
    if(disposed)return;
    const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time) : {t:time,horses:neutral};
    const lead=Math.max(...frame.horses.map(h=>h.x));
+   const raceDistance=race?.distance||2200;
+   const leadS=lengthAtMetres(lead,raceDistance);
    const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,2);
    // Use wall-clock time for leg cadence so 8x replay does not become frantic.
    const motionTime=performance.now()*.001;
@@ -339,11 +343,13 @@ export async function createThreeView(host){
      const item=frame.horses.find(h=>h.id===model.id);
      if(!item)continue;
      const gap=Math.max(0,lead-item.x);
-     // Include the rear pack; maintain a stable camera following the leaders.
-     // Distance/placing follow simulated race data; gallop motion is purely visual.
-     // Use the simulated corridor directly: lane 0 is adjacent to the inner rail.
-     model.group.position.set(-gap*.32,.018,-7.55+item.lane*1.55);
-     model.group.visible=gap<180;
+     // Show the passing positions on the shared curved course.
+     // Longitudinal gaps are exaggerated for visibility; ranking and lanes remain unchanged.
+     const renderedS=leadS-gap*.47;
+     const point=coursePoint(renderedS,INSIDE_MARGIN+item.lane*LANE_WIDTH);
+     model.group.position.set(point.x,.018,point.z);
+     model.group.rotation.y=point.yaw;
+     model.group.visible=gap<92;
      model.shadow.visible=model.group.visible;
      const shouldLabel=!!race && leaders.some(v=>v.id===model.id);
      model.nameLabel.sprite.visible=shouldLabel;
@@ -385,14 +391,25 @@ export async function createThreeView(host){
      const shadowSize=1-lift*.14;
      model.shadow.scale.set(1.42*shadowSize,.60*shadowSize,1);
    }
-   // Stabilize the viewpoint; the track marks and horses convey speed.
-   camera.position.set(8,4.25,11.5);
-   camera.lookAt(-1.4,1.72,0);
-   const scroll=motionTime*7.5;
-   for(const {mark,base,z} of speedMarks){
-     const pos=((base-scroll+48)%96+96)%96-48;
-     mark.position.set(pos,.018,z);
+   // The camera follows the field through the left-hand turn.
+   // Soft position easing, no rhythmic shaking (better for eye comfort).
+   const focus=coursePoint(leadS,INSIDE_MARGIN+2.0*LANE_WIDTH);
+   const outwardX=focus.dz,outwardZ=-focus.dx;
+   const wanted=new THREE.Vector3(
+     focus.x+outwardX*19-focus.dx*8,6.65,
+     focus.z+outwardZ*19-focus.dz*8
+   );
+   const wantedAim=new THREE.Vector3(
+     focus.x+focus.dx*3,1.65,
+     focus.z+focus.dz*3
+   );
+   if(!cameraReady||Math.abs(lastLeadS-leadS)>10){
+     camera.position.copy(wanted);cameraAim.copy(wantedAim);cameraReady=true;
+   }else{
+     camera.position.lerp(wanted,.19);cameraAim.lerp(wantedAim,.19);
    }
+   lastLeadS=leadS;
+   camera.lookAt(cameraAim);
    renderer.render(scene,camera);
  }
  function dispose(){
