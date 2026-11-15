@@ -106,6 +106,7 @@ export function safeRacePositions(horses,lead,raceDistance,course='A') {
 const displayCache=new WeakMap();
 function buildDisplay(race){
  const snapshots=[],lastS=new Map();
+ let lastTime=null;
  for(const frame of race.frames){
    const lead=Math.max(...frame.horses.map(h=>h.x));
    const safe=safeRacePositions(frame.horses,lead,race.distance,race.course||'A');
@@ -113,10 +114,14 @@ function buildDisplay(race){
    for(const h of frame.horses){
      const value=safe.get(h.id).s;
      const prev=lastS.get(h.id);
-     const s=prev===undefined?value:Math.max(prev,value);
+     // Retain forward-only movement but never jump faster than a plausible
+     // visual racing pace. This limit applies to visual spacing only.
+     const maxAdvance=22*Math.max(0,frame.t-(lastTime??frame.t));
+     const s=prev===undefined?value:Math.min(Math.max(prev,value),prev+maxAdvance);
      lastS.set(h.id,s);byId.set(h.id,s);
    }
    snapshots.push({t:frame.t,byId});
+   lastTime=frame.t;
  }
  return snapshots;
 }
