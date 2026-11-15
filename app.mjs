@@ -1,4 +1,5 @@
-import {exampleHorses, runRace, summarizeRaces, validateHorses, COLORS, STYLES} from './engine.mjs';
+import {exampleHorses, runRace, summarizeRaces, validateHorses, STYLES} from './engine.mjs';
+import {getHorseAppearance,getFrameNumber} from './appearance.mjs';
 import {renderFrame} from './visual.mjs';
 const $ = (id) => document.getElementById(id);
 const STORE = 'race-lab-demo-v01';
@@ -17,13 +18,21 @@ let threeView=null;
 const picker=$('horse-picker');
 function persist(){try {localStorage.setItem(STORE,JSON.stringify({horses:state.horses,distance:state.distance,scenario:state.scenario}));}catch{setStatus('保存できません。端末のブラウザー設定を確認してください。',true)}}
 function setStatus(text,error=false){$('status').textContent=text;$('status').style.color=error?'#ffc2a3':'#9baec4';}
-function setColorChip(node,id){node.style.background=COLORS[(id-1)%18];node.style.color=(id===1||id===5)?'#182434':'#fff';}
+function setColorChip(node,id){
+ const a=getHorseAppearance(id);
+ node.style.background=a.helmet;
+ node.style.color=a.helmetNumberColor;
+ node.style.border='1px solid '+(a.frame===2?'#f0f0f0':'rgba(15,22,33,.45)');
+ node.title=`${a.frame}枠・${id}番`;
+}
 function currentHorse(){return state.horses.find(h=>h.id===state.selected)}
 function renderPicker(){
  picker.replaceChildren();
  for(const h of state.horses){
   const button=document.createElement('button');button.type='button';button.textContent=String(h.id);
-  button.classList.toggle('active',h.id===state.selected);button.setAttribute('aria-label',`${h.id}番 ${h.name}`);
+  setColorChip(button,h.id);
+  button.classList.toggle('active',h.id===state.selected);
+  button.setAttribute('aria-label',`${getFrameNumber(h.id)}枠 ${h.id}番 ${h.name}`);
   button.setAttribute('aria-pressed',String(h.id===state.selected));
   button.addEventListener('click',()=>{state.selected=h.id;renderPicker();renderEditor()});
   picker.append(button);
@@ -31,7 +40,7 @@ function renderPicker(){
 }
 function renderEditor(){
  const h=currentHorse();setColorChip($('selected-number'),h.id);$('selected-number').textContent=h.id;
- $('selected-title').textContent=h.name;
+ $('selected-title').textContent=`${h.name}（${getFrameNumber(h.id)}枠）`;
  $('horse-name').value=h.name;
  $('horse-style').value=h.style;
  for(const k of ['speed','stamina','kick']){$(`horse-${k}`).value=h[k];$(`${k}-value`).textContent=h[k]}
