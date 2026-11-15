@@ -143,13 +143,21 @@ export function courseHeightMetres(remaining,venue='tokyo',layout='outer',course
   if(r>straight){const u=(high-r)/(high-straight);return elevation*(1-u*u*(3-2*u));}
   return 0;
  }
- const r=Number(remaining)||0;
- if(r>=460)return 0;
- if(r>=300){
-    const u=(460-r)/160;
-    return 2*u*u*(3-2*u);
+ // Tokyo: a visible uphill over the final 460-300m and a gentler
+ // schematic descent elsewhere. Ensure identical height on both sides
+ // of the finish / lap boundary, including for races over one lap.
+ const lap=getTurfProfile('tokyo',course).lap;
+ const r=wrap(Number(remaining)||0,lap);
+ const height=TRACK_ELEVATION_RANGE_METRES;
+ if(r<=300)return height;
+ if(r<460){
+   const u=(460-r)/160;
+   return height*u*u*(3-2*u);
  }
- return 2;
+ const downhillStart=lap-320;
+ if(r<downhillStart)return 0;
+ const u=(r-downhillStart)/(lap-downhillStart);
+ return height*u*u*(3-2*u);
 }
 export function courseSlope(remaining,venue='tokyo',layout='outer',course='A'){
  if(venue==='kyoto'){
@@ -160,10 +168,17 @@ export function courseSlope(remaining,venue='tokyo',layout='outer',course='A'){
   const u=(high-r)/(high-straight);
   return -elevation*6*u*(1-u)/(high-straight);
  }
- const r=Number(remaining)||0;
- if(r<=300||r>=460)return 0;
- const u=(460-r)/160;
- return 12*u*(1-u)/160; // Dimensionless d(height)/d(distance run).
+ const lap=getTurfProfile('tokyo',course).lap;
+ const r=wrap(Number(remaining)||0,lap);
+ if(r>300&&r<460){
+   const u=(460-r)/160;
+   return TRACK_ELEVATION_RANGE_METRES*6*u*(1-u)/160;
+ }
+ if(r>lap-320&&r<lap){
+   const u=(r-(lap-320))/320;
+   return -TRACK_ELEVATION_RANGE_METRES*6*u*(1-u)/320;
+ }
+ return 0;
 }
 export function safeRacePositions(horses,lead,raceDistance,course='A',venue='tokyo',layout='outer') {
  const leadS=lengthAtMetres(lead,raceDistance);
