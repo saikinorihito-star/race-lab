@@ -2,7 +2,7 @@
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 import {gallopCycle,gallopLegPose} from './gait.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET,safeRacePositions} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,safeRacePositions} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
  const THREE = await import(THREE_URL);
@@ -265,7 +265,7 @@ export async function createThreeView(host){
    }
    // Reduce mesh footprint relative to collision-safe lane spacing.
    group.scale.set(.77,.88,.77);
-   return {group,legs,headPivot,riderPivot,tailPivot,id,numberTexture};
+   return {group,legs,headPivot,riderPivot,tailPivot,id,numberTexture,numberMat,silkMat:silk,helmetMat,accentMat:uniformAccent,appearanceCount:18};
  }
  const models=Array.from({length:18},(_,i)=>horseModel(i+1));
  // Subtle floor shadows provide a clear takeoff/landing cue.
@@ -279,7 +279,7 @@ export async function createThreeView(host){
    model.shadow=shadow;
  }
  // Reference-style black horse nameplates are billboard sprites, drawn in the 3D video as well.
- function makeNameLabel(text,id){
+ function makeNameLabel(text,id,fieldCount=18){
    const image=document.createElement('canvas');image.width=512;image.height=104;
    const ctx=image.getContext('2d');
    const safe=String(text||'競走馬').slice(0,12);
@@ -287,7 +287,7 @@ export async function createThreeView(host){
    ctx.beginPath();ctx.roundRect(14,10,484,84,16);ctx.fill();
    ctx.lineWidth=4;ctx.strokeStyle='#f7f5e8';ctx.stroke();
    // A small colored frame badge is readable even when helmet details are distant.
-   const appearance=getHorseAppearance(id);
+   const appearance=getHorseAppearance(id,fieldCount);
    ctx.fillStyle=appearance.helmet;
    ctx.beginPath();ctx.roundRect(27,23,94,58,10);ctx.fill();
    ctx.strokeStyle='#fafafa';ctx.lineWidth=3;ctx.stroke();
@@ -309,7 +309,21 @@ export async function createThreeView(host){
    const nameLabel=makeNameLabel('',model.id);
    model.group.add(nameLabel.sprite);
    model.nameLabel=nameLabel;
-   model.lastName='';
+   model.lastName='';model.labelCount=18;
+ }
+ // Refresh only the appearance-specific materials when the field size changes.
+ // Unused models stay hidden rather than remaining at their previous position.
+ function setFieldAppearance(model,count){
+   if(model.appearanceCount===count)return;
+   const colors=getHorseAppearance(model.id,count);
+   model.silkMat.color.set(colors.silk);
+   model.helmetMat.color.set(colors.helmet);
+   model.accentMat.color.set(colors.silkAccent);
+   const oldTex=model.numberTexture;
+   const nextTex=raceNumberTexture(model.id,colors);
+   model.numberMat.map=nextTex;model.numberMat.needsUpdate=true;
+   model.numberTexture=nextTex;oldTex.dispose();
+   model.appearanceCount=count;
  }
  const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i}));
  let disposed=false;
@@ -318,7 +332,9 @@ export async function createThreeView(host){
  const cameraAim=new THREE.Vector3();
  function render(race,horses,time){
    if(disposed)return;
-   const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time) : {t:time,horses:neutral};
+   const entrants=horses?.length?horses.length:18;
+   const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time)
+      : {t:time,horses:horses?.length?horses.map(h=>({id:h.id,x:0,lane:h.id-1})):neutral};
    const lead=Math.max(...frame.horses.map(h=>h.x));
    const raceDistance=race?.distance||2200;
    const leadS=lengthAtMetres(lead,raceDistance);
@@ -328,7 +344,12 @@ export async function createThreeView(host){
    const motionTime=performance.now()*.001;
    for(const model of models){
      const item=frame.horses.find(h=>h.id===model.id);
-     if(!item)continue;
+     if(!item){
+       model.group.visible=false;model.shadow.visible=false;
+       model.nameLabel.sprite.visible=false;
+       continue;
+     }
+     setFieldAppearance(model,entrants);
      const gap=Math.max(0,lead-item.x);
      // Display-only safety spacing prevents long 3D bodies intersecting in bends.
      // Simulation order and lane decisions are still determined by the race engine.
@@ -341,13 +362,13 @@ export async function createThreeView(host){
      model.nameLabel.sprite.visible=shouldLabel;
      if(shouldLabel){
        const name=horses?.find(v=>v.id===model.id)?.name || 'サンプル'+model.id;
-       if(name!==model.lastName){
+       if(name!==model.lastName||model.labelCount!==entrants){
          model.group.remove(model.nameLabel.sprite);
          model.nameLabel.sprite.material.dispose();
          model.nameLabel.tex.dispose();
-         model.nameLabel=makeNameLabel(name,model.id);
+         model.nameLabel=makeNameLabel(name,model.id,entrants);
          model.group.add(model.nameLabel.sprite);
-         model.lastName=name;
+         model.lastName=name;model.labelCount=entrants;
        }
      }
      // A single four-beat gallop pattern and cadence for all 18 horses.
@@ -381,14 +402,14 @@ export async function createThreeView(host){
    const focusS=Math.min(leadS,HALF_LAP_LENGTH);
    const visible=frame.horses.filter(h=>lead-h.x<70);
    const meanLane=visible.length
-      ?visible.reduce((sum,h)=>sum+h.lane,0)/visible.length:8.5;
+      ?visible.reduce((sum,h)=>sum+h.lane,0)/visible.length:(entrants-1)/2;
    const direction=coursePoint(focusS,0);
    const insideX=direction.dz,insideZ=-direction.dx;
-   const startCenter=coursePoint(focusS,15.2);
-   const trackCenter=coursePoint(focusS,2+meanLane*1.55);
+   const startCenter=coursePoint(focusS,INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5);
+   const trackCenter=coursePoint(focusS,INSIDE_MARGIN+meanLane*LANE_WIDTH);
    const startCamera=new THREE.Vector3(
-     startCenter.x+direction.dx*43+insideX*18,11.4,
-     startCenter.z+direction.dz*43+insideZ*18
+     startCenter.x+direction.dx*(23+entrants*1.12)+insideX*(9+entrants*.5),6.8+entrants*.25,
+     startCenter.z+direction.dz*(23+entrants*1.12)+insideZ*(9+entrants*.5)
    );
    const followCamera=new THREE.Vector3(
      trackCenter.x+direction.dx*17+insideX*18,7.5,
