@@ -1,7 +1,7 @@
 // Optional low-poly 3D race display. Uses the same synthetic race data as 2D.
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET,safeRacePositions} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 // Four-beat transverse gallop: trailing hind -> leading hind -> trailing fore -> leading fore.
 // The right/left lead determines which side touches down first. Each leg gets its
@@ -60,7 +60,7 @@ export async function createThreeView(host){
  function strip(offsetA,offsetB,color){
    const pos=[],indices=[],steps=160;
    for(let i=0;i<=steps;i++){
-     const s=i*HALF_LAP_LENGTH/steps;
+     const s=-45+i*(HALF_LAP_LENGTH+75)/steps;
      const a=coursePoint(s,offsetA),b=coursePoint(s,offsetB);
      pos.push(a.x,-.035,a.z,b.x,-.035,b.z);
      if(i<steps){const j=2*i;indices.push(j,j+2,j+1,j+1,j+2,j+3);}
@@ -77,7 +77,7 @@ export async function createThreeView(host){
  function rail(offset){
    for(const y of [.52,.94]){
      const points=Array.from({length:106},(_,i)=>{
-       const p=coursePoint(i*HALF_LAP_LENGTH/105,offset);
+       const p=coursePoint(-45+i*(HALF_LAP_LENGTH+75)/105,offset);
        return new THREE.Vector3(p.x,y,p.z);
      });
      const curve=new THREE.CatmullRomCurve3(points);
@@ -85,7 +85,7 @@ export async function createThreeView(host){
      scene.add(mesh);
    }
    const postMat=material(0xf8f9f2);
-   for(let d=0;d<=HALF_LAP_LENGTH;d+=5.8){
+   for(let d=-45;d<=HALF_LAP_LENGTH+30;d+=5.8){
      const p=coursePoint(d,offset);
      const post=new THREE.Mesh(new THREE.CylinderGeometry(.047,.047,1,6),postMat);
      post.position.set(p.x,.50,p.z);scene.add(post);
@@ -339,16 +339,16 @@ export async function createThreeView(host){
    const raceDistance=race?.distance||2200;
    const leadS=lengthAtMetres(lead,raceDistance);
    const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,2);
+   const displayed=safeRacePositions(frame.horses,lead,raceDistance);
    // Use wall-clock time for leg cadence so 8x replay does not become frantic.
    const motionTime=performance.now()*.001;
    for(const model of models){
      const item=frame.horses.find(h=>h.id===model.id);
      if(!item)continue;
      const gap=Math.max(0,lead-item.x);
-     // Show the passing positions on the shared curved course.
-     // Longitudinal gaps are exaggerated for visibility; ranking and lanes remain unchanged.
-     const renderedS=leadS-gap*.82;
-     const point=coursePoint(renderedS,INSIDE_MARGIN+item.lane*LANE_WIDTH);
+     // Display-only safety spacing prevents long 3D bodies intersecting in bends.
+     // Simulation order and lane decisions are still determined by the race engine.
+     const point=displayed.get(item.id).point;
      model.group.position.set(point.x,.018,point.z);
      model.group.rotation.y=point.yaw;
      model.group.visible=gap<92;
@@ -395,7 +395,8 @@ export async function createThreeView(host){
    }
    // The camera follows the field through the left-hand turn.
    // Soft position easing, no rhythmic shaking (better for eye comfort).
-   const focus=coursePoint(leadS,INSIDE_MARGIN+2.0*LANE_WIDTH);
+   const focusS=Math.min(leadS,HALF_LAP_LENGTH);
+   const focus=coursePoint(focusS,5.1);
    const outwardX=focus.dz,outwardZ=-focus.dx;
    const wanted=new THREE.Vector3(
      focus.x+outwardX*17-focus.dx*7,6.20,
@@ -405,12 +406,12 @@ export async function createThreeView(host){
      focus.x+focus.dx*3,1.65,
      focus.z+focus.dz*3
    );
-   if(!cameraReady||Math.abs(lastLeadS-leadS)>10){
+   if(!cameraReady||Math.abs(lastLeadS-focusS)>10){
      camera.position.copy(wanted);cameraAim.copy(wantedAim);cameraReady=true;
    }else{
      camera.position.lerp(wanted,.19);cameraAim.lerp(wantedAim,.19);
    }
-   lastLeadS=leadS;
+   lastLeadS=focusS;
    camera.lookAt(cameraAim);
    renderer.render(scene,camera);
  }
