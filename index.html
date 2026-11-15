@@ -30,17 +30,19 @@
         <div class="panel-head"><h2><span class="step">01</span> レース設定</h2><span class="minor" id="field-count-label">出走 18頭</span></div>
         <div class="settings-grid">
           <label>出走頭数<select id="horse-count"><option value="2">2頭</option><option value="3">3頭</option><option value="4">4頭</option><option value="5">5頭</option><option value="6">6頭</option><option value="7">7頭</option><option value="8">8頭</option><option value="9">9頭</option><option value="10">10頭</option><option value="11">11頭</option><option value="12">12頭</option><option value="13">13頭</option><option value="14">14頭</option><option value="15">15頭</option><option value="16">16頭</option><option value="17">17頭</option><option value="18" selected>18頭</option></select></label>
-          <label>東京・芝距離<select id="distance"><option value="1400">芝1,400m</option><option value="1600">芝1,600m</option><option value="1800">芝1,800m</option><option value="2000">芝2,000m</option><option value="2300">芝2,300m</option><option value="2400" selected>芝2,400m</option><option value="2500">芝2,500m</option><option value="2600">芝2,600m</option><option value="3400">芝3,400m</option></select></label>
+          <label>競馬場<select id="venue"><option value="tokyo">東京競馬場</option><option value="kyoto">京都競馬場</option></select></label>
+          <label id="layout-field" hidden>コースの回り方<select id="course-layout"><option value="outer">外回り</option><option value="inner">内回り</option></select></label>
+          <label>芝の距離<select id="distance"><option value="1400">芝1,400m</option><option value="1600">芝1,600m</option><option value="1800">芝1,800m</option><option value="2000">芝2,000m</option><option value="2300">芝2,300m</option><option value="2400" selected>芝2,400m</option><option value="2500">芝2,500m</option><option value="2600">芝2,600m</option><option value="3400">芝3,400m</option></select></label>
           <label>使用コース<select id="turf-course"><option value="A">Aコース</option><option value="B">Bコース</option><option value="C">Cコース</option><option value="D">Dコース</option></select></label><label>レースペース<select id="scenario"><option value="high">ハイ</option><option value="normal" selected>ミドル</option><option value="low">スロー</option></select></label>
         </div>
         <div class="action-row"><button class="btn primary-btn" id="run"><span>▶</span> 予想シミュレーション開始</button><button class="btn secondary-btn" id="reset-horses" title="すべての馬の設定を初期化">初期化</button></div>
-        <p id="course-data" class="course-data" aria-live="polite">東京芝Aコース｜1周 2,083.1m｜直線 525.9m｜高低差 2.7m</p><p id="status" class="small-status" role="status" aria-live="polite">開始ボタンを押すと1レースを再生し、1,000回の着順分布を集計します。</p>
+        <p id="course-data" class="course-data" aria-live="polite">東京芝Aコース｜左回り｜1周 2,083.1m｜直線 525.9m｜高低差 2.7m</p><p id="status" class="small-status" role="status" aria-live="polite">開始ボタンを押すと1レースを再生し、1,000回の着順分布を集計します。</p>
       </article>
       <article class="panel visual-panel">
         <div class="panel-head"><h2><span class="step">02</span> レース再生</h2><div class="tiny-toggle"><button data-view="top" aria-pressed="false">上空ビュー</button><button class="active" data-view="three" aria-pressed="true">3Dビュー</button></div></div>
         <section class="race-overview" aria-label="レース全体の位置図">
           <div class="race-overview-head"><strong>全体像 <span class="race-overview-hint" id="overview-course">東京芝A・左回り</span></strong><span id="overview-remaining" class="overview-remaining">スタート前</span></div>
-          <svg id="overview-map" viewBox="0 0 900 226" role="img" aria-label="東京競馬場芝コースを模式的に表す左回り1周コースの馬群位置図。黄色い点は3Dカメラ位置です。"></svg>
+          <svg id="overview-map" viewBox="0 0 900 226" role="img" aria-label="選択した東京・京都競馬場芝コースの模式図。黄色い点は3Dカメラ位置です。"></svg>
           <p class="overview-legend" id="overview-legend">点は馬の実位置</p>
         </section>
         <div class="canvas-wrap"><canvas id="race-canvas" width="1000" height="560" aria-label="競走馬の位置関係を示すレースアニメーション"></canvas><div id="three-host" class="three-host" hidden></div><div class="canvas-label" id="canvas-label">スタート前</div></div>
@@ -52,7 +54,7 @@
           <div class="playback-line"><button id="toggle-play" class="play-button" title="再生／一時停止" aria-label="再生">▶</button><input id="seek" type="range" min="0" max="100" value="0" aria-label="再生位置"><span id="play-time" class="time">0:00 / 0:00</span></div>
           <div class="playback-options"><label>再生速度 <select id="speed"><option value="1">1倍</option><option value="2">2倍</option><option value="4">4倍</option><option value="8" selected>8倍</option><option value="12">12倍</option></select></label><button class="btn secondary-btn" id="save-video">動画保存</button></div>
         </div>
-        <p class="helptext">東京競馬場の芝コース（左回り）をモデル化。JRA公式のコース別1周距離・直線525.9m・高低差2.7m・各発走距離を使用します。コース図・上り坂の高さの推移は模式的な近似です。発走ゲートは選択距離に応じた位置に配置します。勝負服・馬・能力値・勝率・坂の減速係数は架空のシミュレーションで、JRAの実レース成績による校正はしていません。 <a href="https://www.jra.go.jp/facilities/race/tokyo/course/" target="_blank" rel="noopener noreferrer">JRA公式：東京競馬場コースデータ</a></p>
+        <p class="helptext">東京芝は左回り、京都芝は右回りです。京都は内回り・外回りを選択できます。JRA公式の距離・1周距離・最後の直線・高低差を採用しています。3コーナー付近の坂は模式的に反映していますが、コースの細部、発走位置、坂勾配やスピード補正は近似です。馬の能力値と勝率は実レース成績で校正していない架空モデルです。<a href="https://www.jra.go.jp/facilities/race/tokyo/course/" target="_blank" rel="noopener noreferrer">JRA 東京芝</a> / <a href="https://www.jra.go.jp/facilities/race/kyoto/course/" target="_blank" rel="noopener noreferrer">JRA 京都芝</a></p>
       </article>
       <article class="panel results-panel">
         <div class="panel-head"><h2><span class="step">03</span> 予想結果</h2><span class="minor">1,000回の仮想試行</span></div>
@@ -75,7 +77,7 @@
         <p class="helptext notes">設定はこの端末のブラウザー内に保存されます。閲覧データを消すと失われる場合があります。</p>
         <div class="backup-row"><button class="btn secondary-btn" id="backup-save">設定をバックアップ</button><button class="btn secondary-btn" id="backup-load">復元する</button><input id="backup-file" type="file" accept="application/json,.json" hidden></div>
       </article>
-      <article class="info-panel"><span class="info-heading">HOW IT WORKS</span><p>JRA公式の東京芝コース寸法と坂の位置をコース設定に使用。馬のスピード・スタミナ・脚質に関する係数は仮定であり、実際のレース結果から推定した数値ではありません。</p></article>
+      <article class="info-panel"><span class="info-heading">HOW IT WORKS</span><p>JRA公式の東京・京都芝のコース寸法と坂の位置を参照。脚質、速度、スタミナ、坂による減速係数は架空の設定で、過去レース結果に基づく推定値ではありません。</p></article>
     </aside>
   </section>
 </main>
