@@ -4,7 +4,8 @@ export const HALF_STRAIGHT=48;
 export const TURN_RADIUS=28;
 export const LANE_WIDTH=1.55;
 export const INSIDE_MARGIN=2.0;
-export const TRACK_OUTER_OFFSET=13.8;
+// Wide enough for 18 separate starting stalls, then tactical movement to the inner rail.
+export const TRACK_OUTER_OFFSET=31.5;
 export const HALF_LAP_LENGTH=HALF_STRAIGHT*2+Math.PI*TURN_RADIUS;
 
 // Counterclockwise as seen from above: east on the lower straight, curve left
@@ -28,7 +29,7 @@ export function coursePoint(s,offset=0) {
 export function horseCoursePoint(raceMetres,raceDistance,lane) {
  const d=Math.max(1,Number(raceDistance)||2200);
  const s=Number(raceMetres)*HALF_LAP_LENGTH/d;
- return coursePoint(s,INSIDE_MARGIN+Math.max(0,Math.min(6,Number(lane)||0))*LANE_WIDTH);
+ return coursePoint(s,INSIDE_MARGIN+Math.max(0,Math.min(17,Number(lane)||0))*LANE_WIDTH);
 }
 export function lengthAtMetres(metres,raceDistance) {
  return Number(metres)*HALF_LAP_LENGTH/Math.max(1,Number(raceDistance)||2200);
@@ -42,7 +43,7 @@ export function safeRacePositions(horses,lead,raceDistance) {
  const placed=[],byId=new Map();
  const order=[...horses].sort((a,b)=>b.x-a.x||a.id-b.id);
  for(const horse of order){
-   const offset=INSIDE_MARGIN+Math.max(0,Math.min(6,horse.lane))*LANE_WIDTH;
+   const offset=INSIDE_MARGIN+Math.max(0,Math.min(17,horse.lane))*LANE_WIDTH;
    let s=leadS-Math.max(0,lead-horse.x)*.82;
    let point=coursePoint(s,offset);
    for(let attempt=0;attempt<36;attempt++){
