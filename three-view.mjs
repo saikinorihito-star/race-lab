@@ -1,38 +1,9 @@
 // Optional low-poly 3D race display. Uses the same synthetic race data as 2D.
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
+import {gallopCycle,gallopLegPose} from './gait.mjs';
 import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET,safeRacePositions} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
-// Four-beat transverse gallop: trailing hind -> leading hind -> trailing fore -> leading fore.
-// The right/left lead determines which side touches down first. Each leg gets its
-// own contact time, support phase and lifted recovery instead of a mirrored sine wave.
-function gallopLegPose(front, nearSide, rightLead, cycle) {
- const isLeading=nearSide===rightLead;
- const contact=front?(isLeading?.50:.35):(isLeading?.14:0);
- const t=((cycle-contact)%1+1)%1;
- // Keyframes: ground contact, support, push-off, knee tuck, forward reach, landing.
- const keys=[
-  [0,.43,.025],
-  [.12,-.04,-.045],
-  [.24,-.40,.015],
-  [.43,-.22,.34],
-  [.68,.24,.34],
-  [.87,.41,.09],
-  [1,.43,.025]
- ];
- for(let i=0;i<keys.length-1;i++){
-  const a=keys[i],b=keys[i+1];
-  if(t<=b[0]){
-   const u=Math.max(0,Math.min(1,(t-a[0])/(b[0]-a[0])));
-   const smooth=u*u*(3-2*u);
-   const hip=a[1]+(b[1]-a[1])*smooth;
-   const knee=a[2]+(b[2]-a[2])*smooth;
-   return {hip:hip*(front?1:.89),knee:knee*(front?1:-.75)};
-  }
- }
- return {hip:.43,knee:.025};
-}
-
 export async function createThreeView(host){
  const THREE = await import(THREE_URL);
  const renderer = new THREE.WebGLRenderer({alpha:false,antialias:true,powerPreference:'low-power'});
@@ -237,7 +208,7 @@ export async function createThreeView(host){
      tackCurve(group,[[-.49,1.82,side*.52],[-.60,1.50,side*.71],[-.61,1.30,side*.75]],leather,.031);
      tackCurve(group,[[-.76,1.34,side*.75],[-.76,1.22,side*.75],[-.45,1.22,side*.75],[-.45,1.34,side*.75]],steel,.030);
      // Reins from the bit toward the jockey's hands.
-     tackCurve(group,[[2.02,1.66,side*.41],[1.48,1.86,side*.55],[.95,2.06,side*.49],[.46,2.21,side*.30]],leather,.030);
+     tackCurve(group,[[2.02,1.66,side*.41],[1.48,1.86,side*.55],[.95,2.06,side*.49],[.48,2.12,side*.27]],leather,.030);
      // Breastplate strap below neck.
      tackCurve(group,[[.60,1.86,side*.53],[.47,1.25,side*.62],[.08,1.10,side*.52]],leather,.039);
    }
@@ -249,36 +220,48 @@ export async function createThreeView(host){
      if(side<0)num.rotation.y=Math.PI;
      group.add(num);
    }
-   // Oversized jockey helmet and face, compact colorful torso and bent arms.
-   // A straddling jockey: hips centered on the saddle, bent knees, boots in stirrups.
-   const riderPivot=new THREE.Group();riderPivot.position.set(-.30,2.00,0);group.add(riderPivot);
-   const breeches=material(0xf0f1ee),boots=material(0x26282e);
-   part(riderPivot,sphere,breeches,-.17,-.095,0,.32,.21,.37);
+   // Race jockey in a forward two-point crouch. Hips stay centered over the
+   // saddle, each thigh wraps the horse's flank and each boot rests in a stirrup.
+   const riderPivot=new THREE.Group();
+   riderPivot.position.set(-.30,1.94,0);
+   group.add(riderPivot);
+   const breeches=material(0xf4f5f0),boots=material(0x262a30);
+   const gloves=material(0x302d2c);
+   // Seat and pelvis make contact with the saddle, not floating above the horse.
+   part(riderPivot,sphere,breeches,-.04,-.02,0,.30,.20,.37);
    for(const side of [-1,1]){
-     const z=side*.31;
-     jointBetween(riderPivot,[-.16,-.10,z],[-.38,-.47,side*.59],breeches,.155);
-     part(riderPivot,sphere,breeches,-.38,-.47,side*.59,.16,.13,.15);
-     jointBetween(riderPivot,[-.38,-.47,side*.59],[-.32,-.72,side*.73],boots,.123);
-     part(riderPivot,sphere,boots,-.31,-.74,side*.73,.23,.09,.13);
+     const hip=[-.04,-.08,side*.30];
+     const knee=[.21,-.37,side*.60];
+     const boot=[-.25,-.63,side*.74];
+     jointBetween(riderPivot,hip,knee,breeches,.155);
+     part(riderPivot,sphere,breeches,...knee,.145,.15,.14);
+     jointBetween(riderPivot,knee,boot,boots,.112);
+     part(riderPivot,sphere,boots,boot[0]+.03,boot[1]-.015,boot[2],.21,.085,.125);
    }
-   const chest=part(riderPivot,sphere,silk,.15,.30,0,.39,.46,.34);
-   chest.rotation.z=-.30;
+   // Chest leans forwards naturally from the pelvis toward the horse's neck.
+   const chest=part(riderPivot,sphere,silk,.19,.27,0,.32,.41,.29);
+   chest.rotation.z=-.62;
    const uniformAccent=material(appearance.silkAccent);
-   // A slim racing-silk band and shoulder flashes, not a solid frame-colored jacket.
-   part(riderPivot,sphere,uniformAccent,.20,.43,-.308,.24,.105,.035);
-   part(riderPivot,sphere,uniformAccent,.20,.43,.308,.24,.105,.035);
-   part(riderPivot,sphere,skin,.29,.91,0,.29,.30,.285);
-   part(riderPivot,sphere,helmetMat,.27,1.14,0,.40,.20,.37);
-   // Contrasting cap edging makes the white and black frames readable.
-   part(riderPivot,sphere,steel,.27,1.045,0,.38,.042,.358);
-   part(riderPivot,sphere,helmetMat,.35,1.035,-.10,.37,.065,.30);
-   part(riderPivot,sphere,hoofMat,.35,.98,-.23,.31,.068,.085);
-   // Bent elbows and both hands extended to grip the reins.
+   // Contrasting narrow stripe lets black/white/yellow jackets remain readable.
    for(const side of [-1,1]){
-     jointBetween(riderPivot,[.16,.48,side*.27],[.42,.22,side*.36],silk,.13);
-     part(riderPivot,sphere,silk,.42,.22,side*.36,.14,.14,.13);
-     jointBetween(riderPivot,[.42,.22,side*.36],[.76,.12,side*.27],silk,.10);
-     part(riderPivot,sphere,skin,.76,.12,side*.27,.13,.11,.12);
+     const flash=part(riderPivot,sphere,uniformAccent,.24,.33,side*.27,.19,.075,.04);
+     flash.rotation.z=-.62;
+   }
+   part(riderPivot,sphere,skin,.51,.73,0,.235,.25,.235);
+   part(riderPivot,sphere,helmetMat,.52,.97,0,.32,.16,.31);
+   part(riderPivot,sphere,steel,.53,.875,0,.29,.028,.288);
+   part(riderPivot,sphere,helmetMat,.67,.865,-.05,.25,.055,.255);
+   // Slim riding goggles and a downward-looking face.
+   part(riderPivot,sphere,hoofMat,.71,.78,-.16,.20,.057,.09);
+   // Shoulders and elbows bend down towards both reins, with hands well forward.
+   for(const side of [-1,1]){
+     const shoulder=[.31,.47,side*.25];
+     const elbow=[.51,.27,side*.35];
+     const hand=[.77,.17,side*.27];
+     jointBetween(riderPivot,shoulder,elbow,silk,.13);
+     part(riderPivot,sphere,silk,...elbow,.125,.12,.12);
+     jointBetween(riderPivot,elbow,hand,silk,.105);
+     part(riderPivot,sphere,gloves,...hand,.112,.095,.10);
    }
    // Reduce mesh footprint relative to collision-safe lane spacing.
    group.scale.set(.77,.88,.77);
@@ -366,12 +349,10 @@ export async function createThreeView(host){
          model.lastName=name;
        }
      }
-     // Racing gallop at about 2.4-2.7 strides per wall-clock second, even at 8x replay.
-     // Keep camera stable; unequal left/right touchdown timing provides realism.
-     const pace=Math.max(.95,Math.min(1.08,(item.speed || 16.5)/16.5));
-     const cycle=(motionTime*2.48*pace+model.id*.071)%1;
+     // A single four-beat gallop pattern and cadence for all 18 horses.
+     // Left/right footfalls remain staggered; no per-horse random phase.
+     const cycle=gallopCycle(motionTime);
      const theta=cycle*Math.PI*2;
-     const rightLead=model.id%2===0;
      // Brief suspension follows the fourth footfall; the horse lifts as one body.
      const airborne=cycle>.66&&cycle<.91
        ?Math.sin(Math.PI*(cycle-.66)/.25):0;
@@ -380,14 +361,14 @@ export async function createThreeView(host){
      model.group.rotation.z=-.014+Math.sin(theta+.42)*.049;
      model.group.rotation.x=Math.sin(theta*.50+model.id)*.008;
      for(const leg of model.legs){
-       const pose=gallopLegPose(leg.front,leg.side,rightLead,cycle);
+       const pose=gallopLegPose(leg.front,leg.side,cycle);
        leg.hip.rotation.z=pose.hip;
        leg.knee.rotation.z=pose.knee;
      }
      model.headPivot.rotation.z=-.014+Math.sin(theta+.94)*.044;
      model.tailPivot.rotation.y=Math.sin(theta+.34)*.108;
-     model.riderPivot.rotation.z=-.055-Math.sin(theta+.56)*.046;
-     model.riderPivot.position.y=2.00-Math.max(0,Math.sin(theta+.85))*.044;
+     model.riderPivot.rotation.z=-.015-Math.sin(theta+.56)*.024;
+     model.riderPivot.position.y=1.94-Math.max(0,Math.sin(theta+.85))*.016;
      model.shadow.position.x=model.group.position.x;
      model.shadow.position.z=model.group.position.z;
      const shadowSize=1-lift*.14;
