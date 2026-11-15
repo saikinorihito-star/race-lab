@@ -230,25 +230,30 @@ export async function createThreeView(host){
          model.lastName=name;
        }
      }
-     // Moderately energetic gallop: coordinated legs, soft suspension, head/torso counter-motion.
-     // Keep the hoof cadence independent of accelerated video playback.
-     const pace=Math.max(.85,Math.min(1.12,(item.speed || 16.5)/16.5));
-     const gait=motionTime*7.0*pace+model.id*.34;
-     const up=Math.max(0,Math.sin(gait*2+.35));
-     model.group.position.y=.016+up*.030;
-     model.group.rotation.z=Math.sin(gait+.4)*.018;
+     // Elastic, stylized gallop. Rhythm is independent of 8x playback speed.
+     // Front legs reach forward together, hind legs push off with a short delay.
+     const pace=Math.max(.88,Math.min(1.12,(item.speed || 16.5)/16.5));
+     const gait=motionTime*7.4*pace+model.id*.40;
+     const lift=Math.pow(Math.max(0,Math.sin(gait+.42)),1.5);
+     const landing=Math.max(0,Math.sin(gait+Math.PI*.65));
+     model.group.position.y=.015+lift*.082-landing*.014;
+     // More motion in the entire horse, not frantic hoof rotations.
+     model.group.rotation.z=-.018+Math.sin(gait+.75)*.052;
+     model.group.rotation.x=Math.sin(gait*.50+model.id)*.015;
      for(let j=0;j<model.legs.length;j++){
        const leg=model.legs[j];
-       const phase=gait+(leg.front?0:Math.PI)+(leg.side?Math.PI:0);
-       leg.hip.rotation.z=Math.sin(phase)*.235;
-       leg.knee.rotation.z=Math.max(0,Math.cos(phase+.4))*.135-.045;
+       const phase=gait+(leg.front?0:Math.PI*.85)+(leg.side?.30:-.30);
+       const stride=leg.front?.34:.31;
+       leg.hip.rotation.z=Math.sin(phase)*stride;
+       leg.knee.rotation.z=Math.max(0,Math.cos(phase+.32))*.22-.085;
      }
-     model.headPivot.rotation.z=-.012+Math.sin(gait+.8)*.025;
-     model.tailPivot.rotation.y=Math.sin(gait*.48)*.11;
-     model.riderPivot.rotation.z=-.023-Math.sin(gait+.5)*.025;
+     model.headPivot.rotation.z=-.01+Math.sin(gait+.96)*.061;
+     model.tailPivot.rotation.y=Math.sin(gait*.55)*.16;
+     model.riderPivot.rotation.z=-.055-Math.sin(gait+.46)*.066;
+     model.riderPivot.position.y=2.00-Math.max(0,Math.cos(gait+.38))*.065;
    }
-   camera.position.set(8.0+Math.sin(frame.t*.12)*.22,4.3,11.5);
-   camera.lookAt(-1.4,1.65,0);
+   camera.position.set(8.0+Math.sin(motionTime*.85)*.13,4.25+Math.sin(motionTime*1.7)*.065,11.5);
+   camera.lookAt(-1.4,1.72+Math.sin(motionTime*1.7+.25)*.035,0);
    renderer.render(scene,camera);
  }
  function dispose(){
