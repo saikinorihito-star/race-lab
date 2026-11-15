@@ -1,7 +1,7 @@
 import {exampleHorses, runRace, summarizeRaces, validateHorses, STYLES} from './engine.mjs';
 import {getHorseAppearance,getFrameNumber} from './appearance.mjs';
 import {renderFrame,interpolateRaceFrame} from './visual.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile,turfDistances,courseSlope,HOME_STRAIGHT_METRES,furlongMarkerPositions} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile,turfDistances,courseSlope,courseHeightMetres,HOME_STRAIGHT_METRES,furlongMarkerPositions} from './course.mjs';
 const $ = (id) => document.getElementById(id);
 const STORE = 'race-lab-demo-v01';
 const DEFAULTS = {horses:exampleHorses(),count:18,distance:2400,venue:'tokyo',layout:'outer',course:'A',scenario:'normal'};
@@ -34,6 +34,7 @@ const HUD_SVG_NS='http://www.w3.org/2000/svg';
 const hudMarkers=new Map(),hudEntries=new Map();
 let hudReady=false,hudLastPaint=0,hudRankKey='';
 let hudCameraDot=null,hudCameraSight=null;
+let elevationKey='',elevationPointer=null,elevationPointerDot=null;
 function hudSvg(tag,attrs={}){
  const el=document.createElementNS(HUD_SVG_NS,tag);
  for(const [k,v] of Object.entries(attrs))el.setAttribute(k,String(v));
@@ -53,6 +54,74 @@ function hudPath(offset,reverse=false){
   parts.push((i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1));
  }
  return parts.join(' ');
+}
+// Rebuild only when venue, layout, rail or distance changes.
+// The horizontal scale covers the entire selected RACE distance, so longer
+// events show their repeated lap profiles rather than just the last lap.
+function buildElevationProfile(){
+ const key=[state.venue,state.layout,state.course,state.distance].join(':');
+ if(elevationKey===key&&elevationPointer&&elevationPointerDot)return;
+ elevationKey=key;
+ const svg=$('elevation-chart');svg.replaceChildren();
+ const p=getTurfProfile(state.venue,state.course,state.layout);
+ const left=58,right=850,top=25,bottom=111;
+ const height=Math.max(.1,p.elevation);
+ const fraction=remaining=>Math.max(0,Math.min(1,1-remaining/state.distance));
+ const x=remaining=>left+(right-left)*fraction(remaining);
+ const y=remaining=>bottom-7-(courseHeightMetres(remaining,state.venue,state.layout,state.course)/height)*69;
+ svg.append(hudSvg('rect',{x:0,y:0,width:900,height:154,fill:'#0c2225'}));
+ for(const [value,line] of [[0,bottom-7],[height,bottom-76]]){
+  svg.append(hudSvg('line',{x1:left,y1:line,x2:right,y2:line,
+   stroke:'#527369','stroke-width':1,'stroke-dasharray':'4 6','opacity':'.68'}));
+  const label=hudSvg('text',{x:left-7,y:line+4,fill:'#b8d3c5','font-size':12,
+   'text-anchor':'end'});
+  label.textContent=value===0?'0m':value.toFixed(1)+'m';svg.append(label);
+ }
+ const points=[];
+ for(let i=0;i<=240;i++){
+  const remaining=state.distance*(1-i/240);
+  points.push([x(remaining),y(remaining)]);
+ }
+ const path=points.map(([px,py],i)=>(i===0?'M':'L')+
+     px.toFixed(2)+' '+py.toFixed(2)).join(' ');
+ svg.append(hudSvg('path',{d:path+' L'+right+' '+bottom+' L'+left+' '+bottom+' Z',
+   fill:'#21674e','fill-opacity':'.58'}));
+ svg.append(hudSvg('path',{d:path,fill:'none',stroke:'#8af1c9',
+   'stroke-width':3.4,'stroke-linecap':'round','stroke-linejoin':'round'}));
+ for(const remaining of [600,400,200]){
+  if(remaining>state.distance)continue;
+  const at=x(remaining);
+  svg.append(hudSvg('line',{x1:at,y1:24,x2:at,y2:bottom,
+    stroke:'#efc96e','stroke-opacity':'.42','stroke-dasharray':'3 4'}));
+  const label=hudSvg('text',{x:at,y:18,fill:'#e4d093','font-size':12,
+    'text-anchor':'middle','font-weight':800});
+  label.textContent=String(remaining/100);svg.append(label);
+ }
+ for(const [at,labelText,anchorText] of [[left,'スタート','start'],[right,'ゴール','end']]){
+  const label=hudSvg('text',{x:at,y:137,fill:'#dbece3','font-size':14,
+   'font-weight':750,'text-anchor':anchorText});
+  label.textContent=labelText;svg.append(label);
+ }
+ elevationPointer=hudSvg('line',{x1:left,y1:20,x2:left,y2:bottom,
+  stroke:'#f8d579','stroke-width':2.5,'stroke-dasharray':'5 3'});
+ elevationPointerDot=hudSvg('circle',{cx:left,cy:y(state.distance),r:7,
+  fill:'#f8d579',stroke:'#122421','stroke-width':2});
+ svg.append(elevationPointer,elevationPointerDot);
+}
+function updateElevationProgress(leader,distance){
+ buildElevationProfile();
+ const remaining=Math.max(0,Math.min(distance,distance-leader));
+ const x=58+792*(1-remaining/distance);
+ const p=getTurfProfile(state.venue,state.course,state.layout);
+ const elevation=courseHeightMetres(remaining,state.venue,state.layout,state.course);
+ const y=104-69*(elevation/Math.max(.1,p.elevation));
+ elevationPointer.setAttribute('x1',x.toFixed(2));
+ elevationPointer.setAttribute('x2',x.toFixed(2));
+ elevationPointerDot.setAttribute('cx',x.toFixed(2));
+ elevationPointerDot.setAttribute('cy',y.toFixed(2));
+ $('elevation-current').textContent=state.race
+   ?'残り'+Math.ceil(remaining).toLocaleString('ja-JP')+'m / 相対高'+elevation.toFixed(1)+'m'
+   :'スタート地点';
 }
 function initializeHud(){
  if(hudReady)return;
@@ -138,6 +207,7 @@ function updateRaceHud(){
  const ranked=[...frame.horses].sort((a,b)=>state.race
   ?b.x-a.x||a.id-b.id:a.id-b.id);
  const remaining=Math.max(0,Math.ceil(distance-leader));
+ updateElevationProgress(leader,distance);
  $('overview-remaining').textContent=state.race
   ?remaining===0?'ゴール'
     :state.venue==='tokyo'&&remaining<=460&&remaining>=300?'残り '+remaining.toLocaleString()+'m・上り坂'
@@ -234,8 +304,10 @@ function setColorChip(node,id){
 }
 function currentHorse(){return state.horses.find(h=>h.id===state.selected)}
 function resetHud(){
- hudReady=false;hudRankKey='';hudMarkers.clear();hudEntries.clear();
+ hudReady=false;hudRankKey='';elevationKey='';elevationPointer=null;elevationPointerDot=null;
+ hudMarkers.clear();hudEntries.clear();
  $('overview-map').replaceChildren();$('race-standings-list').replaceChildren();
+ $('elevation-chart').replaceChildren();
 }
 function renderPicker(){
  picker.replaceChildren();
@@ -299,6 +371,22 @@ function renderStats(stats){
   tr.append(horseCell,win,place,avg);body.append(tr);
  }
 }
+function updateVideoTouchControl(){
+ const button=$('race-touch-control'),prompt=$('race-touch-prompt'),hint=$('race-touch-hint');
+ const finished=!!state.race&&state.currentT>=state.race.elapsed;
+ const playing=state.playing;
+ const action=state.recording?'録画中は操作できません':
+   playing?'一時停止':!state.race?'レース開始':finished?'最初から再生':'再生';
+ button.disabled=state.recording;
+ button.classList.toggle('playing',playing);
+ button.setAttribute('aria-label','レース映像をタップして'+action);
+ prompt.textContent=state.recording?'録画中':
+   playing?'Ⅱ 一時停止':!state.race?'▶ レース開始':
+   finished?'↻ 最初から再生':'▶ 再生';
+ hint.textContent=playing?'映像をタップで一時停止':
+   !state.race?'映像をタップして開始':
+   finished?'映像をタップして最初から再生':'映像をタップして再開';
+}
 function renderCanvas(){
  // WebGL is opt-in; preserve existing 2D views for low-power and offline use.
  if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT,{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance,replaySpeed:state.speed});
@@ -308,6 +396,7 @@ function renderCanvas(){
  const duration=(s)=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
  $('play-time').textContent=`${duration(state.currentT)} / ${duration(end)}`;
  $('canvas-label').textContent=state.race ? state.currentT>=end?'ゴール':state.playing?'再生中':'一時停止中':'スタート前';
+ updateVideoTouchControl();
  updateRaceHud();
 }
 function setPlay(on){
@@ -489,7 +578,16 @@ $('backup-file').addEventListener('change',async e=>{
  }catch(error){setStatus(`復元に失敗しました：${error.message}`,true)}
  finally{e.target.value='';}
 });
-$('toggle-play').addEventListener('click',()=>setPlay(!state.playing));
+$('toggle-play').addEventListener('click',()=>{
+ if(state.recording)return;
+ if(!state.race){startSimulation();return;}
+ setPlay(!state.playing);
+});
+$('race-touch-control').addEventListener('click',()=>{
+ if(state.recording)return;
+ if(!state.race){startSimulation();return;}
+ setPlay(!state.playing);
+});
 $('seek').addEventListener('input',e=>{if(!state.race||state.recording)return;state.currentT=state.race.elapsed*Number(e.target.value)/100;state.lastTick=null;renderCanvas()});
 $('speed').addEventListener('change',e=>state.speed=Number(e.target.value));
 $('save-video').addEventListener('click',exportVideo);
