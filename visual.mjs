@@ -84,7 +84,7 @@ export function interpolateRaceFrame(frames, time) {
   const next=end.horses[i];
   return {id:h.id,x:h.x+(next.x-h.x)*ratio,
    lane:h.lane+(next.lane-h.lane)*ratio,
-   speedNow:h.speedNow+(next.speedNow-h.speedNow)*ratio,
+   speedNow:h.speed+(next.speed-h.speed)*ratio,
    finished:ratio<1?h.finished:next.finished};
  })};
 }
