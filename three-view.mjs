@@ -560,6 +560,7 @@ export async function createThreeView(host){
    const course=race?.course||options.course||'A';
    const venue=race?.venue||options.venue||'tokyo';
    const layout=race?.layout||options.layout||'outer';
+   const horseScale=Math.sqrt(getTurfProfile(venue,course,layout).maxWidth/41);
    rebuildTrack(venue,layout,course,raceDistance);
    const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time)
       : {t:time,horses:horses?.length?horses.map(h=>({id:h.id,x:0,lane:h.id-1})):neutral};
@@ -611,6 +612,7 @@ export async function createThreeView(host){
      // Never abruptly hide a runner when it falls 92m behind the leader.
      // Let camera clipping and distance fog handle out-of-frame horses.
      model.group.visible=true;
+     model.group.scale.set(horseScale,horseScale,horseScale);
      model.shadow.visible=model.group.visible;
      const shouldLabel=!!race && leaders.some(v=>v.id===model.id);
      model.nameLabel.sprite.visible=shouldLabel;
@@ -668,7 +670,7 @@ export async function createThreeView(host){
      model.shadow.position.z=model.group.position.z;
      model.shadow.position.y=trackHeight+.023;
      const shadowSize=1-lift*.20;
-     model.shadow.scale.set(1.42*shadowSize,.60*shadowSize,1);
+     model.shadow.scale.set(1.42*shadowSize*horseScale,.60*shadowSize*horseScale,1);
    }
    // Start: diagonal front view, high enough to show all 18 horses side by side.
    // The camera gradually becomes a closer diagonal-front tracking shot.
