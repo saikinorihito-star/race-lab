@@ -129,56 +129,67 @@ export function horseCoursePoint(progress,distance,lane,course='A',venue='tokyo'
  return coursePoint(lengthAtMetres(progress,distance),INSIDE_MARGIN+
     Math.max(0,Math.min(17,Number(lane)||0))*LANE_WIDTH,course,venue,layout);
 }
-// Known from JRA: slope in home straight from 460m to 300m before finish.
-// Height is a schematic ease, not an exact surveyed elevation profile.
-export function courseHeightMetres(remaining,venue='tokyo',layout='outer',course='A') {
+// JRA-verified slope facts:
+// Tokyo: 1.9m descent (first corner -> back straight), 1.5m rise before
+// turn three, 2.0m rise over the last 460-300m; full vertical range 2.7m.
+// Kyoto: inner full range 3.1m, outer 4.3m. JRA's 2026 Kyoto 1600m
+// description places an OUTER course climb of ~3.9m, crest ~800m to go.
+// Exact longitudinal survey stations and local gradients are not published
+// in the source material. The intermediate knots below are explicitly
+// illustrative and MUST NOT be treated as measured elevation samples.
+const elevationKnotsCache=new Map();
+function elevationKnots(venue='tokyo',layout='outer',course='A'){
+ const key=[venue,layout,course].join(':');
+ let knots=elevationKnotsCache.get(key);
+ if(knots)return knots;
+ const profile=getTurfProfile(venue,course,layout);
+ const lap=profile.lap;
  if(venue==='kyoto'){
-  const {lap,straight,elevation}=getTurfProfile(venue,course,layout);
-  const r=wrap(Number(remaining)||0,lap);
-  // Gradual climb into the third corner (approx. 1200-800m to go),
-  // then descent toward the fourth corner, then level home straight.
-  const high=800,climbStart=Math.min(lap-50,1200);
-  if(r>=climbStart)return 0;
-  if(r>=high){const u=(climbStart-r)/(climbStart-high);return elevation*(u*u*(3-2*u));}
-  if(r>straight){const u=(high-r)/(high-straight);return elevation*(1-u*u*(3-2*u));}
-  return 0;
+   const foot=layout==='outer'?.4:0;
+   const crest=profile.elevation;
+   const lowerBound=profile.straight+65;
+   knots=[
+    [0,0],[lowerBound,0],
+    [800,crest],
+    [1200,foot],
+    [1350,0],
+    [lap,0]
+   ];
+ }else{
+   // Height is relative to the low point; values 0..2.7m. Peaks are
+   // placed to honor the verified relative climbs, not to assert GPS points.
+   knots=[
+     [0,2.0],[300,2.0],[460,0],
+     [620,0],[760,.25],[980,2.3],[1120,2.3],
+     [1300,.8],[1420,.8],[1750,2.7],
+     [lap-170,2.7],[lap,2.0]
+   ];
  }
- // Tokyo: a visible uphill over the final 460-300m and a gentler
- // schematic descent elsewhere. Ensure identical height on both sides
- // of the finish / lap boundary, including for races over one lap.
- const lap=getTurfProfile('tokyo',course).lap;
+ elevationKnotsCache.set(key,knots);
+ return knots;
+}
+function elevationAt(remaining,venue='tokyo',layout='outer',course='A'){
+ const lap=getTurfProfile(venue,course,layout).lap;
  const r=wrap(Number(remaining)||0,lap);
- const height=TRACK_ELEVATION_RANGE_METRES;
- if(r<=300)return height;
- if(r<460){
-   const u=(460-r)/160;
-   return height*u*u*(3-2*u);
+ const knots=elevationKnots(venue,layout,course);
+ let low=0,high=knots.length-1;
+ while(high-low>1){
+   const mid=(low+high)>>1;
+   if(r>=knots[mid][0])low=mid;else high=mid;
  }
- const downhillStart=lap-320;
- if(r<downhillStart)return 0;
- const u=(r-downhillStart)/(lap-downhillStart);
- return height*u*u*(3-2*u);
+ const a=knots[low],b=knots[high],range=b[0]-a[0];
+ const u=Math.max(0,Math.min(1,(r-a[0])/(range||1)));
+ const ease=u*u*(3-2*u);
+ const h=a[1]+(b[1]-a[1])*ease;
+ // Positive uphill gradient when moving toward the goal (remaining falls).
+ const slope=-(b[1]-a[1])*6*u*(1-u)/(range||1);
+ return {h,slope};
+}
+export function courseHeightMetres(remaining,venue='tokyo',layout='outer',course='A'){
+ return elevationAt(remaining,venue,layout,course).h;
 }
 export function courseSlope(remaining,venue='tokyo',layout='outer',course='A'){
- if(venue==='kyoto'){
-  const {lap,straight,elevation}=getTurfProfile(venue,course,layout);
-  const r=wrap(Number(remaining)||0,lap),high=800,start=Math.min(lap-50,1200);
-  if(r>=start||r<=straight)return 0;
-  if(r>=high){const u=(start-r)/(start-high);return elevation*6*u*(1-u)/(start-high);}
-  const u=(high-r)/(high-straight);
-  return -elevation*6*u*(1-u)/(high-straight);
- }
- const lap=getTurfProfile('tokyo',course).lap;
- const r=wrap(Number(remaining)||0,lap);
- if(r>300&&r<460){
-   const u=(460-r)/160;
-   return TRACK_ELEVATION_RANGE_METRES*6*u*(1-u)/160;
- }
- if(r>lap-320&&r<lap){
-   const u=(r-(lap-320))/320;
-   return -TRACK_ELEVATION_RANGE_METRES*6*u*(1-u)/320;
- }
- return 0;
+ return elevationAt(remaining,venue,layout,course).slope;
 }
 export function safeRacePositions(horses,lead,raceDistance,course='A',venue='tokyo',layout='outer') {
  const leadS=lengthAtMetres(lead,raceDistance);
