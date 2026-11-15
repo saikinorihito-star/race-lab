@@ -3,7 +3,7 @@
  * The model and its parameters are illustrative, NOT calibrated against real races.
  * Independent of rendering, DOM, network and external data providers.
  */
-import {TOKYO_TURF,TOKYO_TURF_DISTANCES,HOME_STRAIGHT_METRES,courseSlope} from './course.mjs';
+import {getTurfProfile,turfDistances,courseSlope} from './course.mjs';
 export const STYLES = ['逃げ', '先行', '差し', '追込'];
 export const SCENARIOS = {high: 'ハイ', normal: 'ミドル', low: 'スロー'};
 export const COLORS = ['#f6f7fa','#34373f','#e6575e','#4b83dd','#ecc858','#52a86d','#f18b44','#e285ae','#a5a5a5','#9c7a45','#7b70c7','#31a9b1','#bf576e','#aad85d','#427b83','#d4aa82','#6662a9','#c4c8d1'];
@@ -52,9 +52,13 @@ export function validateHorses(horses) {
  */
 export function runRace(horses, options = {}) {
   validateHorses(horses);
+  const venue=options.venue==='kyoto'?'kyoto':'tokyo';
+  const layout=venue==='kyoto'&&options.layout==='inner'?'inner':'outer';
+  const course=['A','B','C','D'].includes(options.course)?options.course:'A';
   const distance=Number(options.distance||2400);
-  if (!TOKYO_TURF_DISTANCES.includes(distance))throw new Error('東京芝の設定距離を選択してください。');
-  const course=TOKYO_TURF[options.course]?options.course:'A';
+  if(!turfDistances(venue,layout).includes(distance))
+    throw new Error('選択した競馬場・コースで施行できる芝距離を指定してください。');
+  const profile=getTurfProfile(venue,course,layout);
   const scenario=SCENARIOS[options.scenario]?options.scenario:'normal';
   const seed=(options.seed??20261115)>>>0;
   const record=options.record!==false;
@@ -111,8 +115,8 @@ export function runRace(horses, options = {}) {
       const exertion=late*((Number(h.stamina)-70)*.008+(Number(h.kick)-70)*.015);
       const dynamic=.105*Math.sin(t/8+h.sway)+.055*Math.sin(t/3.7+h.sway*1.8);
       // Speed is a synthetic parameter, not a real-world stride-to-velocity model.
-      // Final straight starts exactly 525.9m from the finish at Tokyo.
-      const onHomeStretch=distance-h.x<=HOME_STRAIGHT_METRES;
+      // At Kyoto this switches between the inner and outer home-straight lengths.
+      const onHomeStretch=distance-h.x<=profile.straight;
       let desiredSpeed=16.52+(Number(h.speed)-70)*.009+h.form+
         styleEarly*early+styleLate*late+paceEarly*early+paceLate*late+
         exertion-fatigue+dynamic;
@@ -177,10 +181,10 @@ export function runRace(horses, options = {}) {
       // An outside path is slightly longer, particularly around bends.
       // The wide route costs more until the final straight, where horses can spread.
       desiredSpeed-=Math.min(10,h.lane)*(onHomeStretch?.006:.070);
-      // Schematic uphill effect, NOT fitted to historic finishing times.
-      // JRA confirms an uphill from 460m to 300m remaining;
-      // the 6.0 sensitivity coefficient is an illustrative assumption.
-      desiredSpeed-=courseSlope(distance-h.x)*6.0;
+      // Schematic gradient effect, NOT fitted to historic finishing times:
+      // Tokyo rises in the home straight; Kyoto climbs before turn 3 and
+      // descends toward turn 4. The coefficient is illustrative, not official.
+      desiredSpeed-=courseSlope(distance-h.x,venue,layout,course)*6.0;
       // Outer starters briefly tuck behind an inside runner before cutting over.
       const breakIn=clamp(1-Math.max(0,h.x)/120,0,1);
       desiredSpeed-=h.lane*.22*breakIn;
@@ -227,7 +231,7 @@ export function runRace(horses, options = {}) {
   const results=[...states].sort((a,b)=>a.finishTime-b.finishTime)
     .map((h,i)=>({id:h.id,name:h.name,style:h.style,rank:i+1,
       time:h.finishTime,gap:h.finishTime-bestTime}));
-  return {frames,results,elapsed:t,distance,course,scenario,seed};
+  return {frames,results,elapsed:t,distance,venue,layout,course,scenario,seed};
 }
 
 export function summarizeRaces(horses, opts={}, attempts=1000, onProgress=null) {
