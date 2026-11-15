@@ -1,8 +1,8 @@
 // Optional low-poly 3D race display. Uses the same synthetic race data as 2D.
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
-import {gallopCycle,gallopLegPose} from './gait.mjs';
-import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,getTurfProfile} from './course.mjs';
+import {gallopCycle,gallopLegPose,gallopDynamics} from './gait.mjs';
+import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,getTurfProfile,furlongMarkerPositions} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
  const THREE = await import(THREE_URL);
@@ -39,8 +39,8 @@ export async function createThreeView(host){
      trackGroup.traverse(node=>{
        node.geometry?.dispose();
        if(node.material){
-         if(Array.isArray(node.material))node.material.forEach(m=>m.dispose());
-         else node.material.dispose();
+         if(Array.isArray(node.material))node.material.forEach(m=>{m.map?.dispose();m.dispose();});
+         else {node.material.map?.dispose();node.material.dispose();}
        }
      });
    }
@@ -90,6 +90,53 @@ export async function createThreeView(host){
      stripe.rotation.z=-Math.atan2(dx,dz);
      stripe.position.set((a.x+b.x)*.5,-.020,(a.z+b.z)*.5);
      trackGroup.add(stripe);
+   }
+   // Red/white JRA-style turf furlong posts: 6=600m, 4=400m, 2=200m.
+   // Marker coordinates are shared with both course maps.
+   const stripeRed=material(0xd7242f),stripeWhite=material(0xfff9ed);
+   for(const marker of furlongMarkerPositions(course,venue,layout)){
+     const post=new THREE.Group();
+     post.position.set(marker.point.x,0,marker.point.z);
+     trackGroup.add(post);
+     for(let band=0;band<6;band++){
+       const segment=new THREE.Mesh(
+         new THREE.CylinderGeometry(.105,.12,.51,10),
+         band%2===0?stripeWhite:stripeRed
+       );
+       segment.position.y=.34+band*.51;
+       post.add(segment);
+     }
+     // Two restrained diagonal braces, as seen on real turf marker posts.
+     for(const side of [-1,1]){
+       const end=new THREE.Vector3(side*.50,.08,.29);
+       const upper=new THREE.Vector3(0,1.18,0);
+       const brace=upper.clone().sub(end);
+       const support=new THREE.Mesh(
+         new THREE.CylinderGeometry(.026,.026,brace.length(),6),
+         material(0x345c42)
+       );
+       support.position.copy(end).add(upper).multiplyScalar(.5);
+       support.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),brace.normalize());
+       post.add(support);
+     }
+     // White round sign, red digit, crimson border; always faces the camera.
+     const signCanvas=document.createElement('canvas');
+     signCanvas.width=192;signCanvas.height=192;
+     const sign=signCanvas.getContext('2d');
+     sign.beginPath();sign.arc(96,96,86,0,Math.PI*2);
+     sign.fillStyle='#fffdf3';sign.fill();
+     sign.lineWidth=9;sign.strokeStyle='#cf2932';sign.stroke();
+     sign.textAlign='center';sign.textBaseline='middle';
+     sign.fillStyle='#d52232';sign.font='900 136px Arial,sans-serif';
+     sign.fillText(marker.number,96,102);
+     const texture=new THREE.CanvasTexture(signCanvas);
+     texture.colorSpace=THREE.SRGBColorSpace;
+     const label=new THREE.Sprite(new THREE.SpriteMaterial({
+       map:texture,transparent:true,depthWrite:false
+     }));
+     label.scale.set(1.72,1.72,1);
+     label.position.set(0,3.90,0);
+     post.add(label);
    }
  }
  // Trees stay outside the racing surface as fixed visual landmarks.
@@ -167,10 +214,14 @@ export async function createThreeView(host){
    // Short, round body and a broad chest.
    outlinedBall(group,bodyMat,-.08,1.25,0,1.18,.65,.64);
    part(group,sphere,bodyMat,-.92,1.28,0,.57,.58,.59);
-   part(group,sphere,bodyMat,.71,1.42,0,.56,.57,.59);
-   // Big head is about 70 percent of the body length; this is intentionally cartoonish.
-   part(group,sphere,bodyMat,1.00,1.82,0,.43,.59,.45);
-   const headPivot=new THREE.Group();headPivot.position.set(1.08,2.00,0);group.add(headPivot);
+   // Head and chest have a common moving neck root, allowing visible
+   // extension, lift and dip with each stride.
+   const neckPivot=new THREE.Group();
+   neckPivot.position.set(.71,1.39,0);group.add(neckPivot);
+   part(neckPivot,sphere,bodyMat,0,.03,0,.56,.57,.59);
+   part(neckPivot,sphere,bodyMat,.29,.43,0,.43,.59,.45);
+   const headPivot=new THREE.Group();
+   headPivot.position.set(.37,.61,0);neckPivot.add(headPivot);
    outlinedBall(headPivot,bodyMat,.19,.01,0,.77,.65,.63);
    outlinedBall(headPivot,muzzleMat,.69,-.28,0,.61,.40,.50);
    part(headPivot,sphere,material(0x6b4939),1.09,-.26,0,.12,.23,.33);
@@ -198,7 +249,7 @@ export async function createThreeView(host){
      tuft.rotation.z=-.30;
    }
    for(let i=0;i<4;i++){
-     const tuft=part(group,sphere,mane,.63-i*.20,2.18-i*.075,0,.21,.20,.29);
+     const tuft=part(neckPivot,sphere,mane,-.08-i*.20,.79-i*.075,0,.21,.20,.29);
      tuft.rotation.z=.45;
    }
    const tailPivot=new THREE.Group();tailPivot.position.set(-1.20,1.44,0);group.add(tailPivot);
@@ -283,7 +334,9 @@ export async function createThreeView(host){
    }
    // Reduce mesh footprint relative to collision-safe lane spacing.
    group.scale.set(.77,.88,.77);
-   return {group,legs,headPivot,riderPivot,tailPivot,id,numberTexture,numberMat,silkMat:silk,helmetMat,accentMat:uniformAccent,appearanceCount:18};
+   return {group,legs,neckPivot,headPivot,riderPivot,tailPivot,id,
+     gaitPhase:0,gaitLastTimestamp:null,gaitRace:null,
+     numberTexture,numberMat,silkMat:silk,helmetMat,accentMat:uniformAccent,appearanceCount:18};
  }
  const models=Array.from({length:18},(_,i)=>horseModel(i+1));
  // Subtle floor shadows provide a clear takeoff/landing cue.
@@ -362,8 +415,10 @@ export async function createThreeView(host){
    const leadS=lengthAtMetres(lead,raceDistance);
    const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,2);
    const displayed=raceDisplayPositions(race,frame,raceDistance,course,venue,layout);
-   // Use wall-clock time for leg cadence so 8x replay does not become frantic.
+   // Playback speed affects screen motion. Faster legs remain visually readable
+   // instead of matching an unrealistic 12x hoof-strike rate.
    const motionTime=performance.now()*.001;
+   const replaySpeed=Number(options.replaySpeed)||4;
    for(const model of models){
      const item=frame.horses.find(h=>h.id===model.id);
      if(!item){
@@ -395,29 +450,43 @@ export async function createThreeView(host){
          model.lastName=name;model.labelCount=entrants;
        }
      }
-     // A single four-beat gallop pattern and cadence for all 18 horses.
-     // Left/right footfalls remain staggered; no per-horse random phase.
-     const cycle=gallopCycle(motionTime);
-     const theta=cycle*Math.PI*2;
-     // Brief suspension follows the fourth footfall; the horse lifts as one body.
-     const airborne=cycle>.66&&cycle<.91
-       ?Math.sin(Math.PI*(cycle-.66)/.25):0;
-     const lift=Math.max(0,airborne);
-     model.group.position.y=.020+lift*.093+Math.sin(theta-.50)*.013;
-     model.group.rotation.z=-.014+Math.sin(theta+.42)*.049;
-     model.group.rotation.x=Math.sin(theta*.50+model.id)*.008;
-     for(const leg of model.legs){
-       const pose=gallopLegPose(leg.front,leg.side,cycle);
-       leg.hip.rotation.z=pose.hip;
-       leg.knee.rotation.z=pose.knee;
+     // All horses share a four-beat sequence; velocity changes the stride.
+     // Continuous phase integration prevents animation snaps at speed changes.
+     const dynamics=gallopDynamics(item.speedNow,replaySpeed);
+     if(model.gaitRace!==race){
+       model.gaitRace=race;model.gaitPhase=0;model.gaitLastTimestamp=motionTime;
      }
-     model.headPivot.rotation.z=-.014+Math.sin(theta+.94)*.044;
-     model.tailPivot.rotation.y=Math.sin(theta+.34)*.108;
-     model.riderPivot.rotation.z=-.015-Math.sin(theta+.56)*.024;
-     model.riderPivot.position.y=1.94-Math.max(0,Math.sin(theta+.85))*.016;
+     const deltaTime=Math.max(0,Math.min(.08,motionTime-(model.gaitLastTimestamp??motionTime)));
+     model.gaitLastTimestamp=motionTime;
+     model.gaitPhase=(model.gaitPhase+deltaTime*dynamics.hz)%1;
+     const cycle=gallopCycle(model.gaitPhase,1);
+     const theta=cycle*Math.PI*2;
+     const airborne=cycle>.60&&cycle<.91
+       ?Math.sin(Math.PI*(cycle-.60)/.31):0;
+     const lift=Math.max(0,airborne);
+     const thrust=Math.sin(theta-.55);
+     model.group.position.y=.020+lift*dynamics.bob+thrust*.032;
+     model.group.rotation.z=-.019+Math.sin(theta+.32)*.075;
+     model.group.rotation.x=Math.sin(theta*.5+model.id)*.007;
+     for(const leg of model.legs){
+       const pose=gallopLegPose(leg.front,leg.side,cycle,dynamics.stride);
+       // The front legs reach forward; rear legs actively kick backward.
+       const thrustStep=Math.sin(theta+(leg.front?-.3:1.2)+(leg.side?.22:0));
+       leg.hip.rotation.z=pose.hip+thrustStep*(leg.front?.16:-.20);
+       leg.knee.rotation.z=pose.knee+Math.max(0,-thrustStep)*(leg.front?.18:-.13);
+     }
+     // Distinct neck pump: extends/lifts during front-leg recovery and
+     // dips during ground contact. Head follows the moving neck naturally.
+     model.neckPivot.rotation.z=.025+Math.sin(theta+.90)*dynamics.neck;
+     model.neckPivot.position.x=.71+Math.cos(theta+.40)*.082;
+     model.neckPivot.position.y=1.39-Math.sin(theta+.90)*.073;
+     model.headPivot.rotation.z=-.035+Math.sin(theta+1.55)*.105;
+     model.tailPivot.rotation.y=Math.sin(theta+.34)*.135;
+     model.riderPivot.rotation.z=-.018-Math.sin(theta+.56)*.030;
+     model.riderPivot.position.y=1.94-Math.max(0,Math.sin(theta+.85))*.026;
      model.shadow.position.x=model.group.position.x;
      model.shadow.position.z=model.group.position.z;
-     const shadowSize=1-lift*.14;
+     const shadowSize=1-lift*.20;
      model.shadow.scale.set(1.42*shadowSize,.60*shadowSize,1);
    }
    // Start: diagonal front view, high enough to show all 18 horses side by side.
@@ -500,7 +569,7 @@ export async function createThreeView(host){
      m.nameLabel.sprite.material.dispose();
      m.nameLabel.tex.dispose();
    }
-   if(trackGroup){scene.remove(trackGroup);trackGroup.traverse(node=>{node.geometry?.dispose();if(node.material){if(Array.isArray(node.material))node.material.forEach(m=>m.dispose());else node.material.dispose();}})}
+   if(trackGroup){scene.remove(trackGroup);trackGroup.traverse(node=>{node.geometry?.dispose();if(node.material){if(Array.isArray(node.material))node.material.forEach(m=>{m.map?.dispose();m.dispose();});else {node.material.map?.dispose();node.material.dispose();}}})}
    renderer.dispose();renderer.domElement.remove();
  }
  render(null,null,0);
