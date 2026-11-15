@@ -29,7 +29,7 @@ export async function createThreeView(host){
  // and the 525.9m home straight are official JRA dimensions.
  const surroundings=new THREE.Mesh(new THREE.PlaneGeometry(620,360),new THREE.MeshLambertMaterial({color:0x317e48}));
  surroundings.rotation.x=-Math.PI/2;surroundings.position.y=-.085;scene.add(surroundings);
- let trackGroup=null,renderedTrackKey='';
+ let trackGroup=null,renderedTrackKey='',scoreboard=null;
  function rebuildTrack(venue,layout,course,distance){
    const key=venue+':'+layout+':'+course+':'+distance;
    if(key===renderedTrackKey)return;
@@ -45,6 +45,7 @@ export async function createThreeView(host){
      });
    }
    const lap=getTurfProfile(venue,course,layout).lap;
+   scoreboard=null;
    trackGroup=new THREE.Group();scene.add(trackGroup);
    // Track height follows the continuous, periodic Tokyo/Kyoto elevation
    // profile. Turf and shoulders share precisely the same y at each lap point.
@@ -151,6 +152,95 @@ export async function createThreeView(host){
      label.position.set(0,3.90,0);
      post.add(label);
    }
+   // Finish line: photo-finish pillars and an elevated cross-frame.
+   // The real-world finish architecture varies; these are recognisable
+   // unbranded low-poly racing fixtures, not an exact JRA reconstruction.
+   const steelWhite=material(0xf2f5ef),steelRed=material(0xc62b32),
+         concrete=material(0xadb7bd),seatDark=material(0x395367),
+         glazed=material(0x24455b),roof=material(0x65727b);
+   const finishIn=coursePoint(0,-3.3,course,venue,layout),
+         finishOut=coursePoint(0,TRACK_OUTER_OFFSET+3.3,course,venue,layout);
+   const finishH=groundAt(0);
+   const fixture=(geometry,mat,x,y,z)=>{
+     const item=new THREE.Mesh(geometry,mat);
+     item.position.set(x,y,z);trackGroup.add(item);return item;
+   };
+   for(const at of [finishIn,finishOut]){
+     fixture(new THREE.BoxGeometry(.34,8.5,.42),steelWhite,
+       at.x,finishH+4.25,at.z);
+     fixture(new THREE.BoxGeometry(.55,.50,.57),steelRed,
+       at.x,finishH+8.22,at.z);
+   }
+   fixture(new THREE.BoxGeometry(.32,.35,
+     Math.hypot(finishOut.x-finishIn.x,finishOut.z-finishIn.z)),
+     steelWhite,(finishIn.x+finishOut.x)*.5,finishH+8.3,
+     (finishIn.z+finishOut.z)*.5);
+   // A photo-finish equipment box at the outside rail, facing the infield.
+   const photo=fixture(new THREE.BoxGeometry(1.0,2.8,1.5),steelWhite,
+     finishOut.x+.1,finishH+5.35,finishOut.z);
+   const photoWindow=new THREE.Mesh(new THREE.BoxGeometry(1.04,1.05,.75),glazed);
+   photoWindow.position.set(.0,.42,0);
+   photo.add(photoWindow);
+   // Stand modules beside the home straight. A few broad structures and
+   // long seating bands provide a grandstand silhouette cheaply on iPhone.
+   const standSide=venue==='kyoto'?-1:1;
+   for(const station of [-75,-170,-265]){
+     const p=coursePoint(station,TRACK_OUTER_OFFSET+44,course,venue,layout);
+     const z=p.z,front=standSide;
+     fixture(new THREE.BoxGeometry(46,10,24),concrete,p.x,5,z);
+     fixture(new THREE.BoxGeometry(46.8,4.0,24.8),glazed,p.x,11.9,z);
+     fixture(new THREE.BoxGeometry(50,1.0,30),roof,p.x,17.0,z+front*1.5);
+     fixture(new THREE.BoxGeometry(50,.72,1.2),steelWhite,
+       p.x,17.2,z-front*13.0);
+     for(let tier=0;tier<6;tier++){
+       const row=coursePoint(station,TRACK_OUTER_OFFSET+29+tier*3.3,course,venue,layout);
+       const elevation=5.0+tier*1.55;
+       fixture(new THREE.BoxGeometry(44,.40,3.2),tier%2?seatDark:glazed,
+          row.x,elevation,row.z);
+       fixture(new THREE.BoxGeometry(44,.16,.22),steelWhite,
+          row.x,elevation+.22,row.z-front*1.4);
+     }
+     // Concrete aisle divider between sections.
+     fixture(new THREE.BoxGeometry(1.2,13,25),steelWhite,p.x+23,7,z);
+   }
+   // Outdoor LED monitor next to the grandstand, angled towards the horses.
+   const boardPoint=coursePoint(-115,TRACK_OUTER_OFFSET+22,course,venue,layout);
+   const boardBase=groundAt(-115);
+   for(const dx of [-6.8,6.8]){
+     fixture(new THREE.BoxGeometry(.40,11,.52),steelWhite,
+       boardPoint.x+dx,boardBase+5.5,boardPoint.z);
+   }
+   fixture(new THREE.BoxGeometry(18.0,10.5,1.1),roof,
+     boardPoint.x,boardBase+15,boardPoint.z);
+   const boardCanvas=document.createElement('canvas');
+   boardCanvas.width=640;boardCanvas.height=360;
+   const boardTexture=new THREE.CanvasTexture(boardCanvas);
+   boardTexture.colorSpace=THREE.SRGBColorSpace;
+   const display=new THREE.Mesh(new THREE.PlaneGeometry(17.0,9.55),
+       new THREE.MeshBasicMaterial({map:boardTexture,side:THREE.DoubleSide}));
+   display.rotation.y=venue==='kyoto'?0:Math.PI;
+   display.position.set(boardPoint.x,boardBase+15,boardPoint.z-standSide*.59);
+   trackGroup.add(display);
+   scoreboard={ctx:boardCanvas.getContext('2d'),texture:boardTexture,
+       venue,layout,course,distance,lastText:null};
+   // Finish-post board can be read from any camera angle.
+   const finishCanvas=document.createElement('canvas');
+   finishCanvas.width=320;finishCanvas.height=96;
+   const finCtx=finishCanvas.getContext('2d');
+   finCtx.fillStyle='#fffef4';finCtx.fillRect(0,0,320,96);
+   finCtx.fillStyle='#d12231';finCtx.fillRect(0,0,12,96);
+   finCtx.fillRect(308,0,12,96);
+   finCtx.fillStyle='#223447';finCtx.textAlign='center';
+   finCtx.textBaseline='middle';finCtx.font='900 54px sans-serif';
+   finCtx.fillText('GOAL',160,53);
+   const finishTex=new THREE.CanvasTexture(finishCanvas);
+   finishTex.colorSpace=THREE.SRGBColorSpace;
+   const finishLabel=new THREE.Sprite(new THREE.SpriteMaterial({
+     map:finishTex,transparent:false,depthWrite:false
+   }));
+   finishLabel.position.set(finishOut.x,finishH+9.6,finishOut.z);
+   finishLabel.scale.set(4.0,1.2,1);
+   trackGroup.add(finishLabel);
  }
  // Trees stay outside the racing surface as fixed visual landmarks.
  const trees=material(0x256a3d);
@@ -425,6 +515,29 @@ export async function createThreeView(host){
    const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time)
       : {t:time,horses:horses?.length?horses.map(h=>({id:h.id,x:0,lane:h.id-1})):neutral};
    const lead=Math.max(...frame.horses.map(h=>h.x));
+   if(scoreboard){
+     const remaining=Math.max(0,Math.ceil(raceDistance-lead));
+     // Redraw the monitor only every 25 racing metres.
+     const label=remaining===0?'GOAL':remaining+'m';
+     const bucket=remaining===0?'GOAL':String(Math.ceil(remaining/25)*25);
+     if(scoreboard.lastText!==bucket){
+       scoreboard.lastText=bucket;
+       const ctx=scoreboard.ctx;
+       const w=640,h=360;
+       ctx.fillStyle='#091e32';ctx.fillRect(0,0,w,h);
+       ctx.fillStyle='#23c8aa';ctx.fillRect(0,0,w,13);
+       ctx.fillStyle='#d9e7ed';ctx.font='bold 34px sans-serif';
+       ctx.fillText('RACE LAB  /  '+(venue==='kyoto'?'KYOTO':'TOKYO'),32,70);
+       ctx.strokeStyle='#436172';ctx.lineWidth=3;
+       ctx.beginPath();ctx.moveTo(32,104);ctx.lineTo(607,104);ctx.stroke();
+       ctx.textAlign='center';ctx.fillStyle='#ffffff';
+       ctx.font='bold 114px sans-serif';ctx.fillText(label,320,241);
+       ctx.font='bold 34px sans-serif';ctx.fillStyle='#c8e3d7';
+       ctx.fillText('TURF  /  '+course+' COURSE',320,314);
+       ctx.textAlign='left';
+       scoreboard.texture.needsUpdate=true;
+     }
+   }
    const leadS=lengthAtMetres(lead,raceDistance);
    const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,2);
    const displayed=raceDisplayPositions(race,frame,raceDistance,course,venue,layout);
