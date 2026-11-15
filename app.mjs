@@ -207,7 +207,6 @@ function updateRaceHud(){
  const ranked=[...frame.horses].sort((a,b)=>state.race
   ?b.x-a.x||a.id-b.id:a.id-b.id);
  const remaining=Math.max(0,Math.ceil(distance-leader));
- updateElevationProgress(leader,distance);
  $('overview-remaining').textContent=state.race
   ?remaining===0?'ゴール'
     :state.venue==='tokyo'&&remaining<=460&&remaining>=300?'残り '+remaining.toLocaleString()+'m・上り坂'
@@ -396,6 +395,12 @@ function renderCanvas(){
  const duration=(s)=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
  $('play-time').textContent=`${duration(state.currentT)} / ${duration(end)}`;
  $('canvas-label').textContent=state.race ? state.currentT>=end?'ゴール':state.playing?'再生中':'一時停止中':'スタート前';
+ // The elevation marker moves every rendered frame, not only on the
+ // 85ms ranking/HUD cadence: smoother at 4x and on high-refresh phones.
+ const liveFrame=state.race?.frames?.length
+   ?interpolateRaceFrame(state.race.frames,state.currentT):null;
+ const liveLead=liveFrame?Math.max(...liveFrame.horses.map(h=>h.x)):0;
+ updateElevationProgress(liveLead,state.race?.distance||state.distance);
  updateVideoTouchControl();
  updateRaceHud();
 }
