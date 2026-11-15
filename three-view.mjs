@@ -175,12 +175,38 @@ export async function createThreeView(host){
    return {group,legs,headPivot,riderPivot,tailPivot,id,numberTexture};
  }
  const models=Array.from({length:18},(_,i)=>horseModel(i+1));
+ // Reference-style black horse nameplates are billboard sprites, drawn in the 3D video as well.
+ function makeNameLabel(text){
+   const image=document.createElement('canvas');image.width=512;image.height=104;
+   const ctx=image.getContext('2d');
+   const safe=String(text||'競走馬').slice(0,12);
+   ctx.fillStyle='rgba(10,18,18,.91)';
+   ctx.beginPath();ctx.roundRect(14,10,484,84,16);ctx.fill();
+   ctx.lineWidth=4;ctx.strokeStyle='#f7f5e8';ctx.stroke();
+   ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+   ctx.font='bold 51px -apple-system, Hiragino Sans, sans-serif';
+   ctx.fillText(safe,256,55,451);
+   const tex=new THREE.CanvasTexture(image);
+   tex.colorSpace=THREE.SRGBColorSpace;
+   const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}));
+   sprite.position.set(.05,4.03,0);
+   sprite.scale.set(3.8,.77,1);
+   sprite.visible=false;
+   return {sprite,tex};
+ }
+ for(const model of models){
+   const nameLabel=makeNameLabel('');
+   model.group.add(nameLabel.sprite);
+   model.nameLabel=nameLabel;
+   model.lastName='';
+ }
  const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i%6}));
  let disposed=false;
  function render(race,horses,time){
    if(disposed)return;
    const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time) : {t:time,horses:neutral};
    const lead=Math.max(...frame.horses.map(h=>h.x));
+   const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,2);
    for(const model of models){
      const item=frame.horses.find(h=>h.id===model.id);
      if(!item)continue;
@@ -188,6 +214,19 @@ export async function createThreeView(host){
      // Include the rear pack; maintain a stable camera following the leaders.
      model.group.position.set(-gap*.32,.03+Math.sin(frame.t*22+model.id)*.038,(item.lane-3)*1.25);
      model.group.visible=gap<180;
+     const shouldLabel=!!race && leaders.some(v=>v.id===model.id);
+     model.nameLabel.sprite.visible=shouldLabel;
+     if(shouldLabel){
+       const name=horses?.find(v=>v.id===model.id)?.name || 'サンプル'+model.id;
+       if(name!==model.lastName){
+         model.group.remove(model.nameLabel.sprite);
+         model.nameLabel.sprite.material.dispose();
+         model.nameLabel.tex.dispose();
+         model.nameLabel=makeNameLabel(name);
+         model.group.add(model.nameLabel.sprite);
+         model.lastName=name;
+       }
+     }
      const gait=frame.t*11.4+model.id*.52;
      for(let j=0;j<model.legs.length;j++){
        const leg=model.legs[j];
@@ -211,7 +250,11 @@ export async function createThreeView(host){
        else obj.material.dispose();
      }
    });
-   for(const m of models)m.numberTexture.dispose();
+   for(const m of models){
+     m.numberTexture.dispose();
+     m.nameLabel.sprite.material.dispose();
+     m.nameLabel.tex.dispose();
+   }
    renderer.dispose();renderer.domElement.remove();
  }
  render(null,null,0);
