@@ -1,5 +1,6 @@
 // Optional low-poly 3D race display. Uses the same synthetic race data as 2D.
 import {interpolateRaceFrame} from './visual.mjs';
+import {getHorseAppearance} from './appearance.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
  const THREE = await import(THREE_URL);
@@ -65,10 +66,7 @@ export async function createThreeView(host){
    obj.position.set(x,y,z);obj.scale.set(sx,sy,sz);
    parent.add(obj);return obj;
  }
- const coat=[0x805136,0x353032,0xd8d7d0,0xa5a7a4,0xa16c46,0x67432e,0x242526,0xe7e2d7];
- const jackets=[0xf2f4f7,0x34383f,0xea535d,0x4886d8,0xf0c653,0x51a86c,
-  0xf39c4b,0xe589b4,0xaaaaaa,0x9b7945,0x8074be,0x35a7ac,
-  0xb8546f,0xadd757,0x4b8194,0xd7a884,0x6766ab,0xc5cbd3];
+
  // Rounded chibi racehorses: deliberately oversized heads, short sturdy legs and brightly dressed jockeys.
  // Everything is procedural geometry, keeping mobile downloads and rendering inexpensive.
  const eyeWhite=material(0xfffcf4), pupil=material(0x172232), glint=material(0xffffff);
@@ -79,15 +77,15 @@ export async function createThreeView(host){
  const strokeMat=new THREE.MeshBasicMaterial({color:0x30251e,side:THREE.BackSide});
  const hoofGeom=new THREE.BoxGeometry(.48,.23,.43);
  const cone=new THREE.ConeGeometry(1,1,8);
- function raceNumberTexture(id,color){
+ function raceNumberTexture(id,appearance){
    const canvas=document.createElement('canvas');canvas.width=96;canvas.height=96;
    const context=canvas.getContext('2d');
-   context.fillStyle='#f7f6ee';context.fillRect(0,0,96,96);
-   context.fillStyle='#'+color.toString(16).padStart(6,'0');
-   context.fillRect(0,0,96,13);context.fillRect(0,83,96,13);
+   context.fillStyle=appearance.saddleBase;context.fillRect(0,0,96,96);
+   context.strokeStyle=appearance.saddleBorder;context.lineWidth=10;
+   context.strokeRect(6,6,84,84);
    context.font='900 60px Arial';context.textAlign='center';
-   context.textBaseline='middle';context.fillStyle='#152235';
-   context.fillText(String(id),48,50);
+   context.textBaseline='middle';context.fillStyle=appearance.numberColor;
+   context.fillText(String(id),48,51);
    const texture=new THREE.CanvasTexture(canvas);
    texture.colorSpace=THREE.SRGBColorSpace;
    return texture;
@@ -101,11 +99,12 @@ export async function createThreeView(host){
  }
  function horseModel(id){
    const group=new THREE.Group();scene.add(group);
-   const coatColor=coat[(id*3+Math.floor(id/4))%coat.length];
-   const bodyMat=material(coatColor);
-   const muzzleMat=material(new THREE.Color(coatColor).multiplyScalar(1.14));
+   const appearance=getHorseAppearance(id);
+   const bodyMat=material(appearance.coat);
+   const muzzleMat=material(new THREE.Color(appearance.coat).multiplyScalar(1.14));
    const mane=maneMats[(id-1)%maneMats.length];
-   const silk=material(jackets[(id-1)%18]);
+   const silk=material(appearance.silk);
+   const helmetMat=material(appearance.helmet);
    // Short, round body and a broad chest.
    outlinedBall(group,bodyMat,-.08,1.25,0,1.18,.65,.64);
    part(group,sphere,bodyMat,-.92,1.28,0,.57,.58,.59);
@@ -151,7 +150,7 @@ export async function createThreeView(host){
    }
    // Flat saddlecloth, showing the horse number on both sides without external image files.
    part(group,sphere,saddleMat,-.23,1.77,0,.55,.15,.56);
-   const numberTexture=raceNumberTexture(id,jackets[(id-1)%18]);
+   const numberTexture=raceNumberTexture(id,appearance);
    const numberMat=new THREE.MeshBasicMaterial({map:numberTexture,side:THREE.DoubleSide});
    for(const side of [-1,1]){
      const num=new THREE.Mesh(clothGeom,numberMat);
@@ -164,8 +163,9 @@ export async function createThreeView(host){
    const chest=part(riderPivot,sphere,silk,.15,.30,0,.39,.46,.34);
    chest.rotation.z=-.30;
    part(riderPivot,sphere,skin,.29,.91,0,.29,.30,.285);
-   part(riderPivot,sphere,silk,.27,1.14,0,.39,.19,.36);
-   part(riderPivot,sphere,hoofMat,.35,1.025,-.08,.34,.080,.31);
+   part(riderPivot,sphere,helmetMat,.27,1.14,0,.40,.20,.37);
+   part(riderPivot,sphere,helmetMat,.35,1.035,-.10,.37,.065,.30);
+   part(riderPivot,sphere,hoofMat,.35,.98,-.23,.31,.068,.085);
    for(const side of [-1,1]){
      const arm=part(riderPivot,sphere,silk,.52,.30,side*.27,.19,.38,.18);
      arm.rotation.z=.75;
@@ -212,7 +212,7 @@ export async function createThreeView(host){
      if(!item)continue;
      const gap=Math.max(0,lead-item.x);
      // Include the rear pack; maintain a stable camera following the leaders.
-     model.group.position.set(-gap*.32,.03+Math.sin(frame.t*22+model.id)*.038,(item.lane-3)*1.25);
+     model.group.position.set(-gap*.32,.022+Math.sin(frame.t*8+model.id)*.012,(item.lane-3)*1.25);
      model.group.visible=gap<180;
      const shouldLabel=!!race && leaders.some(v=>v.id===model.id);
      model.nameLabel.sprite.visible=shouldLabel;
@@ -227,16 +227,17 @@ export async function createThreeView(host){
          model.lastName=name;
        }
      }
-     const gait=frame.t*11.4+model.id*.52;
+     // Restrained, slower gallop. Avoid exaggerated leg cycling at 8x playback.
+     const gait=frame.t*4.2+model.id*.34;
      for(let j=0;j<model.legs.length;j++){
        const leg=model.legs[j];
        const phase=gait+(leg.front?0:Math.PI)+(leg.side?Math.PI:0);
-       leg.hip.rotation.z=Math.sin(phase)*.42;
-       leg.knee.rotation.z=Math.max(0,Math.cos(phase))*.40-.10;
+       leg.hip.rotation.z=Math.sin(phase)*.16;
+       leg.knee.rotation.z=Math.max(0,Math.cos(phase))*.10-.035;
      }
-     model.headPivot.rotation.z=Math.sin(gait*2)*.025;
-     model.tailPivot.rotation.y=Math.sin(gait*.56)*.22;
-     model.riderPivot.rotation.z=-.035+Math.sin(gait*2+.3)*.035;
+     model.headPivot.rotation.z=Math.sin(gait*1.3)*.008;
+     model.tailPivot.rotation.y=Math.sin(gait*.45)*.075;
+     model.riderPivot.rotation.z=-.015+Math.sin(gait*1.3+.3)*.012;
    }
    camera.position.set(8.0+Math.sin(frame.t*.12)*.22,4.3,11.5);
    camera.lookAt(-1.4,1.65,0);
