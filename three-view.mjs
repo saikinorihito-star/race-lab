@@ -207,12 +207,15 @@ export async function createThreeView(host){
    const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time) : {t:time,horses:neutral};
    const lead=Math.max(...frame.horses.map(h=>h.x));
    const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,2);
+   // Use wall-clock time for leg cadence so 8x replay does not become frantic.
+   const motionTime=performance.now()*.001;
    for(const model of models){
      const item=frame.horses.find(h=>h.id===model.id);
      if(!item)continue;
      const gap=Math.max(0,lead-item.x);
      // Include the rear pack; maintain a stable camera following the leaders.
-     model.group.position.set(-gap*.32,.022+Math.sin(frame.t*8+model.id)*.012,(item.lane-3)*1.25);
+     // Distance/placing follow simulated race data; gallop motion is purely visual.
+     model.group.position.set(-gap*.32,.018,(item.lane-3)*1.25);
      model.group.visible=gap<180;
      const shouldLabel=!!race && leaders.some(v=>v.id===model.id);
      model.nameLabel.sprite.visible=shouldLabel;
@@ -227,17 +230,22 @@ export async function createThreeView(host){
          model.lastName=name;
        }
      }
-     // Restrained, slower gallop. Avoid exaggerated leg cycling at 8x playback.
-     const gait=frame.t*4.2+model.id*.34;
+     // Moderately energetic gallop: coordinated legs, soft suspension, head/torso counter-motion.
+     // Keep the hoof cadence independent of accelerated video playback.
+     const pace=Math.max(.85,Math.min(1.12,(item.speed || 16.5)/16.5));
+     const gait=motionTime*7.0*pace+model.id*.34;
+     const up=Math.max(0,Math.sin(gait*2+.35));
+     model.group.position.y=.016+up*.030;
+     model.group.rotation.z=Math.sin(gait+.4)*.018;
      for(let j=0;j<model.legs.length;j++){
        const leg=model.legs[j];
        const phase=gait+(leg.front?0:Math.PI)+(leg.side?Math.PI:0);
-       leg.hip.rotation.z=Math.sin(phase)*.16;
-       leg.knee.rotation.z=Math.max(0,Math.cos(phase))*.10-.035;
+       leg.hip.rotation.z=Math.sin(phase)*.235;
+       leg.knee.rotation.z=Math.max(0,Math.cos(phase+.4))*.135-.045;
      }
-     model.headPivot.rotation.z=Math.sin(gait*1.3)*.008;
-     model.tailPivot.rotation.y=Math.sin(gait*.45)*.075;
-     model.riderPivot.rotation.z=-.015+Math.sin(gait*1.3+.3)*.012;
+     model.headPivot.rotation.z=-.012+Math.sin(gait+.8)*.025;
+     model.tailPivot.rotation.y=Math.sin(gait*.48)*.11;
+     model.riderPivot.rotation.z=-.023-Math.sin(gait+.5)*.025;
    }
    camera.position.set(8.0+Math.sin(frame.t*.12)*.22,4.3,11.5);
    camera.lookAt(-1.4,1.65,0);
