@@ -379,14 +379,16 @@ async function exportVideo(){
   $('save-video').disabled=false;$('run').disabled=false;$('save-video').textContent='動画保存';renderCanvas();
  }
 }
-$('distance').value=String(state.distance);$('scenario').value=state.scenario;
+$('distance').value=String(state.distance);$('scenario').value=state.scenario;$('horse-count').value=String(state.count);
 renderPicker();renderEditor();emptyResults();renderCanvas();
 $('run').addEventListener('click',startSimulation);
 $('reset-horses').addEventListener('click',()=>{
  if(state.recording)return;
- if(!confirm('18頭の名前・能力を初期状態に戻しますか？'))return;
- state.horses=exampleHorses();persist();invalidate();renderPicker();renderEditor();
+ if(!confirm('保存している18頭すべての馬名・能力・馬番を初期状態に戻しますか？'))return;
+ state.horses=exampleHorses();state.selected=1;persist();resetHud();invalidate();renderPicker();renderEditor();
 });
+$('horse-count').addEventListener('change',e=>changeHorseCount(e.target.value));
+$('horse-number').addEventListener('change',e=>changeHorseNumber(e.target.value));
 $('distance').addEventListener('change',e=>{state.distance=Number(e.target.value);persist();invalidate()});
 $('scenario').addEventListener('change',e=>{state.scenario=e.target.value;persist();invalidate()});
 $('horse-name').addEventListener('change',e=>updateEditedHorse('name',e.target.value));
@@ -395,11 +397,11 @@ for(const key of ['speed','stamina','kick']){
  $(`horse-${key}`).addEventListener('input',e=>{$(`${key}-value`).textContent=e.target.value;currentHorse()[key]=Number(e.target.value);$('selected-title').textContent=currentHorse().name;persist();if(state.race)invalidate();});
 }
 $('backup-save').addEventListener('click',()=>{
- const content=JSON.stringify({version:1,date:new Date().toISOString(),horses:state.horses,distance:state.distance,scenario:state.scenario},null,2);
+ const content=JSON.stringify({version:2,date:new Date().toISOString(),horses:state.horses,count:state.count,distance:state.distance,scenario:state.scenario},null,2);
  const url=URL.createObjectURL(new Blob([content],{type:'application/json'}));
  const link=document.createElement('a');link.href=url;link.download='race-lab-settings.json';
  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
- setStatus('馬名・能力・ペース・距離のバックアップを保存しました。');
+ setStatus('馬名・馬番・出走頭数・能力・ペース・距離のバックアップを保存しました。');
 });
 $('backup-load').addEventListener('click',()=>$('backup-file').click());
 $('backup-file').addEventListener('change',async e=>{
@@ -409,11 +411,13 @@ $('backup-file').addEventListener('change',async e=>{
   const data=JSON.parse(await file.text());validateHorses(data.horses);
   if(![1200,1600,2000,2200,2400,3000].includes(Number(data.distance)))throw new Error('距離の設定が不正です。');
   if(!['normal','high','low'].includes(data.scenario))throw new Error('ペース設定が不正です。');
-  if(!confirm('現在の18頭の設定を、バックアップの内容で上書きしますか？'))return;
+  if(!confirm('現在の設定をバックアップの内容で上書きしますか？'))return;
   state.horses=data.horses.map(h=>({id:h.id,name:String(h.name).slice(0,24),style:h.style,speed:Number(h.speed),stamina:Number(h.stamina),kick:Number(h.kick)}));
   state.distance=Number(data.distance);state.scenario=data.scenario;
-  $('distance').value=state.distance;$('scenario').value=state.scenario;
-  persist();invalidate();renderPicker();renderEditor();setStatus('バックアップから設定を復元しました。');
+  state.count=Number.isInteger(data.count)&&data.count>=2&&data.count<=18?data.count:18;
+  state.selected=1;
+  $('distance').value=state.distance;$('scenario').value=state.scenario;$('horse-count').value=String(state.count);
+  persist();resetHud();invalidate();renderPicker();renderEditor();setStatus('バックアップから設定を復元しました。');
  }catch(error){setStatus(`復元に失敗しました：${error.message}`,true)}
  finally{e.target.value='';}
 });
@@ -421,7 +425,7 @@ $('toggle-play').addEventListener('click',()=>setPlay(!state.playing));
 $('seek').addEventListener('input',e=>{if(!state.race||state.recording)return;state.currentT=state.race.elapsed*Number(e.target.value)/100;state.lastTick=null;renderCanvas()});
 $('speed').addEventListener('change',e=>state.speed=Number(e.target.value));
 $('save-video').addEventListener('click',exportVideo);
-// Load the 3D view by default; retain the 2D chase as a safe fallback.
+// Load 3D by default; use overhead course view as the offline fallback.
 let viewRequest=0;
 let threeLoading=null;
 async function selectView(view){
@@ -438,7 +442,7 @@ async function selectView(view){
      if(!threeView)threeView=created;
    }catch(error){
      threeLoading=null;
-     if(request===viewRequest)setStatus('3D表示を開始できませんでした。追走ビューで操作できます。接続とSafariを確認してください。',true);
+     if(request===viewRequest){setStatus('3D表示を開始できませんでした。上空ビューで操作できます。接続とSafariを確認してください。',true);state.view='top';document.querySelectorAll('[data-view]').forEach(b=>{const selected=b.dataset.view==='top';b.classList.toggle('active',selected);b.setAttribute('aria-pressed',String(selected));});renderCanvas();}
      console.error('3D view initialization failed',error);
      return;
    }finally{
