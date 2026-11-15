@@ -13,6 +13,7 @@ function restore() {
 const saved=restore();
 const state={...saved,selected:1,race:null,stats:null,playing:false,recording:false,view:'chase',currentT:0,speed:8,lastTick:null,worker:null,seed:20261115};
 const canvas=$('race-canvas');
+let threeView=null;
 const picker=$('horse-picker');
 function persist(){try {localStorage.setItem(STORE,JSON.stringify({horses:state.horses,distance:state.distance,scenario:state.scenario}));}catch{setStatus('保存できません。端末のブラウザー設定を確認してください。',true)}}
 function setStatus(text,error=false){$('status').textContent=text;$('status').style.color=error?'#ffc2a3':'#9baec4';}
@@ -70,8 +71,9 @@ function renderStats(stats){
  }
 }
 function renderCanvas(){
- // Render interpolated horse positions using continuous elapsed time.
- renderFrame(canvas,state.race,state.horses,state.currentT,state.view);
+ // WebGL is opt-in; preserve existing 2D views for low-power and offline use.
+ if(state.view==='three' && threeView)threeView.render(state.race,state.horses,state.currentT);
+ else renderFrame(canvas,state.race,state.horses,state.currentT,state.view==='top'?'top':'chase');
  const end=state.race?.elapsed||0;
  $('seek').value=end?String(Math.min(100,100*state.currentT/end)):'0';
  const duration=(s)=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
@@ -137,7 +139,8 @@ function updateEditedHorse(property,value){
 async function exportVideo(){
  if(!state.race){setStatus('先にシミュレーションを開始してください。',true);return;}
  if(state.recording)return;
- if(!canvas.captureStream || typeof MediaRecorder==='undefined'){
+ const recordCanvas=state.view==='three' && threeView ? threeView.canvas : canvas;
+ if(!recordCanvas.captureStream || typeof MediaRecorder==='undefined'){
   setStatus('このiPhone/ブラウザーでは直接録画に対応していません。iPhoneの「画面収録」を利用してください。',true);return;
  }
  let mime='';
@@ -150,7 +153,7 @@ async function exportVideo(){
  const oldTime=state.currentT;let stream=null;let recorder=null;
  try{
   state.currentT=0;renderCanvas();
-  stream=canvas.captureStream(24);const chunks=[];
+  stream=recordCanvas.captureStream(24);const chunks=[];
   recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:2200000});
   const finalized=new Promise((resolve,reject)=>{
    recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};
@@ -221,8 +224,23 @@ $('seek').addEventListener('input',e=>{if(!state.race||state.recording)return;st
 $('speed').addEventListener('change',e=>state.speed=Number(e.target.value));
 $('save-video').addEventListener('click',exportVideo);
 for(const btn of document.querySelectorAll('[data-view]')){
- btn.addEventListener('click',()=>{
-  state.view=btn.dataset.view;
+ btn.addEventListener('click',async()=>{
+  if(state.recording)return;
+  const view=btn.dataset.view;
+  if(view==='three' && !threeView){
+   btn.disabled=true;const old=btn.textContent;btn.textContent='読込中…';
+   try{
+    const module=await import('./three-view.mjs');
+    threeView=await module.createThreeView($('three-host'));
+   }catch(error){
+    setStatus('3Dビューを読み込めませんでした。通信環境やSafariの設定をご確認ください。2Dビューは引き続き使えます。',true);
+    console.error('3D view initialization failed',error);
+    btn.disabled=false;btn.textContent=old;return;
+   }
+   btn.disabled=false;btn.textContent=old;
+  }
+  state.view=view;
+  $('three-host').hidden=view!=='three';
   document.querySelectorAll('[data-view]').forEach(b=>{b.classList.toggle('active',b===btn);b.setAttribute('aria-pressed',String(b===btn))});
   renderCanvas();
  });
