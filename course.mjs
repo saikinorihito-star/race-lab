@@ -66,3 +66,54 @@ export function safeRacePositions(horses,lead,raceDistance) {
  }
  return byId;
 }
+
+
+// All views share one time-continuous path for each simulated horse.
+// The earlier frame-by-frame crowd solver could move a horse backwards when
+// the ordering changed. Resolve the solver only at recorded keyframes, remove
+// backward steps and interpolate the safe positions for all rendering modes.
+const raceDisplayCache=new WeakMap();
+function buildRaceDisplay(race){
+ const samples=[];
+ const lastS=new Map();
+ for(const frame of race.frames){
+   const lead=Math.max(...frame.horses.map(h=>h.x));
+   const resolved=safeRacePositions(frame.horses,lead,race.distance);
+   const byId=new Map();
+   for(const horse of frame.horses){
+     const raw=resolved.get(horse.id).s;
+     const previous=lastS.get(horse.id);
+     const smooth=previous===undefined?raw:Math.max(previous,raw);
+     lastS.set(horse.id,smooth);
+     byId.set(horse.id,smooth);
+   }
+   samples.push({t:frame.t,byId});
+ }
+ return samples;
+}
+export function raceDisplayPositions(race,frame,distance=2200){
+ if(!race?.frames?.length){
+   const lead=Math.max(...frame.horses.map(h=>h.x));
+   return safeRacePositions(frame.horses,lead,distance);
+ }
+ let snapshots=raceDisplayCache.get(race);
+ if(!snapshots){snapshots=buildRaceDisplay(race);raceDisplayCache.set(race,snapshots);}
+ const time=Math.max(snapshots[0].t,Math.min(snapshots[snapshots.length-1].t,Number(frame.t)||0));
+ let lo=0,hi=snapshots.length-1;
+ while(hi-lo>1){
+   const mid=(lo+hi)>>1;
+   if(snapshots[mid].t<=time)lo=mid;else hi=mid;
+ }
+ const a=snapshots[lo],b=snapshots[hi];
+ const fraction=snapshots.length===1?0:Math.max(0,Math.min(1,(time-a.t)/(b.t-a.t||1)));
+ const result=new Map();
+ for(const horse of frame.horses){
+   const start=a.byId.get(horse.id);
+   const end=b.byId.get(horse.id);
+   if(start===undefined||end===undefined)continue;
+   const s=start+(end-start)*fraction;
+   const offset=INSIDE_MARGIN+Math.max(0,Math.min(17,horse.lane))*LANE_WIDTH;
+   result.set(horse.id,{s,point:coursePoint(s,offset)});
+ }
+ return result;
+}
