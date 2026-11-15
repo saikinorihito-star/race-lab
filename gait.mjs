@@ -16,8 +16,8 @@ export function gallopDynamics(speedNow=16.5,replaySpeed=4){
  };
 }
 
-export function gallopCycle(seconds){
- const t=(Number(seconds)||0)*GAIT_HZ;
+export function gallopCycle(seconds,hz=GAIT_HZ){
+ const t=(Number(seconds)||0)*(Number(hz)||GAIT_HZ);
  return ((t%1)+1)%1;
 }
 export function gallopLegPose(front,nearSide,cycle,stride=1){
