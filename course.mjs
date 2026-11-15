@@ -7,24 +7,26 @@ export const INSIDE_MARGIN=2.0;
 // Wide enough for 18 separate starting stalls, then tactical movement to the inner rail.
 export const TRACK_OUTER_OFFSET=31.5;
 export const HALF_LAP_LENGTH=HALF_STRAIGHT*2+Math.PI*TURN_RADIUS;
+export const FINAL_STRAIGHT_START=(HALF_STRAIGHT+Math.PI*TURN_RADIUS)/HALF_LAP_LENGTH;
 
-// Counterclockwise as seen from above: east on the lower straight, curve left
-// around the eastern end, and west on the upper straight.
+// Three.js uses +Y up, so a genuine LEFT TURN from +X bends toward -Z.
+// Both map projections must use screenY=originY+worldZ*scale, avoiding a
+// mirrored map that appears left-handed while 3D runs to the right.
 export function coursePoint(s,offset=0) {
  const first=HALF_STRAIGHT;
  const curveEnd=HALF_STRAIGHT+Math.PI*TURN_RADIUS;
  if(s<first) {
-  return {x:-HALF_STRAIGHT+s,z:-TURN_RADIUS-offset,dx:1,dz:0,yaw:0};
+  return {x:-HALF_STRAIGHT+s,z:TURN_RADIUS+offset,dx:1,dz:0,yaw:0};
  }
  if(s<curveEnd) {
-  const theta=-Math.PI/2+(s-first)/TURN_RADIUS;
+  const theta=Math.PI/2-(s-first)/TURN_RADIUS;
   const radius=TURN_RADIUS+offset;
-  const dx=-Math.sin(theta),dz=Math.cos(theta);
+  const dx=Math.sin(theta),dz=-Math.cos(theta);
   return {x:HALF_STRAIGHT+Math.cos(theta)*radius,z:Math.sin(theta)*radius,
    dx,dz,yaw:-Math.atan2(dz,dx)};
  }
  const x=HALF_STRAIGHT-(s-curveEnd);
- return {x,z:TURN_RADIUS+offset,dx:-1,dz:0,yaw:-Math.PI};
+ return {x,z:-TURN_RADIUS-offset,dx:-1,dz:0,yaw:Math.PI};
 }
 export function horseCoursePoint(raceMetres,raceDistance,lane) {
  const d=Math.max(1,Number(raceDistance)||2200);
