@@ -62,3 +62,6 @@
  .race-frame-chip{flex-basis:24px;min-width:24px;height:21px;font-size:10px}
  .race-horse-name{font-size:11px}
 }
+
+/* Explain what part of the full field is visible in the 3D camera. */
+.overview-legend{margin:2px 4px 7px;color:#b7d3c5;font-size:10px;line-height:1.4;text-align:right}
