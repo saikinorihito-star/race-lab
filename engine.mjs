@@ -5,7 +5,7 @@
  */
 import {FINAL_STRAIGHT_START} from './course.mjs';
 export const STYLES = ['逃げ', '先行', '差し', '追込'];
-export const SCENARIOS = {normal: '標準', high: 'ハイペース', low: 'スローペース'};
+export const SCENARIOS = {high: 'ハイ', normal: 'ミドル', low: 'スロー'};
 export const COLORS = ['#f6f7fa','#34373f','#e6575e','#4b83dd','#ecc858','#52a86d','#f18b44','#e285ae','#a5a5a5','#9c7a45','#7b70c7','#31a9b1','#bf576e','#aad85d','#427b83','#d4aa82','#6662a9','#c4c8d1'];
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
@@ -31,7 +31,7 @@ function normal(rng) {
   return Math.sqrt(-2 * Math.log(Math.max(rng(), 1e-12))) * Math.cos(2 * Math.PI * rng());
 }
 export function validateHorses(horses) {
-  if (!Array.isArray(horses) || horses.length !== 18) throw new Error('出走馬は18頭必要です。');
+  if (!Array.isArray(horses) || horses.length < 2 || horses.length > 18) throw new Error('出走馬数は2〜18頭にしてください。');
   const ids = new Set();
   for (const h of horses) {
     if (!Number.isInteger(h.id) || h.id < 1 || h.id > 18 || ids.has(h.id)) throw new Error('馬番は1〜18の重複しない整数が必要です。');
@@ -42,6 +42,7 @@ export function validateHorses(horses) {
       if (!Number.isFinite(Number(h[k])) || Number(h[k]) < 40 || Number(h[k]) > 100) throw new Error(`${h.id}番の${k}は40〜100にしてください。`);
     }
   }
+  for(let id=1;id<=horses.length;id++)if(!ids.has(id))throw new Error('出走馬の馬番は1番から連続する番号にしてください。');
 }
 
 /** A deterministic synthetic race with traffic-aware lanes and overtakes.
@@ -56,8 +57,8 @@ export function runRace(horses, options = {}) {
   const scenario=SCENARIOS[options.scenario]?options.scenario:'normal';
   const seed=(options.seed??20261115)>>>0;
   const record=options.record!==false;
-  const rng=random(seed), dt=.5, limit=17;
-  const states=horses.map((horse,index)=>{
+  const rng=random(seed), dt=.5, limit=horses.length-1;
+  const states=[...horses].sort((a,b)=>a.id-b.id).map((horse,index)=>{
     // All 18 start on one straight starting line, occupying separate lateral stalls.
     // After the break they find room to merge gradually toward the inner rail.
     const lane=index;
