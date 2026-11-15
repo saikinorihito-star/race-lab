@@ -21,29 +21,30 @@
 </header>
 <main class="content">
   <section class="intro">
-    <div><p class="eyebrow">RACE SIMULATION / PROTOTYPE</p><h1>レースを、<span>展開で読む。</span></h1><p class="subtext">18頭の脚質・能力を設定して、仮想レースを再生。条件を変えたときの隊列の違いを確認できます。</p></div>
+    <div><p class="eyebrow">RACE SIMULATION / PROTOTYPE</p><h1>レースを、<span>展開で読む。</span></h1><p class="subtext">出走頭数と各馬の脚質・能力を設定して、仮想レースを再生。条件を変えたときの隊列の違いを確認できます。</p></div>
     <div class="warning"><span class="warning-icon">!</span><p><b>予想精度の検証前です。</b> すべての能力値・確率は架空モデルによるデモです。実際の競馬結果や的中率を予測・保証するものではありません。</p></div>
   </section>
   <section class="workspace">
     <div class="primary">
       <article class="panel settings">
-        <div class="panel-head"><h2><span class="step">01</span> レース設定</h2><span class="minor">出走 18頭</span></div>
+        <div class="panel-head"><h2><span class="step">01</span> レース設定</h2><span class="minor" id="field-count-label">出走 18頭</span></div>
         <div class="settings-grid">
+          <label>出走頭数<select id="horse-count"><option value="2">2頭</option><option value="3">3頭</option><option value="4">4頭</option><option value="5">5頭</option><option value="6">6頭</option><option value="7">7頭</option><option value="8">8頭</option><option value="9">9頭</option><option value="10">10頭</option><option value="11">11頭</option><option value="12">12頭</option><option value="13">13頭</option><option value="14">14頭</option><option value="15">15頭</option><option value="16">16頭</option><option value="17">17頭</option><option value="18" selected>18頭</option></select></label>
           <label>距離<select id="distance"><option value="1200">芝1200m</option><option value="1600">芝1600m</option><option value="2000">芝2000m</option><option value="2200" selected>芝2200m</option><option value="2400">芝2400m</option><option value="3000">芝3000m</option></select></label>
-          <label>レースペース<select id="scenario"><option value="normal">標準</option><option value="high">ハイペース</option><option value="low">スローペース</option></select></label>
+          <label>レースペース<select id="scenario"><option value="high">ハイ</option><option value="normal" selected>ミドル</option><option value="low">スロー</option></select></label>
         </div>
         <div class="action-row"><button class="btn primary-btn" id="run"><span>▶</span> 予想シミュレーション開始</button><button class="btn secondary-btn" id="reset-horses" title="すべての馬の設定を初期化">初期化</button></div>
         <p id="status" class="small-status" role="status" aria-live="polite">開始ボタンを押すと1レースを再生し、1,000回の着順分布を集計します。</p>
       </article>
       <article class="panel visual-panel">
-        <div class="panel-head"><h2><span class="step">02</span> レース再生</h2><div class="tiny-toggle"><button class="active" data-view="chase" aria-pressed="true">追走ビュー</button><button data-view="top" aria-pressed="false">上空ビュー</button><button data-view="three" aria-pressed="false">3Dビュー</button></div></div>
+        <div class="panel-head"><h2><span class="step">02</span> レース再生</h2><div class="tiny-toggle"><button data-view="top" aria-pressed="false">上空ビュー</button><button class="active" data-view="three" aria-pressed="true">3Dビュー</button></div></div>
         <section class="race-overview" aria-label="レース全体の位置図">
           <div class="race-overview-head"><strong>全体像 <span class="race-overview-hint">左回り・芝</span></strong><span id="overview-remaining" class="overview-remaining">スタート前</span></div>
           <svg id="overview-map" viewBox="0 0 900 226" role="img" aria-label="3D映像と同じ座標による左回り半周コースの馬群位置図。黄色い点は3Dカメラ位置です。"></svg>
           <p class="overview-legend" id="overview-legend">点は馬の実位置</p>
         </section>
         <div class="canvas-wrap"><canvas id="race-canvas" width="1000" height="560" aria-label="競走馬の位置関係を示すレースアニメーション"></canvas><div id="three-host" class="three-host" hidden></div><div class="canvas-label" id="canvas-label">スタート前</div></div>
-        <section class="race-standings" aria-label="18頭の馬名と現在の順位">
+        <section class="race-standings" aria-label="出走馬の馬名と現在の順位">
           <div class="race-standings-head"><strong id="standings-heading">出走馬一覧</strong><span>数字は馬番・色は枠色</span></div>
           <div id="race-standings-list" class="race-standings-columns"></div>
         </section>
@@ -51,7 +52,7 @@
           <div class="playback-line"><button id="toggle-play" class="play-button" title="再生／一時停止" aria-label="再生">▶</button><input id="seek" type="range" min="0" max="100" value="0" aria-label="再生位置"><span id="play-time" class="time">0:00 / 0:00</span></div>
           <div class="playback-options"><label>再生速度 <select id="speed"><option value="1">1倍</option><option value="2">2倍</option><option value="4">4倍</option><option value="8" selected>8倍</option><option value="12">12倍</option></select></label><button class="btn secondary-btn" id="save-video">動画保存</button></div>
         </div>
-        <p class="helptext">芝の左回り半周コースを再現。上の全体図と3Dレースは同じ位置情報で連動し、黄色い点が3Dカメラを示します。18頭が横一列でスタート。斜め前から馬群を映し、発走後は安全な進路を選んで内へ寄り、最後の直線までは内ラチ優先で走ります。最後の直線では外へ出して追い抜くこともできます。帽子・勝負服は枠色で統一（実在の登録勝負服ではありません）。馬・レースは架空モデルです。3Dはネット接続が必要です。</p>
+        <p class="helptext">2〜18頭の出走馬を設定できます。芝の左回り半周コースを再現。上の全体図と3Dレースは同じ位置情報で連動し、黄色い点が3Dカメラを示します。選択した頭数が横一列でスタート。斜め前から馬群を映し、発走後は安全な進路を選んで内へ寄り、最後の直線までは内ラチ優先で走ります。最後の直線では外へ出して追い抜くこともできます。帽子・勝負服は枠色で統一（実在の登録勝負服ではありません）。馬・レースは架空モデルです。3Dはネット接続が必要です。</p>
       </article>
       <article class="panel results-panel">
         <div class="panel-head"><h2><span class="step">03</span> 予想結果</h2><span class="minor">1,000回の仮想試行</span></div>
@@ -61,9 +62,10 @@
     </div>
     <aside class="secondary">
       <article class="panel editor-panel"><div class="panel-head"><h2>出走馬の能力設定</h2><span class="minor">変更は自動保存</span></div>
-        <p class="helptext">馬番を選択すると、名前・脚質・能力値を変更できます。40〜100の数値は架空の設定値です。</p>
+        <p class="helptext">馬番を選択すると、馬名・脚質・能力値を編集できます。馬番を変更すると、変更先の馬と番号を入れ替えます（馬名・能力はそのまま）。非出走馬の設定も保存されます。</p>
         <div id="horse-picker" class="horse-picker" aria-label="編集する馬番"></div>
         <div class="selected-horse"><div class="horse-current"><span class="horse-chip" id="selected-number">1</span><div><strong id="selected-title">サンプル01</strong><small>編集対象</small></div></div>
+          <label class="field">馬番（変更すると入れ替え）<select id="horse-number" aria-label="選択した馬の馬番を変更"></select></label>
           <label class="field">馬名<input id="horse-name" type="text" maxlength="24" autocomplete="off"></label>
           <label class="field">脚質<select id="horse-style"><option value="逃げ">逃げ</option><option value="先行">先行</option><option value="差し">差し</option><option value="追込">追込</option></select></label>
           <label class="slider-label"><span>スピード</span><output id="speed-value">70</output><input id="horse-speed" type="range" min="40" max="100"></label>
