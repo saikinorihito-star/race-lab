@@ -33,6 +33,19 @@ export async function createThreeView(host){
  dirt.rotation.x=-Math.PI/2;dirt.position.set(0,-0.037,12);scene.add(dirt);
  const turfBorder=new THREE.Mesh(new THREE.BoxGeometry(330,.035,.075),material(0xf4f6ef));
  turfBorder.position.set(0,.018,1.48);scene.add(turfBorder);
+ // Gentle low-contrast ground movement conveys speed without shaking the camera.
+ const speedMarks=[];
+ const markGeometry=new THREE.PlaneGeometry(1.2,.075);
+ const markMaterial=new THREE.MeshBasicMaterial({color:0xd4eabc,transparent:true,opacity:.24,depthWrite:false});
+ for(const z of [-7.6,6.7]){
+   for(let i=0;i<16;i++){
+     const mark=new THREE.Mesh(markGeometry,markMaterial);
+     mark.rotation.x=-Math.PI/2;
+     mark.position.set(-45+i*6,.018,z);
+     scene.add(mark);
+     speedMarks.push({mark,base:-45+i*6,z});
+   }
+ }
  // Thin white racecourse fences on the near and far edges.
  const railMat=material(0xfaf9f3);
  for(const z of [-17,9]){
@@ -175,6 +188,16 @@ export async function createThreeView(host){
    return {group,legs,headPivot,riderPivot,tailPivot,id,numberTexture};
  }
  const models=Array.from({length:18},(_,i)=>horseModel(i+1));
+ // Subtle floor shadows provide a clear takeoff/landing cue.
+ const shadowGeometry=new THREE.CircleGeometry(1,20);
+ const shadowMaterial=new THREE.MeshBasicMaterial({color:0x25412c,transparent:true,opacity:.16,depthWrite:false});
+ for(const model of models){
+   const shadow=new THREE.Mesh(shadowGeometry,shadowMaterial);
+   shadow.rotation.x=-Math.PI/2;
+   shadow.position.y=.023;
+   scene.add(shadow);
+   model.shadow=shadow;
+ }
  // Reference-style black horse nameplates are billboard sprites, drawn in the 3D video as well.
  function makeNameLabel(text){
    const image=document.createElement('canvas');image.width=512;image.height=104;
@@ -217,6 +240,7 @@ export async function createThreeView(host){
      // Distance/placing follow simulated race data; gallop motion is purely visual.
      model.group.position.set(-gap*.32,.018,(item.lane-3)*1.25);
      model.group.visible=gap<180;
+     model.shadow.visible=model.group.visible;
      const shouldLabel=!!race && leaders.some(v=>v.id===model.id);
      model.nameLabel.sprite.visible=shouldLabel;
      if(shouldLabel){
@@ -230,30 +254,39 @@ export async function createThreeView(host){
          model.lastName=name;
        }
      }
-     // Elastic, stylized gallop. Rhythm is independent of 8x playback speed.
-     // Front legs reach forward together, hind legs push off with a short delay.
-     const pace=Math.max(.88,Math.min(1.12,(item.speed || 16.5)/16.5));
-     const gait=motionTime*7.4*pace+model.id*.40;
-     const lift=Math.pow(Math.max(0,Math.sin(gait+.42)),1.5);
-     const landing=Math.max(0,Math.sin(gait+Math.PI*.65));
-     model.group.position.y=.015+lift*.082-landing*.014;
-     // More motion in the entire horse, not frantic hoof rotations.
-     model.group.rotation.z=-.018+Math.sin(gait+.75)*.052;
-     model.group.rotation.x=Math.sin(gait*.50+model.id)*.015;
+     // Noticeably brisk but controlled gallop. Limb amplitude stays moderate
+     // and the animation remains independent of the 8x race playback clock.
+     const pace=Math.max(.94,Math.min(1.10,(item.speed || 16.5)/16.5));
+     const gait=motionTime*10.0*pace+model.id*.40;
+     const lift=Math.pow(Math.max(0,Math.sin(gait+.42)),1.35);
+     model.group.position.y=.017+lift*.105;
+     // Keep body lean and rider counter-motion restrained to avoid eye fatigue.
+     model.group.rotation.z=-.018+Math.sin(gait+.70)*.047;
+     model.group.rotation.x=Math.sin(gait*.50+model.id)*.010;
      for(let j=0;j<model.legs.length;j++){
        const leg=model.legs[j];
-       const phase=gait+(leg.front?0:Math.PI*.85)+(leg.side?.30:-.30);
-       const stride=leg.front?.34:.31;
+       const phase=gait+(leg.front?0:Math.PI*.85)+(leg.side?.28:-.28);
+       const stride=leg.front?.29:.27;
        leg.hip.rotation.z=Math.sin(phase)*stride;
-       leg.knee.rotation.z=Math.max(0,Math.cos(phase+.32))*.22-.085;
+       leg.knee.rotation.z=Math.max(0,Math.cos(phase+.35))*.175-.065;
      }
-     model.headPivot.rotation.z=-.01+Math.sin(gait+.96)*.061;
-     model.tailPivot.rotation.y=Math.sin(gait*.55)*.16;
-     model.riderPivot.rotation.z=-.055-Math.sin(gait+.46)*.066;
-     model.riderPivot.position.y=2.00-Math.max(0,Math.cos(gait+.38))*.065;
+     model.headPivot.rotation.z=-.012+Math.sin(gait+.94)*.047;
+     model.tailPivot.rotation.y=Math.sin(gait*.46)*.105;
+     model.riderPivot.rotation.z=-.048-Math.sin(gait+.46)*.052;
+     model.riderPivot.position.y=2.00-Math.max(0,Math.cos(gait+.36))*.050;
+     model.shadow.position.x=model.group.position.x;
+     model.shadow.position.z=model.group.position.z;
+     const shadowSize=1-lift*.14;
+     model.shadow.scale.set(1.42*shadowSize,.60*shadowSize,1);
    }
-   camera.position.set(8.0+Math.sin(motionTime*.85)*.13,4.25+Math.sin(motionTime*1.7)*.065,11.5);
-   camera.lookAt(-1.4,1.72+Math.sin(motionTime*1.7+.25)*.035,0);
+   // Stabilize the viewpoint; the track marks and horses convey speed.
+   camera.position.set(8,4.25,11.5);
+   camera.lookAt(-1.4,1.72,0);
+   const scroll=motionTime*7.5;
+   for(const {mark,base,z} of speedMarks){
+     const pos=((base-scroll+48)%96+96)%96-48;
+     mark.position.set(pos,.018,z);
+   }
    renderer.render(scene,camera);
  }
  function dispose(){
