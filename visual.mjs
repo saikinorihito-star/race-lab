@@ -88,11 +88,28 @@ function renderTop(ctx,frame,horses,distance){
  ctx.fillStyle='rgba(11,32,34,.87)';rounded(ctx,25,18,530,52,11);ctx.fill();
  label(ctx,`隊列図  •  残り ${Math.ceil(Math.max(0,distance-lead))}m`,43,52,{size:23,bold:true});
 }
-export function renderFrame(canvas,race,horses,index,mode='chase'){
+function interpolateRaceFrame(frames, time) {
+ if(frames.length===1 || time<=frames[0].t)return frames[0];
+ const last=frames[frames.length-1];
+ if(time>=last.t)return last;
+ let lo=0, hi=frames.length-1;
+ while(hi-lo>1){const mid=(lo+hi)>>1;if(frames[mid].t<=time)lo=mid;else hi=mid;}
+ const start=frames[lo], end=frames[hi];
+ const ratio=clamp((time-start.t)/(end.t-start.t || 1),0,1);
+ return {t:time,horses:start.horses.map((h,i)=>{
+  const next=end.horses[i];
+  return {id:h.id,x:h.x+(next.x-h.x)*ratio,
+   lane:h.lane+(next.lane-h.lane)*ratio,
+   speed:h.speed+(next.speed-h.speed)*ratio,
+   finished:ratio<1?h.finished:next.finished};
+ })};
+}
+
+export function renderFrame(canvas,race,horses,time=0,mode='chase'){
  const ctx=canvas.getContext('2d');if(!ctx)return;
  // Fixed internal size avoids high device memory requirements; CSS scales it responsively.
  if(canvas.width!==BASE_W||canvas.height!==BASE_H){canvas.width=BASE_W;canvas.height=BASE_H;}
- const frame=race?.frames?.[index] ?? {t:0,horses:horses.map(h=>({id:h.id,x:0,lane:(h.id-1)%6}))};
+ const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time) : {t:0,horses:horses.map(h=>({id:h.id,x:0,lane:(h.id-1)%6}))};
  ctx.clearRect(0,0,BASE_W,BASE_H);
  if(mode==='top')renderTop(ctx,frame,horses,race?.distance||2200);
  else renderChase(ctx,frame,horses,race?.distance||2200);
