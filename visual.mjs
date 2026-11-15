@@ -11,7 +11,9 @@ function rounded(ctx,x,y,w,h,r=12){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
 function renderTop(ctx,frame,horses,distance,race,course='A',venue='tokyo',layout='outer'){
  // The same Tokyo/Kyoto turf A-D oval used by the 3D camera.
  ctx.fillStyle='#1b5638';ctx.fillRect(0,0,1000,560);
- const toXY=p=>({x:500+p.x*2.01,y:280+p.z*1.74});
+ // Fit the long Kyoto 1800m chute into the canvas without cropping.
+ const scale=startPocket(venue,layout,distance)?1.60:2.01;
+ const toXY=p=>({x:500+p.x*scale,y:280+p.z*1.74});
  const profile=getTurfProfile(venue,course,layout);
  const lap=profile.lap;
  function band(a,b,color){
