@@ -59,15 +59,22 @@ export async function createThreeView(host){
  const track=new THREE.Mesh(new THREE.PlaneGeometry(330,37),turf);
  track.rotation.x=-Math.PI/2;track.position.y=-0.05;scene.add(track);
  // The reference shows turf and sandy dirt side-by-side, not one vast empty field.
- const dirt=new THREE.Mesh(new THREE.PlaneGeometry(330,21),material(0xd8b879));
- dirt.rotation.x=-Math.PI/2;dirt.position.set(0,-0.037,12);scene.add(dirt);
- const turfBorder=new THREE.Mesh(new THREE.BoxGeometry(330,.035,.075),material(0xf4f6ef));
- turfBorder.position.set(0,.018,1.48);scene.add(turfBorder);
+ // Turf-only course: alternating mowing bands instead of a dirt strip.
+ const grassStripeMaterials=[material(0x79c07e),material(0x85cc88)];
+ for(let i=0;i<8;i++){
+   const z=-9.8+i*2.3;
+   const stripe=new THREE.Mesh(new THREE.PlaneGeometry(330,2.3),grassStripeMaterials[i%2]);
+   stripe.rotation.x=-Math.PI/2;
+   stripe.position.set(0,-.034,z+1.15);scene.add(stripe);
+ }
+ // The inner rail is z=-9.8; the horses start at z=-7.55 (lane 0).
+ const turfBorder=new THREE.Mesh(new THREE.BoxGeometry(330,.025,.055),material(0xf4f6ef));
+ turfBorder.position.set(0,.019,-9.8);scene.add(turfBorder);
  // Gentle low-contrast ground movement conveys speed without shaking the camera.
  const speedMarks=[];
  const markGeometry=new THREE.PlaneGeometry(1.2,.075);
- const markMaterial=new THREE.MeshBasicMaterial({color:0xd4eabc,transparent:true,opacity:.24,depthWrite:false});
- for(const z of [-7.6,6.7]){
+ const markMaterial=new THREE.MeshBasicMaterial({color:0xd4eabc,transparent:true,opacity:.13,depthWrite:false});
+ for(const z of [-7.2,4.6]){
    for(let i=0;i<16;i++){
      const mark=new THREE.Mesh(markGeometry,markMaterial);
      mark.rotation.x=-Math.PI/2;
@@ -78,7 +85,7 @@ export async function createThreeView(host){
  }
  // Thin white racecourse fences on the near and far edges.
  const railMat=material(0xfaf9f3);
- for(const z of [-17,9]){
+ for(const z of [-9.8,9]){
    for(const h of [.46,.90]){
      const rail=new THREE.Mesh(new THREE.BoxGeometry(280,.082,.085),railMat);
      rail.position.set(0,h,z);scene.add(rail);
@@ -104,6 +111,15 @@ export async function createThreeView(host){
  }
  const sphere=new THREE.SphereGeometry(1,18,12);
  const capsule=new THREE.CylinderGeometry(.23,.26,1,8);
+ const limbCylinder=new THREE.CylinderGeometry(1,1,1,8);
+ function jointBetween(parent,start,end,mat,radius){
+   const a=new THREE.Vector3(...start),b=new THREE.Vector3(...end);
+   const obj=new THREE.Mesh(limbCylinder,mat);
+   obj.position.copy(a).add(b).multiplyScalar(.5);
+   obj.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());
+   obj.scale.set(radius,a.distanceTo(b),radius);
+   parent.add(obj);return obj;
+ }
  function part(parent,geo,mat,x,y,z,sx=1,sy=1,sz=1){
    const obj=new THREE.Mesh(geo,mat);
    obj.position.set(x,y,z);obj.scale.set(sx,sy,sz);
@@ -232,7 +248,17 @@ export async function createThreeView(host){
      group.add(num);
    }
    // Oversized jockey helmet and face, compact colorful torso and bent arms.
+   // A straddling jockey: hips centered on the saddle, bent knees, boots in stirrups.
    const riderPivot=new THREE.Group();riderPivot.position.set(-.30,2.00,0);group.add(riderPivot);
+   const breeches=material(0xf0f1ee),boots=material(0x26282e);
+   part(riderPivot,sphere,breeches,-.17,-.095,0,.32,.21,.37);
+   for(const side of [-1,1]){
+     const z=side*.31;
+     jointBetween(riderPivot,[-.16,-.10,z],[-.38,-.47,side*.59],breeches,.155);
+     part(riderPivot,sphere,breeches,-.38,-.47,side*.59,.16,.13,.15);
+     jointBetween(riderPivot,[-.38,-.47,side*.59],[-.32,-.72,side*.73],boots,.123);
+     part(riderPivot,sphere,boots,-.31,-.74,side*.73,.23,.09,.13);
+   }
    const chest=part(riderPivot,sphere,silk,.15,.30,0,.39,.46,.34);
    chest.rotation.z=-.30;
    const uniformAccent=material(appearance.silkAccent);
@@ -245,11 +271,12 @@ export async function createThreeView(host){
    part(riderPivot,sphere,steel,.27,1.045,0,.38,.042,.358);
    part(riderPivot,sphere,helmetMat,.35,1.035,-.10,.37,.065,.30);
    part(riderPivot,sphere,hoofMat,.35,.98,-.23,.31,.068,.085);
+   // Bent elbows and both hands extended to grip the reins.
    for(const side of [-1,1]){
-     const arm=part(riderPivot,sphere,silk,.52,.30,side*.27,.19,.38,.18);
-     arm.rotation.z=.75;
-     part(riderPivot,sphere,skin,.73,.10,side*.24,.13,.13,.12);
-     part(riderPivot,sphere,hoofMat,-.20,-.28,side*.35,.20,.27,.13);
+     jointBetween(riderPivot,[.16,.48,side*.27],[.42,.22,side*.36],silk,.13);
+     part(riderPivot,sphere,silk,.42,.22,side*.36,.14,.14,.13);
+     jointBetween(riderPivot,[.42,.22,side*.36],[.76,.12,side*.27],silk,.10);
+     part(riderPivot,sphere,skin,.76,.12,side*.27,.13,.11,.12);
    }
    return {group,legs,headPivot,riderPivot,tailPivot,id,numberTexture};
  }
@@ -312,7 +339,8 @@ export async function createThreeView(host){
      const gap=Math.max(0,lead-item.x);
      // Include the rear pack; maintain a stable camera following the leaders.
      // Distance/placing follow simulated race data; gallop motion is purely visual.
-     model.group.position.set(-gap*.32,.018,(item.lane-3)*1.25);
+     // Use the simulated corridor directly: lane 0 is adjacent to the inner rail.
+     model.group.position.set(-gap*.32,.018,-7.55+item.lane*1.55);
      model.group.visible=gap<180;
      model.shadow.visible=model.group.visible;
      const shouldLabel=!!race && leaders.some(v=>v.id===model.id);
