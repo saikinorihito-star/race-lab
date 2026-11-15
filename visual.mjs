@@ -1,5 +1,6 @@
 import {SCENARIOS} from './engine.mjs';
 import {getHorseAppearance} from './appearance.mjs';
+import {gallopCycle,gallopLegPose} from './gait.mjs';
 import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET} from './course.mjs';
 const BASE_W=1000,BASE_H=560;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -20,20 +21,22 @@ function drawHorse(ctx,x,y,size,horse,appearance,phase=0){
  };
  // Ground shadow; no fast bobbing.
  shape(0,55,65,10,'rgba(18,24,17,.18)',0,'transparent',0);
- const leg=(hipX,offset,isNear)=>{
+ // Same four-beat leg sequence as the 3D model, including the right/left delay.
+ const leg=(hipX,isFront,isNear)=>{
+   const pose=gallopLegPose(isFront,isNear,phase);
    ctx.save();
    ctx.translate(hipX,12);
-   ctx.rotate(Math.sin(phase+offset)*.16);
+   ctx.rotate(pose.hip*.83);
    shape(0,13,12,24,coat,.12,edge,3.8);
    ctx.translate(3,30);
-   ctx.rotate((Math.max(0,Math.cos(phase+offset))*.10)-.03);
+   ctx.rotate(pose.knee*.85);
    shape(0,8,10,16,coat,0,edge,3.2);
    ctx.fillStyle='#342822';ctx.strokeStyle=edge;ctx.lineWidth=3;
    ctx.beginPath();ctx.roundRect(-11,17,26,12,5);ctx.fill();ctx.stroke();
    ctx.restore();
  };
  // Back-side limbs appear behind the belly.
- leg(-39,Math.PI,false);leg(35,0,false);
+ leg(-39,false,false);leg(35,true,false);
  shape(-10,3,57,32,coat,0,edge,4.5);
  shape(-45,0,26,28,coat,-.2,edge,3.6);
  shape(35,-3,29,32,coat,-.20,edge,3.5);
@@ -41,7 +44,7 @@ function drawHorse(ctx,x,y,size,horse,appearance,phase=0){
  shape(-67,-4,23,10,'#342a23',-.30,edge,3);
  shape(-81,-12,15,11,'#342a23',-.4,edge,2.8);
  // Near-side hooves and legs.
- leg(-33,0,true);leg(37,Math.PI,true);
+ leg(-33,false,true);leg(37,true,true);
  // Short thick neck, oversized head and rounded muzzle.
  shape(48,-24,24,33,coat,-.28,edge,4.2);
  shape(74,-33,33,29,coat,-.1,edge,4.4);
@@ -81,32 +84,33 @@ function drawHorse(ctx,x,y,size,horse,appearance,phase=0){
  ctx.lineWidth=4;ctx.beginPath();ctx.roundRect(-28,-25,39,31,6);ctx.fill();ctx.stroke();
  ctx.fillStyle=appearance.numberColor;ctx.font='900 22px Arial';ctx.textAlign='center';
  ctx.fillText(String(horse.id),-8,-2);
- // Jockey in a crouch: illustrative silks, cap colored by the frame.
- shape(-2,-41,20,22,appearance.silk,-.38,edge,3.5);
- shape(0,-44,17,5,appearance.silkAccent,-.38,edge,1.1);
- // Jockey truly straddles the horse. Folded thighs and calves end in the stirrups.
- shape(-14,-29,17,11,'#f5f5f1',.28,edge,2.4);
- ctx.strokeStyle='#f5f5f1';ctx.lineWidth=12;ctx.lineCap='round';
- ctx.beginPath();ctx.moveTo(-17,-29);ctx.lineTo(-35,-16);ctx.stroke();
- ctx.strokeStyle=edge;ctx.lineWidth=2.5;ctx.stroke();
- shape(-35,-16,7,8,'#f7f7f4',.25,edge,1.8);
- ctx.strokeStyle='#303238';ctx.lineWidth=10;
- ctx.beginPath();ctx.moveTo(-35,-16);ctx.lineTo(-37,12);ctx.stroke();
- shape(-36,13,12,5,'#242830',0,edge,2.2);
- // Face and bright helmet.
- shape(10,-77,15,17,'#f0c5a6',0,edge,3);
- shape(8,-89,21,12,appearance.helmet,-.06,edge,3.5);
- shape(16,-83,18,5,appearance.helmet,-.08,edge,2.7);
+ // Racing two-point posture: the rider crouches over the saddle.
+ // Jacket and helmet are identical frame colors; stripe is contrasting.
+ shape(-2,-43,19,23,appearance.silk,-.58,edge,3.5);
+ shape(1,-45,14,4,appearance.silkAccent,-.58,edge,1.1);
+ // Pelvis is seated over the saddle; knee points forward, boot returns to stirrup.
+ shape(-16,-32,16,10,'#f5f5f1',.12,edge,2.4);
+ ctx.lineCap='round';
+ ctx.strokeStyle='#f5f5f1';ctx.lineWidth=13;
+ ctx.beginPath();ctx.moveTo(-15,-32);ctx.lineTo(5,-17);ctx.stroke();
+ shape(5,-17,8,8,'#f5f5f1',0,edge,2.1);
+ ctx.strokeStyle='#303238';ctx.lineWidth=11;
+ ctx.beginPath();ctx.moveTo(5,-17);ctx.lineTo(-34,9);ctx.stroke();
+ shape(-35,10,11,5,'#242830',0,edge,2.2);
+ // Face and cap tilt slightly down towards the hands.
+ shape(17,-75,14,16,'#f0c5a6',-.18,edge,3);
+ shape(17,-89,21,11,appearance.helmet,-.13,edge,3.5);
+ shape(25,-83,16,5,appearance.helmet,-.14,edge,2.7);
  ctx.strokeStyle='#eeeeeb';ctx.lineWidth=2;
- ctx.beginPath();ctx.moveTo(-6,-86);ctx.quadraticCurveTo(6,-82,21,-84);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(1,-86);ctx.quadraticCurveTo(13,-82,29,-84);ctx.stroke();
  // Goggle band and lenses.
  shape(18,-76,12,4,'#1c2b37',0,edge,1);
  shape(20,-77,4,2.5,'#9dcde5',0,'#9dcde5',0);
  // Two sleeves holding the reins.
- shape(19,-43,9,18,appearance.silk,-.7,edge,2.4);
- shape(31,-30,9,8,'#f0c5a6',-.3,edge,2.5);
+ shape(23,-43,9,18,appearance.silk,-.7,edge,2.4);
+ shape(35,-30,9,8,'#f0c5a6',-.3,edge,2.5);
  ctx.strokeStyle='#252421';ctx.lineWidth=2.4;
- ctx.beginPath();ctx.moveTo(32,-29);ctx.quadraticCurveTo(66,-26,90,-15);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(36,-29);ctx.quadraticCurveTo(66,-26,90,-15);ctx.stroke();
  ctx.restore();
 }
 function backgroundChase(ctx,t){
@@ -140,13 +144,14 @@ function renderChase(ctx,frame,horses,distance){
  const records=frame.horses.map(h=>({...h,meta:horses.find(x=>x.id===h.id)}));
  // Screen travel points LEFT: leaders are on the left, followers are farther right.
  records.sort((a,b)=>a.x-b.x);
+ const cycle=gallopCycle(performance.now()*.001);
  for(const h of records){
   const diff=lead-h.x;const x=160+diff*12;
   if(x>1145)continue;
   const scale=clamp(1.04+h.lane*.014-diff*.008,.52,1.14);
   // Lane 0 is the inside rail, farther from this side-on camera.
  const y=336+h.lane*21+diff*.018;
-  drawHorse(ctx,x,y,scale,h,getHorseAppearance(h.id),frame.t*4.2+h.id*.34);
+  drawHorse(ctx,x,y,scale,h,getHorseAppearance(h.id),cycle);
  }
  ctx.fillStyle='rgba(7,27,36,.78)';rounded(ctx,22,22,325,57,13);ctx.fill();
  label(ctx,'RACE LAB  •  LIVE SIMULATION',38,57,{size:21,bold:true,color:'#d8fff1'});
