@@ -1,4 +1,5 @@
-import {COLORS, SCENARIOS} from './engine.mjs';
+import {SCENARIOS} from './engine.mjs';
+import {getHorseAppearance} from './appearance.mjs';
 const BASE_W=1000,BASE_H=560;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 function label(ctx,text,x,y,opts={}){
@@ -6,27 +7,80 @@ function label(ctx,text,x,y,opts={}){
  ctx.textAlign=opts.align||'left'; ctx.fillStyle=opts.color||'#fff';ctx.fillText(text,x,y);
 }
 function rounded(ctx,x,y,w,h,r=12){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
-function drawHorse(ctx,x,y,size,horse,color,phase=0){
- ctx.save();ctx.translate(x,y);ctx.scale(size,size);
- // Soft shadow: shape is an intentional stylized 2D sprite, not a 3D mesh.
- ctx.fillStyle='rgba(16,18,22,.23)';ctx.beginPath();ctx.ellipse(6,42,47,10,0,0,Math.PI*2);ctx.fill();
- ctx.strokeStyle='#3e2b20';ctx.lineWidth=9;ctx.lineCap='round';
- for (const [lx,p] of [[-25,0],[2,1],[18,2],[33,3]]) {
-  ctx.beginPath();ctx.moveTo(lx,13);ctx.lineTo(lx+Math.sin(phase*2+p)*8,38+Math.cos(phase*2+p)*4);ctx.stroke();
+// Cartoon chase-view counterpart of the shared 3D horse design.
+// The horse faces left on the track; all coat/silk/saddle/helmet colors are shared.
+function drawHorse(ctx,x,y,size,horse,appearance,phase=0){
+ ctx.save();ctx.translate(x,y);ctx.scale(-size,size);
+ const edge=appearance.outline,coat=appearance.coat;
+ const shape=(cx,cy,rx,ry,fill,rotation=0,stroke=edge,weight=3.5)=>{
+   ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,rotation,0,Math.PI*2);
+   ctx.fillStyle=fill;ctx.fill();
+   if(weight){ctx.lineWidth=weight;ctx.strokeStyle=stroke;ctx.stroke();}
+ };
+ // Ground shadow; no fast bobbing.
+ shape(0,55,65,10,'rgba(18,24,17,.18)',0,'transparent',0);
+ const leg=(hipX,offset,isNear)=>{
+   ctx.save();
+   ctx.translate(hipX,12);
+   ctx.rotate(Math.sin(phase+offset)*.16);
+   shape(0,13,12,24,coat,.12,edge,3.8);
+   ctx.translate(3,30);
+   ctx.rotate((Math.max(0,Math.cos(phase+offset))*.10)-.03);
+   shape(0,8,10,16,coat,0,edge,3.2);
+   ctx.fillStyle='#342822';ctx.strokeStyle=edge;ctx.lineWidth=3;
+   ctx.beginPath();ctx.roundRect(-11,17,26,12,5);ctx.fill();ctx.stroke();
+   ctx.restore();
+ };
+ // Back-side limbs appear behind the belly.
+ leg(-39,Math.PI,false);leg(35,0,false);
+ shape(-10,3,57,32,coat,0,edge,4.5);
+ shape(-45,0,26,28,coat,-.2,edge,3.6);
+ shape(35,-3,29,32,coat,-.20,edge,3.5);
+ // Fluffy tail, short to match the 3D character.
+ shape(-67,-4,23,10,'#342a23',-.30,edge,3);
+ shape(-81,-12,15,11,'#342a23',-.4,edge,2.8);
+ // Near-side hooves and legs.
+ leg(-33,0,true);leg(37,Math.PI,true);
+ // Short thick neck, oversized head and rounded muzzle.
+ shape(48,-24,24,33,coat,-.28,edge,4.2);
+ shape(74,-33,33,29,coat,-.1,edge,4.4);
+ shape(93,-19,26,20,coat,.08,edge,4);
+ shape(105,-17,13,10,'rgba(255,221,194,.18)',.05,edge,2);
+ shape(106,-19,3.6,4.1,edge,0,edge,0);
+ // Ears and forehead mane.
+ for(const z of [-1,1]){
+   const px=56+z*17;
+   ctx.beginPath();ctx.moveTo(px,-52);ctx.lineTo(px+6,-72);ctx.lineTo(px+18,-49);
+   ctx.closePath();ctx.fillStyle=coat;ctx.fill();ctx.strokeStyle=edge;ctx.lineWidth=3.5;ctx.stroke();
  }
- ctx.fillStyle='#74503a';ctx.beginPath();ctx.ellipse(0,7,49,24,-.02,0,2*Math.PI);ctx.fill();
- ctx.fillStyle='#60412e';ctx.beginPath();ctx.ellipse(-41,-1,18,13,-.24,0,2*Math.PI);ctx.fill();
- ctx.strokeStyle='#49372a';ctx.lineWidth=12;ctx.beginPath();ctx.moveTo(35,-6);ctx.lineTo(55,-27);ctx.stroke();
- ctx.fillStyle='#76543b';ctx.beginPath();ctx.ellipse(58,-29,17,11,-.30,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='#251b1a';ctx.beginPath();ctx.arc(65,-32,2.3,0,2*Math.PI);ctx.fill();
- ctx.fillStyle=color;ctx.fillRect(-13,-24,25,26);
- ctx.fillStyle='#18222b';ctx.fillRect(-7,-2,16,8);
- ctx.fillStyle='#f0d6b4';ctx.beginPath();ctx.arc(1,-38,12,0,Math.PI*2);ctx.fill();
- ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(0,-45,17,9,0,0,2*Math.PI);ctx.fill();
- ctx.fillStyle='rgba(3,12,20,.7)';ctx.beginPath();ctx.ellipse(4,-38,8,4,0,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='#fff';ctx.beginPath();ctx.roundRect(-13,-24,25,23,4);ctx.fill();
- ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(-10,-21,19,17,3);ctx.fill();
- ctx.font='800 17px Arial';ctx.textAlign='center';ctx.fillStyle=horse.id===1||horse.id===5?'#152234':'#fff';ctx.fillText(horse.id,0,-7);
+ for(let i=0;i<4;i++)shape(54+i*11,-59+i*3,9,10,'#3d2a22',.45,edge,1.6);
+ // Large expressive visible eye.
+ shape(85,-41,12,14,'#faf9f0',-.1,edge,3);
+ shape(90,-42,6.5,9,'#1d2530',0,edge,1);
+ shape(92,-46,2.8,3.4,'#ffffff',0,'#ffffff',0);
+ // Saddle, bib and large readable numbered cloth.
+ shape(-8,-27,32,11,'#f5f0e8',-.07,edge,2.8);
+ ctx.fillStyle=appearance.saddleBase;ctx.strokeStyle=appearance.saddleBorder;
+ ctx.lineWidth=4;ctx.beginPath();ctx.roundRect(-28,-25,39,31,6);ctx.fill();ctx.stroke();
+ ctx.fillStyle=appearance.numberColor;ctx.font='900 22px Arial';ctx.textAlign='center';
+ ctx.fillText(String(horse.id),-8,-2);
+ // Jockey in a crouch, with two distinct colors for helmet and silk.
+ shape(-2,-41,20,22,appearance.silk,-.38,edge,3.5);
+ // Trouser and boots.
+ shape(-24,-23,13,9,'#f9f8f4',.2,edge,2.4);
+ shape(-38,-14,13,5,'#292b31',0,edge,2);
+ // Face and bright helmet.
+ shape(10,-77,15,17,'#f0c5a6',0,edge,3);
+ shape(8,-89,21,12,appearance.helmet,-.06,edge,3.5);
+ shape(16,-83,18,5,appearance.helmet,-.08,edge,2.7);
+ // Goggle band and lenses.
+ shape(18,-76,12,4,'#1c2b37',0,edge,1);
+ shape(20,-77,4,2.5,'#9dcde5',0,'#9dcde5',0);
+ // Two sleeves holding the reins.
+ shape(19,-43,9,18,appearance.silk,-.7,edge,2.4);
+ shape(31,-30,9,8,'#f0c5a6',-.3,edge,2.5);
+ ctx.strokeStyle='#252421';ctx.lineWidth=2.4;
+ ctx.beginPath();ctx.moveTo(32,-29);ctx.quadraticCurveTo(66,-26,90,-15);ctx.stroke();
  ctx.restore();
 }
 function backgroundChase(ctx,t){
@@ -52,7 +106,7 @@ function renderChase(ctx,frame,horses,distance){
   if(x>1130)continue;
   const scale=clamp(1.18-diff*.012,.4,1.18);
   const y=418-(h.lane*31)-diff*.11;
-  drawHorse(ctx,x,y,scale,h,COLORS[(h.id-1)%COLORS.length],frame.t*1.4+h.id);
+  drawHorse(ctx,x,y,scale,h,getHorseAppearance(h.id),frame.t*4.2+h.id*.34);
  }
  ctx.fillStyle='rgba(7,27,36,.78)';rounded(ctx,22,22,325,57,13);ctx.fill();
  label(ctx,'RACE LAB  •  LIVE SIMULATION',38,57,{size:21,bold:true,color:'#d8fff1'});
@@ -63,8 +117,8 @@ function renderChase(ctx,frame,horses,distance){
  const front=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,3);
  front.forEach((h,i)=>{
   const yy=102+i*47;ctx.fillStyle='rgba(12,26,37,.78)';rounded(ctx,23,yy,225,39,10);ctx.fill();
-  ctx.fillStyle=COLORS[(h.id-1)%18];rounded(ctx,31,yy+5,29,28,6);ctx.fill();
-  label(ctx,String(h.id),46,yy+26,{size:19,bold:true,align:'center',color:h.id===1||h.id===5?'#203040':'#fff'});
+  ctx.fillStyle=getHorseAppearance(h.id).helmet;rounded(ctx,31,yy+5,29,28,6);ctx.fill();
+  label(ctx,String(h.id),46,yy+26,{size:19,bold:true,align:'center',color:getHorseAppearance(h.id).helmetNumberColor});
   const meta=horses.find(x=>x.id===h.id);label(ctx,`${i+1}  ${meta.name.slice(0,9)}`,72,yy+27,{size:18});
  });
 }
@@ -81,9 +135,9 @@ function renderTop(ctx,frame,horses,distance){
  for(const h of frame.horses){
   const diff=lead-h.x;const x=clamp(90+diff*10.6,75,940);const y=136+h.lane*42;
   ctx.fillStyle='rgba(1,35,20,.22)';ctx.beginPath();ctx.ellipse(x,y+7,20,7,0,0,2*Math.PI);ctx.fill();
-  ctx.fillStyle=COLORS[(h.id-1)%18];ctx.strokeStyle=h.id===1?'#1b3447':'#fff';ctx.lineWidth=2;
+  ctx.fillStyle=getHorseAppearance(h.id).helmet;ctx.strokeStyle='#f7f7ee';ctx.lineWidth=2;
   ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.fill();ctx.stroke();
-  label(ctx,String(h.id),x,y+7,{size:20,bold:true,align:'center',color:h.id===1||h.id===5?'#182636':'#fff'});
+  label(ctx,String(h.id),x,y+7,{size:20,bold:true,align:'center',color:getHorseAppearance(h.id).helmetNumberColor});
  }
  ctx.fillStyle='rgba(11,32,34,.87)';rounded(ctx,25,18,530,52,11);ctx.fill();
  label(ctx,`隊列図  •  残り ${Math.ceil(Math.max(0,distance-lead))}m`,43,52,{size:23,bold:true});
