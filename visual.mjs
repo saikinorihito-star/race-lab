@@ -54,18 +54,35 @@ function drawHorse(ctx,x,y,size,horse,appearance,phase=0){
    ctx.closePath();ctx.fillStyle=coat;ctx.fill();ctx.strokeStyle=edge;ctx.lineWidth=3.5;ctx.stroke();
  }
  for(let i=0;i<4;i++)shape(54+i*11,-59+i*3,9,10,'#3d2a22',.45,edge,1.6);
+ // Leather noseband and headstall, with a metallic bit.
+ ctx.strokeStyle=appearance.leather;ctx.lineWidth=4.2;ctx.lineCap='round';
+ ctx.beginPath();ctx.moveTo(91,-30);ctx.quadraticCurveTo(102,-32,109,-27);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(76,-53);ctx.quadraticCurveTo(74,-37,94,-29);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(62,-56);ctx.quadraticCurveTo(81,-55,88,-49);ctx.stroke();
+ shape(105,-19,4.5,4.5,'#d9dddd',0,edge,2);
+ // Reins lead back from the bit to the jockey's hands.
+ ctx.strokeStyle=appearance.leather;ctx.lineWidth=2.8;
+ ctx.beginPath();ctx.moveTo(104,-19);ctx.bezierCurveTo(81,-9,52,-27,32,-30);ctx.stroke();
  // Large expressive visible eye.
  shape(85,-41,12,14,'#faf9f0',-.1,edge,3);
  shape(90,-42,6.5,9,'#1d2530',0,edge,1);
  shape(92,-46,2.8,3.4,'#ffffff',0,'#ffffff',0);
- // Saddle, bib and large readable numbered cloth.
+ // Saddle, girth and stirrup with clear hardware, matching 3D tack.
+ ctx.strokeStyle=appearance.leather;ctx.lineWidth=6;ctx.lineCap='round';
+ ctx.beginPath();ctx.moveTo(-13,-20);ctx.quadraticCurveTo(-9,10,-6,32);ctx.stroke();
+ shape(-8,-32,29,10,'#49372c',-.08,edge,3);
+ ctx.strokeStyle=appearance.leather;ctx.lineWidth=2.8;
+ ctx.beginPath();ctx.moveTo(-29,-31);ctx.lineTo(-37,11);ctx.stroke();
+ ctx.strokeStyle='#d7dbe0';ctx.lineWidth=3.4;
+ ctx.beginPath();ctx.moveTo(-42,4);ctx.lineTo(-43,17);ctx.lineTo(-26,17);ctx.lineTo(-26,4);ctx.stroke();
  shape(-8,-27,32,11,'#f5f0e8',-.07,edge,2.8);
  ctx.fillStyle=appearance.saddleBase;ctx.strokeStyle=appearance.saddleBorder;
  ctx.lineWidth=4;ctx.beginPath();ctx.roundRect(-28,-25,39,31,6);ctx.fill();ctx.stroke();
  ctx.fillStyle=appearance.numberColor;ctx.font='900 22px Arial';ctx.textAlign='center';
  ctx.fillText(String(horse.id),-8,-2);
- // Jockey in a crouch, with two distinct colors for helmet and silk.
+ // Jockey in a crouch: illustrative silks, cap colored by the frame.
  shape(-2,-41,20,22,appearance.silk,-.38,edge,3.5);
+ shape(0,-44,17,5,appearance.silkAccent,-.38,edge,1.1);
  // Trouser and boots.
  shape(-24,-23,13,9,'#f9f8f4',.2,edge,2.4);
  shape(-38,-14,13,5,'#292b31',0,edge,2);
@@ -73,6 +90,8 @@ function drawHorse(ctx,x,y,size,horse,appearance,phase=0){
  shape(10,-77,15,17,'#f0c5a6',0,edge,3);
  shape(8,-89,21,12,appearance.helmet,-.06,edge,3.5);
  shape(16,-83,18,5,appearance.helmet,-.08,edge,2.7);
+ ctx.strokeStyle='#eeeeeb';ctx.lineWidth=2;
+ ctx.beginPath();ctx.moveTo(-6,-86);ctx.quadraticCurveTo(6,-82,21,-84);ctx.stroke();
  // Goggle band and lenses.
  shape(18,-76,12,4,'#1c2b37',0,edge,1);
  shape(20,-77,4,2.5,'#9dcde5',0,'#9dcde5',0);
@@ -121,7 +140,7 @@ function renderChase(ctx,frame,horses,distance){
   const yy=102+i*47;ctx.fillStyle='rgba(12,26,37,.78)';rounded(ctx,23,yy,225,39,10);ctx.fill();
   ctx.fillStyle=getHorseAppearance(h.id).helmet;rounded(ctx,31,yy+5,29,28,6);ctx.fill();
   label(ctx,String(h.id),46,yy+26,{size:19,bold:true,align:'center',color:getHorseAppearance(h.id).helmetNumberColor});
-  const meta=horses.find(x=>x.id===h.id);label(ctx,`${i+1}  ${meta.name.slice(0,9)}`,72,yy+27,{size:18});
+  const meta=horses.find(x=>x.id===h.id);label(ctx,`${i+1}  ${meta.name.slice(0,7)} (${getHorseAppearance(h.id).frame}枠)`,72,yy+27,{size:16});
  });
 }
 function renderTop(ctx,frame,horses,distance){
