@@ -149,8 +149,10 @@ export function runRace(horses, options = {}) {
       const lateral=clamp(h.targetLane-h.lane,-.44,.44);
       const nextLane=clamp(h.lane+lateral,0,limit);
       const halfway=(h.lane+nextLane)*.5;
+      // Keep an entire horse-length buffer before entering another corridor.
+      // This also prevents two horses from simultaneously cutting across each other.
       const sideCollision=snapshot.some(other=>other.id!==h.id&&!other.finished&&
-        Math.abs(other.x-h.x)<2.5&&Math.abs(other.lane-halfway)<.58);
+        Math.abs(other.x-h.x)<9&&Math.abs(other.lane-nextLane)<1.1);
       if(!sideCollision||Math.abs(lateral)<.01)h.lane=nextLane;
       else h.targetLane=Math.round(h.lane);
 
