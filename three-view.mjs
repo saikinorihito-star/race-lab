@@ -2,7 +2,7 @@
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 import {gallopCycle,gallopLegPose} from './gait.mjs';
-import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,TOKYO_TURF} from './course.mjs';
+import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,getTurfProfile} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
  const THREE = await import(THREE_URL);
@@ -30,8 +30,8 @@ export async function createThreeView(host){
  const surroundings=new THREE.Mesh(new THREE.PlaneGeometry(620,360),new THREE.MeshLambertMaterial({color:0x317e48}));
  surroundings.rotation.x=-Math.PI/2;surroundings.position.y=-.085;scene.add(surroundings);
  let trackGroup=null,renderedTrackKey='';
- function rebuildTrack(course,distance){
-   const key=course+':'+distance;
+ function rebuildTrack(venue,layout,course,distance){
+   const key=venue+':'+layout+':'+course+':'+distance;
    if(key===renderedTrackKey)return;
    renderedTrackKey=key;
    if(trackGroup){
@@ -44,14 +44,14 @@ export async function createThreeView(host){
        }
      });
    }
-   const lap=TOKYO_TURF[course].lap;
+   const lap=getTurfProfile(venue,course,layout).lap;
    trackGroup=new THREE.Group();scene.add(trackGroup);
    const positions=[],indices=[];
    const strip=(a,b,color)=>{
      const coords=[],faces=[],steps=240;
      for(let i=0;i<=steps;i++){
        const metre=i*lap/steps;
-       const inside=coursePoint(metre,a,course),outside=coursePoint(metre,b,course);
+       const inside=coursePoint(metre,a,course,venue,layout),outside=coursePoint(metre,b,course,venue,layout);
        coords.push(inside.x,-.035,inside.z,outside.x,-.035,outside.z);
        if(i<steps){const j=i*2;faces.push(j,j+2,j+1,j+1,j+2,j+3);}
      }
@@ -67,7 +67,7 @@ export async function createThreeView(host){
    for(const offset of [0,TRACK_OUTER_OFFSET]){
      for(const y of [.52,.94]){
        const points=Array.from({length:144},(_,i)=>{
-         const p=coursePoint(i*lap/144,offset,course);
+         const p=coursePoint(i*lap/144,offset,course,venue,layout);
          return new THREE.Vector3(p.x,y,p.z);
        });
        const curve=new THREE.CatmullRomCurve3(points,true);
@@ -75,7 +75,7 @@ export async function createThreeView(host){
        trackGroup.add(rail);
      }
      for(let d=0;d<lap;d+=15){
-       const p=coursePoint(d,offset,course);
+       const p=coursePoint(d,offset,course,venue,layout);
        const post=new THREE.Mesh(new THREE.CylinderGeometry(.047,.047,1,6),postMat);
        post.position.set(p.x,.50,p.z);trackGroup.add(post);
      }
@@ -83,7 +83,7 @@ export async function createThreeView(host){
    // Race-specific start line, permanent finish line.
    const paint=new THREE.MeshBasicMaterial({color:0xfbfbf4,side:THREE.DoubleSide});
    for(const d of [-distance,0]){
-     const a=coursePoint(d,0,course),b=coursePoint(d,TRACK_OUTER_OFFSET,course);
+     const a=coursePoint(d,0,course,venue,layout),b=coursePoint(d,TRACK_OUTER_OFFSET,course,venue,layout);
      const dx=b.x-a.x,dz=b.z-a.z;
      const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.20,Math.hypot(dx,dz)),paint);
      stripe.rotation.x=-Math.PI/2;
@@ -353,13 +353,15 @@ export async function createThreeView(host){
    const entrants=horses?.length?horses.length:18;
    const raceDistance=race?.distance||options.distance||2400;
    const course=race?.course||options.course||'A';
-   rebuildTrack(course,raceDistance);
+   const venue=race?.venue||options.venue||'tokyo';
+   const layout=race?.layout||options.layout||'outer';
+   rebuildTrack(venue,layout,course,raceDistance);
    const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time)
       : {t:time,horses:horses?.length?horses.map(h=>({id:h.id,x:0,lane:h.id-1})):neutral};
    const lead=Math.max(...frame.horses.map(h=>h.x));
    const leadS=lengthAtMetres(lead,raceDistance);
    const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,2);
-   const displayed=raceDisplayPositions(race,frame,raceDistance,course);
+   const displayed=raceDisplayPositions(race,frame,raceDistance,course,venue,layout);
    // Use wall-clock time for leg cadence so 8x replay does not become frantic.
    const motionTime=performance.now()*.001;
    for(const model of models){
@@ -425,10 +427,11 @@ export async function createThreeView(host){
    const visible=frame.horses.filter(h=>lead-h.x<70);
    const meanLane=visible.length
       ?visible.reduce((sum,h)=>sum+h.lane,0)/visible.length:(entrants-1)/2;
-   const direction=coursePoint(focusS,0,course);
-   const insideX=direction.dz,insideZ=-direction.dx;
-   const startCenter=coursePoint(focusS,INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5,course);
-   const trackCenter=coursePoint(focusS,INSIDE_MARGIN+meanLane*LANE_WIDTH,course);
+   const direction=coursePoint(focusS,0,course,venue,layout);
+   const insideSign=venue==='kyoto'?-1:1;
+   const insideX=insideSign*direction.dz,insideZ=-insideSign*direction.dx;
+   const startCenter=coursePoint(focusS,INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5,course,venue,layout);
+   const trackCenter=coursePoint(focusS,INSIDE_MARGIN+meanLane*LANE_WIDTH,course,venue,layout);
    const startCamera=new THREE.Vector3(
      startCenter.x+direction.dx*(23+entrants*1.12)+insideX*(9+entrants*.5),6.8+entrants*.25,
      startCenter.z+direction.dz*(23+entrants*1.12)+insideZ*(9+entrants*.5)
@@ -456,13 +459,13 @@ export async function createThreeView(host){
    const raceTime=Number(frame.t)||0;
    const delta=lastCameraTime===null?0:raceTime-lastCameraTime;
    const manuallySeeked=lastCameraTime!==null && (delta<-.25||delta>2.0);
-   if(!cameraReady||race!==lastCameraRace||course!==lastCameraCourse||manuallySeeked){
+   if(!cameraReady||race!==lastCameraRace||venue+':'+layout+':'+course!==lastCameraCourse||manuallySeeked){
      camera.position.copy(wanted);cameraAim.copy(wantedAim);cameraReady=true;
    }else{
      const follow=Math.min(.36,1-Math.exp(-Math.max(0,delta)*1.2));
      camera.position.lerp(wanted,follow);cameraAim.lerp(wantedAim,follow);
    }
-   lastLeadS=focusS;lastCameraRace=race;lastCameraTime=raceTime;lastCameraCourse=course;
+   lastLeadS=focusS;lastCameraRace=race;lastCameraTime=raceTime;lastCameraCourse=venue+':'+layout+':'+course;
    camera.lookAt(cameraAim);
    camera.updateMatrixWorld();
    // Share the ACTUAL 3D camera position and frustum with the upper overview.
