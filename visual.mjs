@@ -1,6 +1,6 @@
 import {SCENARIOS} from './engine.mjs';
 import {getHorseAppearance} from './appearance.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile,furlongMarkerPositions} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile,furlongMarkerPositions,raceCoursePoint,startPocket} from './course.mjs';
 const BASE_W=1000,BASE_H=560;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 function label(ctx,text,x,y,opts={}){
@@ -35,9 +35,43 @@ function renderTop(ctx,frame,horses,distance,race,course='A',venue='tokyo',layou
    }
    ctx.stroke();
  }
+ // Show Kyoto's shared back straight with the unselected alternate bend.
+ if(venue==='kyoto'){
+   const alt=layout==='inner'?'outer':'inner';
+   const other=getTurfProfile(venue,course,alt);
+   ctx.strokeStyle='rgba(179,214,225,.70)';ctx.lineWidth=3;
+   ctx.setLineDash([8,7]);ctx.beginPath();
+   for(let i=0;i<=70;i++){
+     const q=1090+(other.lap-other.straight-1090)*i/70;
+     const p=toXY(coursePoint(q,0,course,venue,alt));
+     if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y);
+   }
+   ctx.stroke();ctx.setLineDash([]);
+ }
+ // Paint the special starting chute and merge onto the shared turf.
+ const pocket=startPocket(venue,layout,distance);
+ if(pocket){
+   const points=[],outer=[];
+   for(let i=0;i<=48;i++){
+     const travelled=i/48;
+     const s=-distance+(distance-pocket.joinRemaining)*travelled;
+     points.push(toXY(raceCoursePoint(s,0,distance,course,venue,layout)));
+     outer.push(toXY(raceCoursePoint(s,TRACK_OUTER_OFFSET,distance,course,venue,layout)));
+   }
+   ctx.beginPath();
+   points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+   [...outer].reverse().forEach(p=>ctx.lineTo(p.x,p.y));
+   ctx.closePath();ctx.fillStyle='#659d74';ctx.fill();
+   ctx.strokeStyle='#f7f8ee';ctx.lineWidth=2.2;
+   for(const edge of [points,outer]){
+     ctx.beginPath();
+     edge.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+     ctx.stroke();
+   }
+ }
  // Start and finish edges are shown as white tick marks.
  for(const [s,title] of [[-distance,'START'],[0,'GOAL']]){
-   const a=toXY(coursePoint(s,0,course,venue,layout)),b=toXY(coursePoint(s,TRACK_OUTER_OFFSET,course,venue,layout));
+   const a=toXY(raceCoursePoint(s,0,distance,course,venue,layout)),b=toXY(raceCoursePoint(s,TRACK_OUTER_OFFSET,distance,course,venue,layout));
    ctx.strokeStyle='#f9f7ea';ctx.lineWidth=4;ctx.beginPath();
    ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
    label(ctx,title,a.x-15,a.y-12,{size:13,bold:true,color:'#fefefe'});
@@ -54,7 +88,7 @@ function renderTop(ctx,frame,horses,distance,race,course='A',venue='tokyo',layou
    });
  }
  label(ctx,(venue==='kyoto'?'京都芝':'東京芝')+course+'・'+(venue==='kyoto'?'右回り':'左回り'),715,107,{size:23,bold:true,color:'#edffef'});
- label(ctx,venue==='kyoto'?'直線 '+profile.straight+'m / 3コーナー上り・4コーナー下り':'直線 525.9m / 残り460〜300mが上り坂',280,502,{size:18,bold:true,color:'#edffef'});
+ label(ctx,venue==='kyoto'?'直線 '+profile.straight+'m / 3コーナー上り・4コーナー下り':'直線 525.9m / 残り460〜300mで約2.0m上昇',280,502,{size:18,bold:true,color:'#edffef'});
  const lead=Math.max(...frame.horses.map(h=>h.x));
  // Shared scene positions: the overhead view and the 3D model are identical.
  const positions=raceDisplayPositions(race,frame,distance,course,venue,layout);
