@@ -88,7 +88,7 @@ function renderTop(ctx,frame,horses,distance){
  ctx.fillStyle='rgba(11,32,34,.87)';rounded(ctx,25,18,530,52,11);ctx.fill();
  label(ctx,`隊列図  •  残り ${Math.ceil(Math.max(0,distance-lead))}m`,43,52,{size:23,bold:true});
 }
-function interpolateRaceFrame(frames, time) {
+export function interpolateRaceFrame(frames, time) {
  if(frames.length===1 || time<=frames[0].t)return frames[0];
  const last=frames[frames.length-1];
  if(time>=last.t)return last;
