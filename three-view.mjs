@@ -121,5 +121,5 @@ export async function createThreeView(host){
    renderer.dispose();renderer.domElement.remove();
  }
  render(null,null,0);
- return {render,dispose};
+ return {render,dispose,canvas:renderer.domElement};
 }
