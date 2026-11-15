@@ -1,7 +1,7 @@
 import {exampleHorses, runRace, summarizeRaces, validateHorses, STYLES} from './engine.mjs';
 import {getHorseAppearance,getFrameNumber} from './appearance.mjs';
 import {renderFrame,interpolateRaceFrame} from './visual.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile,turfDistances,courseSlope,HOME_STRAIGHT_METRES} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,raceDisplayPositions,getTurfProfile,turfDistances,courseSlope,HOME_STRAIGHT_METRES,furlongMarkerPositions} from './course.mjs';
 const $ = (id) => document.getElementById(id);
 const STORE = 'race-lab-demo-v01';
 const DEFAULTS = {horses:exampleHorses(),count:18,distance:2400,venue:'tokyo',layout:'outer',course:'A',scenario:'normal'};
@@ -22,7 +22,7 @@ function restore() {
   } catch {return structuredClone(DEFAULTS);}
 }
 const saved=restore();
-const state={...saved,selected:1,race:null,stats:null,playing:false,recording:false,view:'top',currentT:0,speed:8,lastTick:null,worker:null,seed:20261115};
+const state={...saved,selected:1,race:null,stats:null,playing:false,recording:false,view:'top',currentT:0,speed:4,lastTick:null,worker:null,seed:20261115};
 const canvas=$('race-canvas');
 let threeView=null;
 function activeHorses(){return [...state.horses].sort((a,b)=>a.id-b.id).slice(0,state.count);}
@@ -76,6 +76,18 @@ function initializeHud(){
   const text=hudSvg('text',{x:a.x,y:a.y-10,fill:'#f4f9f4',
    'font-size':15,'font-weight':700,'text-anchor':'middle'});
   text.textContent=item[1];svg.append(text);
+ }
+ // Place the identical JRA-style furlong marker coordinates on the race map.
+ for(const marker of furlongMarkerPositions(state.course,state.venue,state.layout)){
+   const q=hudPoint(marker.point);
+   svg.append(hudSvg('circle',{
+     cx:q.x,cy:q.y,r:9,fill:'#fffdf2',stroke:'#cf2932','stroke-width':2
+   }));
+   const digit=hudSvg('text',{
+     x:q.x,y:q.y+3.7,'text-anchor':'middle','font-size':12,
+     'font-weight':900,fill:'#d32231'
+   });
+   digit.textContent=marker.number;svg.append(digit);
  }
  const note=hudSvg('text',{x:23,y:36,fill:'#c9e9d6','font-size':20,'font-weight':800});
  note.textContent=`馬群位置 / ${state.venue==='kyoto'?'京都芝・右回り':'東京芝・左回り'}`;svg.append(note);
@@ -289,7 +301,7 @@ function renderStats(stats){
 }
 function renderCanvas(){
  // WebGL is opt-in; preserve existing 2D views for low-power and offline use.
- if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT,{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance});
+ if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT,{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance,replaySpeed:state.speed});
  else renderFrame(canvas,state.race,activeHorses(),state.currentT,'top',{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance});
  const end=state.race?.elapsed||0;
  $('seek').value=end?String(Math.min(100,100*state.currentT/end)):'0';
