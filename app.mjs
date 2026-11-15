@@ -152,6 +152,11 @@ function updateRaceHud(){
   dot.setAttribute('aria-label',h.id+'番 '+(state.horses.find(v=>v.id===h.id)?.name||''));
   $('overview-map').append(dot);
  }
+ // Keep the yellow camera marker above overlapping horse dots.
+ if(cameraView)$('overview-map').append(hudCameraDot);
+ $('overview-legend').textContent=cameraView
+   ?'黄色＝3Dカメラ　明るい点＝映像内　薄い点＝映像外'
+   :'点は馬の実位置（映像は別の視点）';
  const nameKey=state.horses.map(h=>h.id+':'+h.name).join('|');
  const rankKey=(state.race?'race:':'before:')+ranked.map(h=>h.id).join(',')+'|'+nameKey;
  if(rankKey===hudRankKey)return;
