@@ -4,20 +4,21 @@ import {renderFrame,interpolateRaceFrame} from './visual.mjs';
 import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,safeRacePositions} from './course.mjs';
 const $ = (id) => document.getElementById(id);
 const STORE = 'race-lab-demo-v01';
-const DEFAULTS = {horses:exampleHorses(), distance:2200, scenario:'normal'};
+const DEFAULTS = {horses:exampleHorses(),count:18,distance:2200,scenario:'normal'};
 function restore() {
   try {
     const data=JSON.parse(localStorage.getItem(STORE));
     if(!data || data.horses?.length!==18)return structuredClone(DEFAULTS);
-    return {horses:data.horses,distance:data.distance||2200,scenario:data.scenario||'normal'};
+    return {horses:data.horses,count:Number.isInteger(data.count)&&data.count>=2&&data.count<=18?data.count:18,distance:data.distance||2200,scenario:data.scenario||'normal'};
   } catch {return structuredClone(DEFAULTS);}
 }
 const saved=restore();
-const state={...saved,selected:1,race:null,stats:null,playing:false,recording:false,view:'chase',currentT:0,speed:8,lastTick:null,worker:null,seed:20261115};
+const state={...saved,selected:1,race:null,stats:null,playing:false,recording:false,view:'top',currentT:0,speed:8,lastTick:null,worker:null,seed:20261115};
 const canvas=$('race-canvas');
 let threeView=null;
+function activeHorses(){return [...state.horses].sort((a,b)=>a.id-b.id).slice(0,state.count);}
 const picker=$('horse-picker');
-function persist(){try {localStorage.setItem(STORE,JSON.stringify({horses:state.horses,distance:state.distance,scenario:state.scenario}));}catch{setStatus('保存できません。端末のブラウザー設定を確認してください。',true)}}
+function persist(){try {localStorage.setItem(STORE,JSON.stringify({horses:state.horses,count:state.count,distance:state.distance,scenario:state.scenario}));}catch{setStatus('保存できません。端末のブラウザー設定を確認してください。',true)}}
 function setStatus(text,error=false){$('status').textContent=text;$('status').style.color=error?'#ffc2a3':'#9baec4';}
 // Race broadcast HUD: live course overview above the image, all horses below.
 const HUD_SVG_NS='http://www.w3.org/2000/svg';
@@ -75,8 +76,8 @@ function initializeHud(){
  hudCameraDot=hudSvg('circle',{r:9,fill:'#ffd276',stroke:'#102a23',
   'stroke-width':3,'pointer-events':'none'});
  svg.append(hudCameraSight,hudCameraDot);
- for(const horse of state.horses){
-  const a=getHorseAppearance(horse.id);
+ for(const horse of activeHorses()){
+  const a=getHorseAppearance(horse.id,state.count);
   const group=hudSvg('g');
   group.append(hudSvg('circle',{r:8,fill:a.helmet,stroke:'#fff','stroke-width':1.5}));
   const text=hudSvg('text',{y:3.4,fill:a.helmetNumberColor,
@@ -88,8 +89,8 @@ function initializeHud(){
  for(let i=0;i<2;i++){
   const col=document.createElement('div');col.className='race-standings-column';grid.append(col);
  }
- for(const horse of state.horses){
-  const a=getHorseAppearance(horse.id);
+ for(const horse of activeHorses()){
+  const a=getHorseAppearance(horse.id,state.count);
   const row=document.createElement('div');row.className='race-entry';
   const place=document.createElement('span');place.className='race-place';
   const chip=document.createElement('span');chip.className='race-frame-chip';
@@ -109,7 +110,7 @@ function updateRaceHud(){
  initializeHud();
  const frame=state.race?.frames?.length
   ?interpolateRaceFrame(state.race.frames,state.currentT)
-  :{horses:state.horses.map(h=>({id:h.id,x:0,lane:h.id-1}))};
+  :{horses:activeHorses().map(h=>({id:h.id,x:0,lane:h.id-1}))};
  const distance=state.race?.distance||state.distance;
  const leader=Math.max(...frame.horses.map(h=>h.x));
  const leadS=lengthAtMetres(leader,distance);
@@ -157,7 +158,7 @@ function updateRaceHud(){
  $('overview-legend').textContent=cameraView
    ?'黄色＝3Dカメラ　明るい点＝映像内　薄い点＝映像外'
    :'点は馬の実位置（映像は別の視点）';
- const nameKey=state.horses.map(h=>h.id+':'+h.name).join('|');
+ const nameKey=activeHorses().map(h=>h.id+':'+h.name).join('|');
  const rankKey=(state.race?'race:':'before:')+ranked.map(h=>h.id).join(',')+'|'+nameKey;
  if(rankKey===hudRankKey)return;
  hudRankKey=rankKey;
@@ -167,7 +168,7 @@ function updateRaceHud(){
   entry.place.textContent=String(i+1);
   entry.name.textContent=state.horses.find(item=>item.id===h.id)?.name||'馬番'+h.id;
   entry.row.classList.toggle('leader',!!state.race&&i<3);
-  columns[i<9?0:1].append(entry.row);
+  columns[i<Math.ceil(state.count/2)?0:1].append(entry.row);
  }
 }
 
@@ -234,8 +235,8 @@ function renderStats(stats){
 }
 function renderCanvas(){
  // WebGL is opt-in; preserve existing 2D views for low-power and offline use.
- if(state.view==='three' && threeView)threeView.render(state.race,state.horses,state.currentT);
- else renderFrame(canvas,state.race,state.horses,state.currentT,state.view==='top'?'top':'chase');
+ if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT);
+ else renderFrame(canvas,state.race,activeHorses(),state.currentT,'top');
  const end=state.race?.elapsed||0;
  $('seek').value=end?String(Math.min(100,100*state.currentT/end)):'0';
  const duration=(s)=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
@@ -263,7 +264,7 @@ function startSimulation(){
  if(state.recording)return;
  const seed=(Date.now()>>>0);
  state.seed=seed;
- try{state.race=runRace(state.horses,{distance:state.distance,scenario:state.scenario,seed});}
+ try{state.race=runRace(activeHorses(),{distance:state.distance,scenario:state.scenario,seed});}
  catch(error){setStatus(error.message,true);return;}
  state.stats=null;state.currentT=0;state.playing=false;state.lastTick=null;
  emptyResults();setPlay(true);
@@ -279,7 +280,7 @@ function startSimulation(){
     if(ev.data.type==='result'){state.stats=ev.data.stats;renderStats(state.stats);setStatus('1,000回の試行を集計しました。数値は実データで検証されていない架空モデルの推定値です。');worker.terminate();state.worker=null;}
    };
    worker.onerror=()=>{if(state.worker===worker){worker.terminate();state.worker=null;fallbackStats();}};
-   worker.postMessage({horses:state.horses,options:{distance:state.distance,scenario:state.scenario,seed},attempts:1000});
+   worker.postMessage({horses:activeHorses(),options:{distance:state.distance,scenario:state.scenario,seed},attempts:1000});
    return;
   }catch{ /* file: protocol or unsupported module worker — continue on main thread */ }
  }
@@ -289,7 +290,7 @@ function fallbackStats(){
  // Defer so the interface can render the new race before calculating.
  setTimeout(()=>{
   if(!state.race)return;
-  try {state.stats=summarizeRaces(state.horses,{distance:state.distance,scenario:state.scenario,seed:state.seed},1000);renderStats(state.stats);setStatus('1,000回の仮想試行を集計しました。実データに基づく予測ではありません。');}
+  try {state.stats=summarizeRaces(activeHorses(),{distance:state.distance,scenario:state.scenario,seed:state.seed},1000);renderStats(state.stats);setStatus('1,000回の仮想試行を集計しました。実データに基づく予測ではありません。');}
   catch(error){setStatus(error.message,true)}
  },35);
 }
