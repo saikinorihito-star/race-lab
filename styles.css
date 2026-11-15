@@ -76,3 +76,47 @@
 
 /* Venue-specific inner/outer option: hidden entirely for Tokyo. */
 .settings-grid label[hidden]{display:none!important}
+
+/* Entire start-to-finish elevation graph under the shared race overview. */
+.elevation-profile{
+  margin:7px 0 10px;padding:10px 11px 5px;background:#0c2225;
+  border:1px solid #30514a;border-radius:10px
+}
+.elevation-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.elevation-head strong{font-size:12px;color:#e5f9ee}
+.elevation-note{font-size:10px;color:#a9c9bb;font-weight:400;margin-left:6px}
+#elevation-current{font-size:11px;font-weight:800;color:#f4d37a;font-variant-numeric:tabular-nums;text-align:right}
+#elevation-chart{display:block;width:100%;height:auto;max-height:138px;min-height:78px}
+#elevation-chart text{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif}
+/* The canvas / WebGL surface is one large accessible play/pause target. */
+.race-touch-control{
+  position:absolute;inset:0;z-index:3;display:flex;
+  align-items:center;justify-content:center;border:0;padding:0;
+  background:rgba(5,14,22,.38);color:#fff;
+  touch-action:manipulation;user-select:none;-webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;cursor:pointer
+}
+.race-touch-control.playing{background:transparent}
+.race-touch-control:focus-visible{outline:3px solid #7ff6d4;outline-offset:-5px}
+.race-touch-control:disabled{cursor:default;background:transparent}
+.race-touch-prompt{
+  background:rgba(6,21,31,.88);border:1px solid #a6f1d4;border-radius:999px;
+  padding:13px 23px;font-size:19px;font-weight:850;letter-spacing:.4px;
+  box-shadow:0 7px 25px rgba(0,0,0,.34)
+}
+.race-touch-hint{
+  position:absolute;bottom:16px;left:15px;font-size:11px;font-weight:750;
+  background:rgba(6,22,28,.80);padding:7px 11px;border-radius:8px
+}
+.race-touch-control.playing .race-touch-prompt{opacity:0;pointer-events:none}
+.race-touch-control:disabled .race-touch-prompt{opacity:0}
+.race-touch-control:disabled .race-touch-hint{opacity:0}
+@media(max-width:650px){
+  .elevation-profile{margin:6px 0 8px;padding:7px 6px 3px}
+  .elevation-head strong{font-size:11px}
+  .elevation-note{font-size:9px;margin-left:3px}
+  #elevation-current{font-size:10px}
+  #elevation-chart{min-height:65px}
+  .race-touch-prompt{font-size:15px;padding:10px 17px}
+  .race-touch-hint{font-size:10px;bottom:9px;left:8px;padding:5px 8px}
+}
