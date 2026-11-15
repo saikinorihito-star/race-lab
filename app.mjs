@@ -114,13 +114,15 @@ function updateElevationProgress(leader,distance){
  const x=58+792*(1-remaining/distance);
  const p=getTurfProfile(state.venue,state.course,state.layout);
  const elevation=courseHeightMetres(remaining,state.venue,state.layout,state.course);
+ const grade=courseSlope(remaining,state.venue,state.layout,state.course);
+ const slopeLabel=grade>.001?'↗ 上り':grade<-.001?'↘ 下り':'→ 平坦';
  const y=104-69*(elevation/Math.max(.1,p.elevation));
  elevationPointer.setAttribute('x1',x.toFixed(2));
  elevationPointer.setAttribute('x2',x.toFixed(2));
  elevationPointerDot.setAttribute('cx',x.toFixed(2));
  elevationPointerDot.setAttribute('cy',y.toFixed(2));
  $('elevation-current').textContent=state.race
-   ?'残り'+Math.ceil(remaining).toLocaleString('ja-JP')+'m / 相対高'+elevation.toFixed(1)+'m'
+   ?'残り'+Math.ceil(remaining).toLocaleString('ja-JP')+'m / '+slopeLabel+' / 高さ'+elevation.toFixed(1)+'m'
    :'スタート地点';
 }
 function initializeHud(){
