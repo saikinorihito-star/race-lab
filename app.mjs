@@ -173,28 +173,41 @@ function updateRaceHud(){
 }
 
 function setColorChip(node,id){
- const a=getHorseAppearance(id);
+ const a=getHorseAppearance(id,state.count);
  node.style.background=a.helmet;
  node.style.color=a.helmetNumberColor;
  node.style.border='1px solid '+(a.frame===2?'#f0f0f0':'rgba(15,22,33,.45)');
  node.title=`${a.frame}枠・${id}番`;
 }
 function currentHorse(){return state.horses.find(h=>h.id===state.selected)}
+function resetHud(){
+ hudReady=false;hudRankKey='';hudMarkers.clear();hudEntries.clear();
+ $('overview-map').replaceChildren();$('race-standings-list').replaceChildren();
+}
 function renderPicker(){
  picker.replaceChildren();
- for(const h of state.horses){
+ for(const h of activeHorses()){
   const button=document.createElement('button');button.type='button';button.textContent=String(h.id);
   setColorChip(button,h.id);
   button.classList.toggle('active',h.id===state.selected);
-  button.setAttribute('aria-label',`${getFrameNumber(h.id)}枠 ${h.id}番 ${h.name}`);
+  button.setAttribute('aria-label',`${getFrameNumber(h.id,state.count)}枠 ${h.id}番 ${h.name}`);
   button.setAttribute('aria-pressed',String(h.id===state.selected));
   button.addEventListener('click',()=>{state.selected=h.id;renderPicker();renderEditor()});
   picker.append(button);
  }
+ $('field-count-label').textContent=`出走 ${state.count}頭`;
 }
 function renderEditor(){
- const h=currentHorse();setColorChip($('selected-number'),h.id);$('selected-number').textContent=h.id;
- $('selected-title').textContent=`${h.name}（${getFrameNumber(h.id)}枠）`;
+ const h=currentHorse();if(!h)return;
+ setColorChip($('selected-number'),h.id);$('selected-number').textContent=h.id;
+ $('selected-title').textContent=`${h.name}（${getFrameNumber(h.id,state.count)}枠）`;
+ const numberSelect=$('horse-number');
+ numberSelect.replaceChildren();
+ for(let n=1;n<=state.count;n++){
+  const option=document.createElement('option');option.value=String(n);option.textContent=`${n}番`;
+  numberSelect.append(option);
+ }
+ numberSelect.value=String(h.id);
  $('horse-name').value=h.name;
  $('horse-style').value=h.style;
  for(const k of ['speed','stamina','kick']){$(`horse-${k}`).value=h[k];$(`${k}-value`).textContent=h[k]}
@@ -293,6 +306,27 @@ function fallbackStats(){
   try {state.stats=summarizeRaces(activeHorses(),{distance:state.distance,scenario:state.scenario,seed:state.seed},1000);renderStats(state.stats);setStatus('1,000回の仮想試行を集計しました。実データに基づく予測ではありません。');}
   catch(error){setStatus(error.message,true)}
  },35);
+}
+function changeHorseNumber(value){
+ if(state.recording)return;
+ const n=Number(value),horse=currentHorse();
+ if(!Number.isInteger(n)||n<1||n>state.count||!horse||n===horse.id)return;
+ const other=state.horses.find(h=>h.id===n);
+ if(!other)return;
+ const previous=horse.id;
+ // Exchange numbers, not records; names and capabilities follow the horse.
+ horse.id=n;other.id=previous;state.selected=n;
+ persist();invalidate();renderPicker();renderEditor();
+ setStatus(`馬番を${previous}番から${n}番へ変更し、変更先の馬は${previous}番にしました。`);
+}
+function changeHorseCount(value){
+ if(state.recording)return;
+ const n=Number(value);
+ if(!Number.isInteger(n)||n<2||n>18||n===state.count)return;
+ state.count=n;
+ if(state.selected>n)state.selected=1;
+ persist();resetHud();invalidate();renderPicker();renderEditor();
+ setStatus(`出走頭数を${n}頭にしました。非出走馬の設定も保持されています。`);
 }
 function updateEditedHorse(property,value){
  const h=currentHorse();
