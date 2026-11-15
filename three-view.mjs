@@ -2,7 +2,7 @@
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 import {gallopCycle,gallopLegPose,gallopDynamics} from './gait.mjs';
-import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,getTurfProfile,furlongMarkerPositions} from './course.mjs';
+import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,getTurfProfile,furlongMarkerPositions,courseHeightMetres,courseSlope} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
  const THREE = await import(THREE_URL);
@@ -46,13 +46,22 @@ export async function createThreeView(host){
    }
    const lap=getTurfProfile(venue,course,layout).lap;
    trackGroup=new THREE.Group();scene.add(trackGroup);
-   const positions=[],indices=[];
+   // Track height follows the continuous, periodic Tokyo/Kyoto elevation
+   // profile. Turf and shoulders share precisely the same y at each lap point.
+   const groundAt=metre=>courseHeightMetres(-metre,venue,layout,course);
+   const turfY=(metre,offset)=>{
+     const h=groundAt(metre);
+     if(offset<0)return h*Math.max(0,1+offset/24);
+     if(offset>TRACK_OUTER_OFFSET)return h*Math.max(0,1-(offset-TRACK_OUTER_OFFSET)/24);
+     return h;
+   };
    const strip=(a,b,color)=>{
      const coords=[],faces=[],steps=240;
      for(let i=0;i<=steps;i++){
        const metre=i*lap/steps;
        const inside=coursePoint(metre,a,course,venue,layout),outside=coursePoint(metre,b,course,venue,layout);
-       coords.push(inside.x,-.035,inside.z,outside.x,-.035,outside.z);
+       coords.push(inside.x,turfY(metre,a)-.035,inside.z,
+          outside.x,turfY(metre,b)-.035,outside.z);
        if(i<steps){const j=i*2;faces.push(j,j+2,j+1,j+1,j+2,j+3);}
      }
      const geometry=new THREE.BufferGeometry();
@@ -61,14 +70,18 @@ export async function createThreeView(host){
      const mat=material(color);mat.side=THREE.DoubleSide;
      trackGroup.add(new THREE.Mesh(geometry,mat));
    };
+   // Rolling embankments hide the edge of raised turf instead of floating
+   // the racing surface above a perfectly flat background plane.
+   strip(-24,0,0x438d4b);
    for(let i=0;i<16;i++)strip(i*2,Math.min(TRACK_OUTER_OFFSET,(i+1)*2),i%2?0x83c77a:0x73bb70);
+   strip(TRACK_OUTER_OFFSET,TRACK_OUTER_OFFSET+24,0x438d4b);
    const railMat=new THREE.MeshBasicMaterial({color:0xf6f6ee});
    const postMat=material(0xf8f9f2);
    for(const offset of [0,TRACK_OUTER_OFFSET]){
      for(const y of [.52,.94]){
        const points=Array.from({length:144},(_,i)=>{
          const p=coursePoint(i*lap/144,offset,course,venue,layout);
-         return new THREE.Vector3(p.x,y,p.z);
+         return new THREE.Vector3(p.x,groundAt(i*lap/144)+y,p.z);
        });
        const curve=new THREE.CatmullRomCurve3(points,true);
        const rail=new THREE.Mesh(new THREE.TubeGeometry(curve,240,.043,5,true),railMat);
@@ -77,7 +90,7 @@ export async function createThreeView(host){
      for(let d=0;d<lap;d+=15){
        const p=coursePoint(d,offset,course,venue,layout);
        const post=new THREE.Mesh(new THREE.CylinderGeometry(.047,.047,1,6),postMat);
-       post.position.set(p.x,.50,p.z);trackGroup.add(post);
+       post.position.set(p.x,groundAt(d)+.50,p.z);trackGroup.add(post);
      }
    }
    // Race-specific start line, permanent finish line.
@@ -88,7 +101,7 @@ export async function createThreeView(host){
      const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.20,Math.hypot(dx,dz)),paint);
      stripe.rotation.x=-Math.PI/2;
      stripe.rotation.z=-Math.atan2(dx,dz);
-     stripe.position.set((a.x+b.x)*.5,-.020,(a.z+b.z)*.5);
+     stripe.position.set((a.x+b.x)*.5,groundAt(d)-.020,(a.z+b.z)*.5);
      trackGroup.add(stripe);
    }
    // Red/white JRA-style turf furlong posts: 6=600m, 4=400m, 2=200m.
@@ -96,7 +109,7 @@ export async function createThreeView(host){
    const stripeRed=material(0xd7242f),stripeWhite=material(0xfff9ed);
    for(const marker of furlongMarkerPositions(course,venue,layout)){
      const post=new THREE.Group();
-     post.position.set(marker.point.x,0,marker.point.z);
+     post.position.set(marker.point.x,groundAt(-marker.remaining),marker.point.z);
      trackGroup.add(post);
      for(let band=0;band<6;band++){
        const segment=new THREE.Mesh(
@@ -465,8 +478,13 @@ export async function createThreeView(host){
        ?Math.sin(Math.PI*(cycle-.60)/.31):0;
      const lift=Math.max(0,airborne);
      const thrust=Math.sin(theta-.55);
-     model.group.position.y=.020+lift*dynamics.bob+thrust*.032;
-     model.group.rotation.z=-.019+Math.sin(theta+.32)*.075;
+     const displayedS=displayed.get(item.id).s;
+     const trackHeight=courseHeightMetres(-displayedS,venue,layout,course);
+     model.group.position.y=trackHeight+.020+lift*dynamics.bob+thrust*.032;
+     // The horse leans into the local grade; the animated stride is additive.
+     const grade=courseSlope(-displayedS,venue,layout,course);
+     model.group.rotation.z=-.019+Math.sin(theta+.32)*.075+
+       Math.max(-.12,Math.min(.12,grade*2.2));
      model.group.rotation.x=Math.sin(theta*.5+model.id)*.007;
      for(const leg of model.legs){
        const pose=gallopLegPose(leg.front,leg.side,cycle,dynamics.stride);
@@ -486,6 +504,7 @@ export async function createThreeView(host){
      model.riderPivot.position.y=1.94-Math.max(0,Math.sin(theta+.85))*.026;
      model.shadow.position.x=model.group.position.x;
      model.shadow.position.z=model.group.position.z;
+     model.shadow.position.y=trackHeight+.023;
      const shadowSize=1-lift*.20;
      model.shadow.scale.set(1.42*shadowSize,.60*shadowSize,1);
    }
@@ -501,20 +520,21 @@ export async function createThreeView(host){
    const insideX=insideSign*direction.dz,insideZ=-insideSign*direction.dx;
    const startCenter=coursePoint(focusS,INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5,course,venue,layout);
    const trackCenter=coursePoint(focusS,INSIDE_MARGIN+meanLane*LANE_WIDTH,course,venue,layout);
+   const focusHeight=courseHeightMetres(-focusS,venue,layout,course);
    const startCamera=new THREE.Vector3(
-     startCenter.x+direction.dx*(23+entrants*1.12)+insideX*(9+entrants*.5),6.8+entrants*.25,
+     startCenter.x+direction.dx*(23+entrants*1.12)+insideX*(9+entrants*.5),focusHeight+6.8+entrants*.25,
      startCenter.z+direction.dz*(23+entrants*1.12)+insideZ*(9+entrants*.5)
    );
    const followCamera=new THREE.Vector3(
-     trackCenter.x+direction.dx*17+insideX*18,7.5,
+     trackCenter.x+direction.dx*17+insideX*18,focusHeight+7.5,
      trackCenter.z+direction.dz*17+insideZ*18
    );
    const startAim=new THREE.Vector3(
-     startCenter.x-direction.dx*1.8,1.80,
+     startCenter.x-direction.dx*1.8,focusHeight+1.80,
      startCenter.z-direction.dz*1.8
    );
    const followAim=new THREE.Vector3(
-     trackCenter.x+direction.dx*2.8,1.75,
+     trackCenter.x+direction.dx*2.8,focusHeight+1.75,
      trackCenter.z+direction.dz*2.8
    );
    // 0-7s: front diagonal, 7-21s: ease to the race tracking camera.
@@ -544,7 +564,7 @@ export async function createThreeView(host){
    const center=new THREE.Vector3();
    for(const model of models){
      if(!model.group.visible)continue;
-     center.set(model.group.position.x,1.40,model.group.position.z).project(camera);
+     center.set(model.group.position.x,model.group.position.y+1.40,model.group.position.z).project(camera);
      if(center.z>=-1&&center.z<=1&&Math.abs(center.x)<=1.03&&Math.abs(center.y)<=1.03){
        visibleIds.push(model.id);
      }
