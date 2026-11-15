@@ -148,9 +148,9 @@ function renderChase(ctx,frame,horses,distance){
  for(const h of records){
   const diff=lead-h.x;const x=160+diff*12;
   if(x>1145)continue;
-  const scale=clamp(1.04+h.lane*.014-diff*.008,.52,1.14);
+  const scale=clamp(.84+h.lane*.003-diff*.008,.42,1.02);
   // Lane 0 is the inside rail, farther from this side-on camera.
- const y=336+h.lane*21+diff*.018;
+ const y=303+h.lane*10.2+diff*.018;
   drawHorse(ctx,x,y,scale,h,getHorseAppearance(h.id),cycle);
  }
  ctx.fillStyle='rgba(7,27,36,.78)';rounded(ctx,22,22,325,57,13);ctx.fill();
@@ -171,7 +171,7 @@ function renderChase(ctx,frame,horses,distance){
 function renderTop(ctx,frame,horses,distance){
  // Map of the same left-handed half-oval used in the Three.js scene.
  ctx.fillStyle='#1b5638';ctx.fillRect(0,0,1000,560);
- const toXY=p=>({x:145+(p.x+50)*5.2,y:280-p.z*4.4});
+ const toXY=p=>({x:145+(p.x+50)*4.45,y:280-p.z*2.15});
  function band(a,b,color){
    ctx.beginPath();
    for(let i=0;i<=140;i++){
@@ -184,7 +184,7 @@ function renderTop(ctx,frame,horses,distance){
    }
    ctx.closePath();ctx.fillStyle=color;ctx.fill();
  }
- for(let i=0;i<7;i++)band(i*2,Math.min((i+1)*2,TRACK_OUTER_OFFSET),i%2?'#85c983':'#72b877');
+ for(let i=0;i<16;i++)band(i*2,Math.min((i+1)*2,TRACK_OUTER_OFFSET),i%2?'#85c983':'#72b877');
  for(const off of [0,TRACK_OUTER_OFFSET]){
    ctx.strokeStyle='#fcfcf7';ctx.lineWidth=3.8;ctx.beginPath();
    for(let i=0;i<=140;i++){
@@ -242,7 +242,7 @@ export function renderFrame(canvas,race,horses,time=0,mode='chase'){
  const ctx=canvas.getContext('2d');if(!ctx)return;
  // Fixed internal size avoids high device memory requirements; CSS scales it responsively.
  if(canvas.width!==BASE_W||canvas.height!==BASE_H){canvas.width=BASE_W;canvas.height=BASE_H;}
- const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time) : {t:0,horses:horses.map(h=>({id:h.id,x:0,lane:(h.id-1)%6}))};
+ const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time) : {t:0,horses:horses.map(h=>({id:h.id,x:0,lane:h.id-1}))};
  ctx.clearRect(0,0,BASE_W,BASE_H);
  if(mode==='top')renderTop(ctx,frame,horses,race?.distance||2200);
  else renderChase(ctx,frame,horses,race?.distance||2200);
