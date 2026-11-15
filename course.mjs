@@ -33,3 +33,33 @@ export function horseCoursePoint(raceMetres,raceDistance,lane) {
 export function lengthAtMetres(metres,raceDistance) {
  return Number(metres)*HALF_LAP_LENGTH/Math.max(1,Number(raceDistance)||2200);
 }
+
+// Render-only collision spacing for low-poly horse meshes.
+// The race engine remains authoritative for ranks/speeds/lanes. This visual
+// adjustment keeps the long cartoon silhouettes from intersecting on curves.
+export function safeRacePositions(horses,lead,raceDistance) {
+ const leadS=lengthAtMetres(lead,raceDistance);
+ const placed=[],byId=new Map();
+ const order=[...horses].sort((a,b)=>b.x-a.x||a.id-b.id);
+ for(const horse of order){
+   const offset=INSIDE_MARGIN+Math.max(0,Math.min(6,horse.lane))*LANE_WIDTH;
+   let s=leadS-Math.max(0,lead-horse.x)*.82;
+   let point=coursePoint(s,offset);
+   for(let attempt=0;attempt<36;attempt++){
+     let interfering=null;
+     for(const ahead of placed){
+       const dx=point.x-ahead.point.x,dz=point.z-ahead.point.z;
+       const tx=(point.dx+ahead.point.dx)*.5,tz=(point.dz+ahead.point.dz)*.5;
+       const along=Math.abs(dx*tx+dz*tz);
+       const across=Math.abs(dx*tz-dz*tx);
+       if(along<3.19 && across<1.20){interfering=ahead;break;}
+     }
+     if(!interfering)break;
+     s=Math.min(s,interfering.s-3.72);
+     point=coursePoint(s,offset);
+   }
+   placed.push({id:horse.id,s,point});
+   byId.set(horse.id,{s,point});
+ }
+ return byId;
+}
