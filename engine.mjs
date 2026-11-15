@@ -43,71 +43,144 @@ export function validateHorses(horses) {
   }
 }
 
-/** @returns {{frames: Array, results: Array, elapsed: number, distance: number, scenario: string, seed: number}} */
+/** A deterministic synthetic race with traffic-aware lanes and overtakes.
+ * lane=0 is the INSIDE rail; larger lanes travel farther from the rail.
+ * Frame and result formats intentionally remain compatible with the existing UI.
+ * This is a race-game model, NOT a trained or validated real-racing forecast.
+ */
 export function runRace(horses, options = {}) {
   validateHorses(horses);
-  const distance = options.distance || 2200;
-  if (!(distance >= 1000 && distance <= 3600)) throw new Error('距離は1000〜3600mで指定してください。');
-  const scenario = SCENARIOS[options.scenario] ? options.scenario : 'normal';
-  const seed = (options.seed ?? 20261115) >>> 0;
-  const record = options.record !== false;
-  const rng = random(seed);
-  const dt = 0.5;
-  const states = horses.map((horse, index) => ({
-    ...horse, x: -Math.max(0, rng() < .07 ? rng() * 7 : rng() * 2),
-    lane: (index % 6) + 0.25 * ((index / 6) | 0),
-    form: clamp(normal(rng) * .11, -.32, .32),
-    sway: rng() * 6.28,
-    finishTime: null,
-    speedNow: 0,
-  }));
-  const frames = [];
-  const maxT = distance / 12 + 55;
-  let t = 0;
-  const packFrame = () => ({
-    t: Number(t.toFixed(1)),
-    horses: states.map(s => ({id: s.id, x: Math.max(0, Math.min(distance, s.x)), lane: s.lane, speed: s.speedNow, finished: s.finishTime !== null}))
+  const distance=options.distance||2200;
+  if (!(distance>=1000&&distance<=3600)) throw new Error('距離は1000〜3600mで指定してください。');
+  const scenario=SCENARIOS[options.scenario]?options.scenario:'normal';
+  const seed=(options.seed??20261115)>>>0;
+  const record=options.record!==false;
+  const rng=random(seed), dt=.5, limit=6;
+  const states=horses.map((horse,index)=>{
+    // Six starting corridors, three rows. Horses settle towards the rail once moving.
+    const lane=index%6;
+    return {...horse,
+      x:-((index/6)|0)*3.1-rng()*.5,
+      lane, targetLane:lane, nextDecision:1.2+rng()*1.4,
+      form:clamp(normal(rng)*.115,-.32,.32),
+      sway:rng()*Math.PI*2,
+      finishTime:null, speedNow:0, overtakes:0};
   });
-  if (record) frames.push(packFrame());
-  for (let step = 0; step < maxT / dt; step++) {
-    if (states.every(h => h.finishTime !== null)) break;
-    const previous = states.map(h => ({id:h.id,x:h.x,lane:h.lane, finished: h.finishTime!==null}));
-    for (const h of states) {
-      if (h.finishTime !== null) continue;
-      const p = clamp(h.x / distance, 0, 1);
-      const early = clamp(1 - p / .38, 0, 1);
-      const late = clamp((p - .61) / .39, 0, 1);
-      const earlyStyle = {逃げ:.51, 先行:.25, 差し:-.17, 追込:-.36}[h.style];
-      const lateStyle = {逃げ:-.24, 先行:.08, 差し:.30, 追込:.46}[h.style];
-      const paceEarly = scenario === 'high' ? .41 : scenario === 'low' ? -.43 : 0;
-      const paceLate = scenario === 'high' ? -.36 : scenario === 'low' ? .22 : 0;
-      const energyCost = scenario === 'high' ? .13 : scenario === 'low' ? -.07 : 0;
-      const fatigue = late * (Math.max(0, 70 - Number(h.stamina)) * .004 + energyCost * (.35 + Math.max(0, earlyStyle)));
-      const exertion = late * ((Number(h.stamina) - 70) * .008 + (Number(h.kick) - 70) * .013);
-      const dynamic = .028 * Math.sin(t / 8 + h.sway);
-      // A deliberately simple synthetic velocity model, not a prediction of real-world times.
-      let velocity = 16.52 + (Number(h.speed) - 70) * .009 + h.form +
-        earlyStyle * early + lateStyle * late + paceEarly * early + paceLate * late +
-        exertion - fatigue + dynamic;
-      const blocked = previous.some(other =>
-        other.id !== h.id && !other.finished && other.x > h.x && other.x - h.x < 2.6 &&
-        Math.abs(other.lane - h.lane) < .32);
-      if (blocked) velocity -= .10;
-      velocity = clamp(velocity, 12.1, 19.6);
-      h.speedNow = velocity;
-      h.lane = clamp((h.id - 1) % 6 + .25 * Math.floor((h.id - 1) / 6) +
-        Math.sin(t / 14 + h.sway) * .13 + (h.style === '追込' ? late*.65 : h.style === '差し' ? late*.30 : 0), 0, 6.45);
-      const before = h.x;
-      h.x += velocity * dt;
-      if (h.x >= distance) h.finishTime = t + (distance - before) / velocity;
+  const frames=[];
+  const maxT=distance/12+65;
+  let t=0;
+  const packFrame=()=>({
+    t:Number(t.toFixed(1)),
+    horses:states.map(h=>({id:h.id,
+      x:Math.max(0,Math.min(distance,h.x)),
+      lane:Number(h.lane.toFixed(3)),
+      speed:h.speedNow,finished:h.finishTime!==null}))
+  });
+  if(record)frames.push(packFrame());
+
+  // Return free-space and the nearest horse ahead in an intended corridor.
+  function corridor(snapshot,me,lane) {
+    let forward=Infinity,rear=Infinity,front=null;
+    for(const other of snapshot){
+      if(other.id===me.id||other.finished)continue;
+      if(Math.abs(other.lane-lane)>.68)continue;
+      const gap=other.x-me.x;
+      if(gap>=0&&gap<forward){forward=gap;front=other;}
+      if(gap<0&&-gap<rear)rear=-gap;
     }
-    t += dt;
-    if (record && (step % 2 === 1 || states.every(h => h.finishTime !== null))) frames.push(packFrame());
+    return {forward,rear,front};
   }
-  if (states.some(h => h.finishTime === null)) throw new Error('計算が規定時間内に終了しませんでした。');
-  const results = [...states].sort((a,b) => a.finishTime - b.finishTime)
-    .map((h,i) => ({id:h.id, name:h.name, style:h.style, rank:i+1, time:h.finishTime, gap:h.finishTime-states.reduce((acc, s)=>Math.min(acc,s.finishTime), Infinity)}));
-  return {frames, results, elapsed:t, distance, scenario, seed};
+  for(let step=0;step<maxT/dt;step++){
+    if(states.every(h=>h.finishTime!==null))break;
+    const snapshot=states.map(h=>({id:h.id,x:h.x,lane:h.lane,speedNow:h.speedNow,finished:h.finishTime!==null}));
+    for(const h of states){
+      if(h.finishTime!==null)continue;
+      const p=clamp(h.x/distance,0,1),early=clamp(1-p/.38,0,1);
+      const late=clamp((p-.60)/.40,0,1);
+      const styleEarly={逃げ:.51,先行:.25,差し:-.17,追込:-.36}[h.style];
+      const styleLate={逃げ:-.24,先行:.08,差し:.35,追込:.53}[h.style];
+      const paceEarly=scenario==='high'?.41:scenario==='low'?-.43:0;
+      const paceLate=scenario==='high'?-.36:scenario==='low'?.22:0;
+      const energyCost=scenario==='high'?.13:scenario==='low'?-.07:0;
+      const fatigue=late*(Math.max(0,70-Number(h.stamina))*.004+
+        energyCost*(.35+Math.max(0,styleEarly)));
+      const exertion=late*((Number(h.stamina)-70)*.008+(Number(h.kick)-70)*.015);
+      const dynamic=.105*Math.sin(t/8+h.sway)+.055*Math.sin(t/3.7+h.sway*1.8);
+      // Speed is a synthetic parameter, not a real-world stride-to-velocity model.
+      const curve=(p>.06&&p<.32)||(p>.55&&p<.79);
+      let desiredSpeed=16.52+(Number(h.speed)-70)*.009+h.form+
+        styleEarly*early+styleLate*late+paceEarly*early+paceLate*late+
+        exertion-fatigue+dynamic;
+
+      // Re-evaluate the racing line every ~1 second, or sooner when trapped.
+      const current=corridor(snapshot,h,h.lane);
+      const trapped=current.forward<6.0;
+      if(t>=h.nextDecision || (trapped&&t+dt>=h.nextDecision-.55)){
+        const base=clamp(Math.round(h.lane),0,limit);
+        const candidates=[base,base-1,base+1].filter(v=>v>=0&&v<=limit);
+        let best=base,bestCost=Infinity;
+        for(const target of candidates){
+          const space=corridor(snapshot,h,target);
+          // Penalize dangerous crossovers where a horse is alongside.
+          let alongside=false;
+          if(target!==base){
+            const halfway=(h.lane+target)*.5;
+            alongside=snapshot.some(other=>other.id!==h.id&&!other.finished&&
+              Math.abs(other.x-h.x)<2.8&&
+              Math.abs(other.lane-halfway)<.67);
+          }
+          // Strong inside preference, relieved only by imminent traffic.
+          const inside=target*(curve?.090:.056);
+          const ahead=space.forward<9?(9-space.forward)*.30:0;
+          const close=space.forward<3.6?1.15:0;
+          const unsafe=alongside?8:0;
+          const rear=space.rear<1.8?.7:0;
+          const change=Math.abs(target-h.lane)*.19;
+          const hold=Math.abs(target-h.targetLane)*.10;
+          const cost=inside+ahead+close+unsafe+rear+change+hold;
+          if(cost<bestCost-1e-6 || (Math.abs(cost-bestCost)<1e-6&&target<best)){
+            best=target;bestCost=cost;
+          }
+        }
+        h.targetLane=best;
+        h.nextDecision=t+1.0+rng()*.6;
+      }
+      // Lateral motion is bounded: no teleporting or instantaneous weaving.
+      const lateral=clamp(h.targetLane-h.lane,-.44,.44);
+      const nextLane=clamp(h.lane+lateral,0,limit);
+      const halfway=(h.lane+nextLane)*.5;
+      const sideCollision=snapshot.some(other=>other.id!==h.id&&!other.finished&&
+        Math.abs(other.x-h.x)<2.5&&Math.abs(other.lane-halfway)<.58);
+      if(!sideCollision||Math.abs(lateral)<.01)h.lane=nextLane;
+      else h.targetLane=Math.round(h.lane);
+
+      const space=corridor(snapshot,h,h.lane);
+      // Drafting/traffic: an occupied corridor caps acceleration until cleared.
+      if(space.front && space.forward<5){
+        const limitSpeed=space.front.speedNow>10?
+          space.front.speedNow+clamp((space.forward-2.25)*.35,-.50,.80):
+          desiredSpeed;
+        desiredSpeed=Math.min(desiredSpeed,limitSpeed);
+      }
+      // An outside path is slightly longer, particularly around bends.
+      desiredSpeed-=h.lane*(curve?.032:.012);
+      desiredSpeed=clamp(desiredSpeed,12.1,19.6);
+      const accel=clamp(desiredSpeed-h.speedNow,-.37,.37);
+      const velocity=h.speedNow>10?clamp(h.speedNow+accel,12.1,19.6):desiredSpeed;
+      h.speedNow=velocity;
+      const before=h.x;
+      h.x+=velocity*dt;
+      if(h.x>=distance)h.finishTime=t+Math.max(0,distance-before)/velocity;
+    }
+    t+=dt;
+    if(record && (step%2===1||states.every(h=>h.finishTime!==null)))frames.push(packFrame());
+  }
+  if(states.some(h=>h.finishTime===null))throw new Error('計算が規定時間内に終了しませんでした。');
+  const bestTime=Math.min(...states.map(h=>h.finishTime));
+  const results=[...states].sort((a,b)=>a.finishTime-b.finishTime)
+    .map((h,i)=>({id:h.id,name:h.name,style:h.style,rank:i+1,
+      time:h.finishTime,gap:h.finishTime-bestTime}));
+  return {frames,results,elapsed:t,distance,scenario,seed};
 }
 
 export function summarizeRaces(horses, opts={}, attempts=1000, onProgress=null) {
