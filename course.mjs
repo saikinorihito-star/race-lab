@@ -22,10 +22,12 @@ export function coursePoint(s,offset=0) {
   const theta=Math.PI/2-(s-first)/TURN_RADIUS;
   const radius=TURN_RADIUS+offset;
   const dx=Math.sin(theta),dz=-Math.cos(theta);
-  return {x:HALF_STRAIGHT+Math.cos(theta)*radius,z:Math.sin(theta)*radius,
+  // The bend is centered at x=0 and touches BOTH straights at x=0.
+  // Previously +HALF_STRAIGHT added an unintended 48m jump at corner entry.
+  return {x:Math.cos(theta)*radius,z:Math.sin(theta)*radius,
    dx,dz,yaw:-Math.atan2(dz,dx)};
  }
- const x=HALF_STRAIGHT-(s-curveEnd);
+ const x=-(s-curveEnd);
  return {x,z:-TURN_RADIUS-offset,dx:-1,dz:0,yaw:Math.PI};
 }
 export function horseCoursePoint(raceMetres,raceDistance,lane) {
