@@ -120,7 +120,11 @@ function updateRaceHud(){
   ?b.x-a.x||a.id-b.id:a.id-b.id);
  const remaining=Math.max(0,Math.ceil(distance-leader));
  $('overview-remaining').textContent=state.race
-  ?remaining===0?'ゴール':'残り '+remaining.toLocaleString()+'m':'スタート前';
+  ?remaining===0?'ゴール'
+    :remaining<=460&&remaining>=300?'残り '+remaining.toLocaleString()+'m・上り坂'
+    :remaining<=HOME_STRAIGHT_METRES?'残り '+remaining.toLocaleString()+'m・直線'
+    :'残り '+remaining.toLocaleString()+'m'
+  :'スタート前';
  $('standings-heading').textContent=state.race
   ?state.currentT>=state.race.elapsed?'最終着順':'現在順位・馬名'
   :'出走馬一覧（馬番順）';
