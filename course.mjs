@@ -58,34 +58,61 @@ export function getTurfProfile(venue='tokyo',course='A',layout='outer'){
  return {...TOKYO_TURF[selection],straight:HOME_STRAIGHT_METRES,elevation:TRACK_ELEVATION_RANGE_METRES,
   venue:'tokyo',layout:'outer',course:selection,turn:'left'};
 }
+// The right-handed Kyoto inner/outer loops share the home straight,
+// turns 1-2 and back straight. They diverge through turns 3-4 and rejoin
+// on the home straight, as in JRA's course diagram. The bend is a C1
+// Bezier approximation, NOT a surveyed plan of the real course.
 function kyotoCoursePoint(distanceAfterFinish,offset,course,layout){
  const profile=getTurfProfile('kyoto',course,layout);
  const lap=profile.lap;
- // Straight lengths other than the home straight are visual approximations.
- const straight=layout==='inner'?520:540;
- const bend=(lap-2*straight)*.5;
- const radius=bend/Math.PI*SCENE_METRE_SCALE+offset;
- const half=straight*.5*SCENE_METRE_SCALE;
- const phase=wrap(Number(distanceAfterFinish)+profile.straight,lap);
- // Clockwise from above, starting east along the near straight.
- if(phase<straight)return {x:-half+phase*SCENE_METRE_SCALE,z:-radius,dx:1,dz:0,yaw:0};
- if(phase<straight+bend){
-  const theta=Math.PI/2-(phase-straight)/bend*Math.PI;
-  const dx=Math.sin(theta),dz=Math.cos(theta);
-  return {x:half+Math.cos(theta)*radius,z:-Math.sin(theta)*radius,
-   dx,dz,yaw:-Math.atan2(dz,dx)};
+ const phase=wrap(Number(distanceAfterFinish)||0,lap);
+ const firstStraight=200,firstBend=370,backStraight=520;
+ const lastBend=lap-firstStraight-firstBend-backStraight-profile.straight;
+ const radius=47.1+offset;
+ const turnEndX=104,goalX=24;
+ const firstCornerStart=firstStraight;
+ const firstCornerEnd=firstCornerStart+firstBend;
+ const backEnd=firstCornerEnd+backStraight;
+ const homeStart=lap-profile.straight;
+ const homeExitX=goalX-profile.straight*SCENE_METRE_SCALE;
+ if(phase<firstCornerStart){
+   return {x:goalX+phase*SCENE_METRE_SCALE,z:-radius,dx:1,dz:0,yaw:0};
  }
- if(phase<2*straight+bend)
-   return {x:half-(phase-straight-bend)*SCENE_METRE_SCALE,z:radius,dx:-1,dz:0,yaw:-Math.PI};
- const theta=-Math.PI/2-(phase-(2*straight+bend))/bend*Math.PI;
- const dx=Math.sin(theta),dz=Math.cos(theta);
- return {x:-half+Math.cos(theta)*radius,z:-Math.sin(theta)*radius,
-  dx,dz,yaw:-Math.atan2(dz,dx)};
+ if(phase<firstCornerEnd){
+   const theta=Math.PI/2-(phase-firstCornerStart)/firstBend*Math.PI;
+   const dx=Math.sin(theta),dz=Math.cos(theta);
+   return {x:turnEndX+Math.cos(theta)*radius,z:-Math.sin(theta)*radius,
+      dx,dz,yaw:-Math.atan2(dz,dx)};
+ }
+ if(phase<backEnd){
+   return {x:turnEndX-(phase-firstCornerEnd)*SCENE_METRE_SCALE,z:radius,
+     dx:-1,dz:0,yaw:Math.PI};
+ }
+ if(phase<homeStart){
+   const t=Math.max(0,Math.min(1,(phase-backEnd)/(lastBend||1)));
+   const a=1-t,b=t;
+   const x0=-104,x3=homeExitX;
+   const x1=x0-radius*1.30,x2=x3-radius*1.30;
+   const x=a*a*a*x0+3*a*a*b*x1+3*a*b*b*x2+b*b*b*x3;
+   const z=radius*(a*a*a+3*a*a*b-3*a*b*b-b*b*b);
+   const ddx=3*a*a*(x1-x0)+6*a*b*(x2-x1)+3*b*b*(x3-x2);
+   const ddz=-12*radius*a*b;
+   const norm=Math.hypot(ddx,ddz)||1;
+   const dx=ddx/norm,dz=ddz/norm;
+   return {x,z,dx,dz,yaw:-Math.atan2(dz,dx)};
+ }
+ return {x:homeExitX+(phase-homeStart)*SCENE_METRE_SCALE,z:-radius,
+   dx:1,dz:0,yaw:0};
 }
 
 export function coursePoint(distanceAfterFinish,offset=0,course='A',venue='tokyo',layout='outer') {
- if(venue==='kyoto')return kyotoCoursePoint(distanceAfterFinish,offset,course,layout);
+ // The rail width changes with A-D selection. This is a *visual*
+ // proportional adjustment; detailed sectional width positions are unknown.
+ const profile=getTurfProfile(venue,course,layout);
+ const visualOffset=offset*profile.maxWidth/41;
+ if(venue==='kyoto')return kyotoCoursePoint(distanceAfterFinish,visualOffset,course,layout);
  const lap=resolveCourse(course).lap;
+ offset=visualOffset;
  const halfStraight=STRAIGHT_METRES*.5*SCENE_METRE_SCALE;
  const bendMetres=(lap-2*STRAIGHT_METRES)*.5;
  const radius=bendMetres/Math.PI*SCENE_METRE_SCALE+offset;
@@ -112,6 +139,38 @@ export function coursePoint(distanceAfterFinish,offset=0,course='A',venue='tokyo
  return {x:-halfStraight+Math.cos(theta)*radius,z:Math.sin(theta)*radius,
     dx,dz,yaw:-Math.atan2(dz,dx)};
 }
+// Documented start pockets / straight extensions.
+// The exact joining coordinates are not available; pocket length and
+// placement are deliberately schematic, but path position AND tangent are
+// continuous at the join. All other distances use the ordinary oval.
+export function startPocket(venue='tokyo',layout='outer',distance=2400){
+ if(venue==='tokyo'&&Number(distance)===1800)
+   return {joinRemaining:1550,kind:'Tokyo 1800m start pocket (schematic)'};
+ if(venue==='kyoto'&&Number(distance)===1600&&layout==='inner')
+   return {joinRemaining:1200,kind:'Kyoto 1600m inner extension (schematic)'};
+ if(venue==='kyoto'&&layout==='outer'&&[1600,1800].includes(Number(distance)))
+   return {joinRemaining:1320,kind:'Kyoto 1600/1800m outer extension (schematic)'};
+ return null;
+}
+export function raceCoursePoint(s,offset=0,raceDistance=2400,course='A',venue='tokyo',layout='outer'){
+ const pocket=startPocket(venue,layout,raceDistance);
+ if(pocket&&s<-pocket.joinRemaining){
+   const join=coursePoint(-pocket.joinRemaining,offset,course,venue,layout);
+   const delta=(s+pocket.joinRemaining)*SCENE_METRE_SCALE;
+   return {x:join.x+join.dx*delta,z:join.z+join.dz*delta,
+      dx:join.dx,dz:join.dz,yaw:join.yaw};
+ }
+ return coursePoint(s,offset,course,venue,layout);
+}
+export function raceCourseHeightMetres(remaining,raceDistance=2400,venue='tokyo',layout='outer',course='A'){
+ const pocket=startPocket(venue,layout,raceDistance);
+ return courseHeightMetres(pocket&&remaining>pocket.joinRemaining?pocket.joinRemaining:remaining,venue,layout,course);
+}
+export function raceCourseSlope(remaining,raceDistance=2400,venue='tokyo',layout='outer',course='A'){
+ const pocket=startPocket(venue,layout,raceDistance);
+ if(pocket&&remaining>pocket.joinRemaining)return 0;
+ return courseSlope(remaining,venue,layout,course);
+}
 export function lengthAtMetres(progress,raceDistance){
  // Offset from the FINISH, in actual metres. At the start: -raceDistance.
  return Number(progress)-Number(raceDistance||2400);
@@ -126,8 +185,8 @@ export function furlongMarkerPositions(course='A',venue='tokyo',layout='outer'){
  }));
 }
 export function horseCoursePoint(progress,distance,lane,course='A',venue='tokyo',layout='outer'){
- return coursePoint(lengthAtMetres(progress,distance),INSIDE_MARGIN+
-    Math.max(0,Math.min(17,Number(lane)||0))*LANE_WIDTH,course,venue,layout);
+ return raceCoursePoint(lengthAtMetres(progress,distance),INSIDE_MARGIN+
+    Math.max(0,Math.min(17,Number(lane)||0))*LANE_WIDTH,distance,course,venue,layout);
 }
 // JRA-verified slope facts:
 // Tokyo: 1.9m descent (first corner -> back straight), 1.5m rise before
@@ -198,7 +257,7 @@ export function safeRacePositions(horses,lead,raceDistance,course='A',venue='tok
  for(const horse of order){
    const offset=INSIDE_MARGIN+Math.max(0,Math.min(17,horse.lane))*LANE_WIDTH;
    let s=leadS-Math.max(0,lead-horse.x)*.82;
-   let point=coursePoint(s,offset,course,venue,layout);
+   let point=raceCoursePoint(s,offset,raceDistance,course,venue,layout);
    for(let attempt=0;attempt<36;attempt++){
      let interfering=null;
      for(const ahead of placed){
@@ -211,7 +270,7 @@ export function safeRacePositions(horses,lead,raceDistance,course='A',venue='tok
      if(!interfering)break;
      // The longitudinal safety gap is in display units; path s is now metres.
      s=Math.min(s,interfering.s-3.72/SCENE_METRE_SCALE);
-     point=coursePoint(s,offset,course,venue,layout);
+     point=raceCoursePoint(s,offset,raceDistance,course,venue,layout);
    }
    placed.push({id:horse.id,s,point});
    byId.set(horse.id,{s,point});
@@ -261,7 +320,7 @@ export function raceDisplayPositions(race,frame,distance=2400,course='A',venue='
    if(start===undefined||end===undefined)continue;
    const s=start+(end-start)*alpha;
    const offset=INSIDE_MARGIN+Math.max(0,Math.min(17,h.lane))*LANE_WIDTH;
-   result.set(h.id,{s,point:coursePoint(s,offset,race.course||course,race.venue||venue,race.layout||layout)});
+   result.set(h.id,{s,point:raceCoursePoint(s,offset,race.distance||distance,race.course||course,race.venue||venue,race.layout||layout)});
  }
  return result;
 }
