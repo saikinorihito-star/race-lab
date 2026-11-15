@@ -1,7 +1,7 @@
 import {SCENARIOS} from './engine.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 import {gallopCycle,gallopLegPose} from './gait.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET} from './course.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET,safeRacePositions} from './course.mjs';
 const BASE_W=1000,BASE_H=560;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 function label(ctx,text,x,y,opts={}){
@@ -203,12 +203,10 @@ function renderTop(ctx,frame,horses,distance){
  label(ctx,'左回り  ↶',817,107,{size:24,bold:true,color:'#edffef'});
  label(ctx,'スタート後、空いた進路から内ラチへ',316,502,{size:19,bold:true,color:'#edffef'});
  const lead=Math.max(...frame.horses.map(h=>h.x));
- const leadS=lengthAtMetres(lead,distance);
- const positions=[...frame.horses].sort((a,b)=>a.x-b.x);
- for(const h of positions){
-   const diff=Math.max(0,lead-h.x);
-   // Stretch the local group visually so number markers remain legible.
-   const point=coursePoint(leadS-diff*.55,INSIDE_MARGIN+h.lane*LANE_WIDTH);
+ // Shared scene positions: the overhead view and the 3D model are identical.
+ const positions=safeRacePositions(frame.horses,lead,distance);
+ for(const h of [...frame.horses].sort((a,b)=>a.x-b.x)){
+   const point=positions.get(h.id).point;
    const q=toXY(point),a=getHorseAppearance(h.id);
    ctx.fillStyle='rgba(6,35,18,.3)';ctx.beginPath();
    ctx.ellipse(q.x+2,q.y+5,10,5,0,0,Math.PI*2);ctx.fill();
