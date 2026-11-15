@@ -2,7 +2,7 @@
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 import {gallopCycle,gallopLegPose} from './gait.mjs';
-import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions} from './course.mjs';
+import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,TOKYO_TURF} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
  const THREE = await import(THREE_URL);
@@ -16,69 +16,87 @@ export async function createThreeView(host){
  host.appendChild(renderer.domElement);
  const scene=new THREE.Scene();
  scene.background=new THREE.Color(0x8dd0f4);
- scene.fog=new THREE.Fog(0x8dd0f4,65,155);
+ scene.fog=new THREE.Fog(0x8dd0f4,80,200);
  // Low, close television-style camera. The original aerial view made the horses tiny.
- const camera=new THREE.PerspectiveCamera(44,1000/560,0.1,210);
+ const camera=new THREE.PerspectiveCamera(44,1000/560,0.1,300);
  camera.position.set(8,4.3,11.5);
  camera.lookAt(-1.4,1.65,0);
  scene.add(new THREE.HemisphereLight(0xffffff,0x416e50,2.15));
  const sun=new THREE.DirectionalLight(0xffffff,2.2);
  sun.position.set(-18,35,10);scene.add(sun);
  const material=(color)=>new THREE.MeshLambertMaterial({color});
- // Shared half-lap: lower straight -> counterclockwise 180° turn -> upper straight.
- const surroundings=new THREE.Mesh(new THREE.PlaneGeometry(410,260),material(0x317e48));
+ // Tokyo turf oval is a schematic closed loop. The A-D circumference
+ // and the 525.9m home straight are official JRA dimensions.
+ const surroundings=new THREE.Mesh(new THREE.PlaneGeometry(620,360),new THREE.MeshLambertMaterial({color:0x317e48}));
  surroundings.rotation.x=-Math.PI/2;surroundings.position.y=-.085;scene.add(surroundings);
- function strip(offsetA,offsetB,color){
-   const pos=[],indices=[],steps=160;
-   for(let i=0;i<=steps;i++){
-     const s=-45+i*(HALF_LAP_LENGTH+75)/steps;
-     const a=coursePoint(s,offsetA),b=coursePoint(s,offsetB);
-     pos.push(a.x,-.035,a.z,b.x,-.035,b.z);
-     if(i<steps){const j=2*i;indices.push(j,j+2,j+1,j+1,j+2,j+3);}
-   }
-   const geometry=new THREE.BufferGeometry();
-   geometry.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
-   geometry.setIndex(indices);geometry.computeVertexNormals();
-   const mat=material(color);mat.side=THREE.DoubleSide;
-   const mesh=new THREE.Mesh(geometry,mat);scene.add(mesh);
- }
- // All racing surface is turf. Alternate mowing shades across the track width.
- for(let i=0;i<16;i++)strip(i*2,Math.min(TRACK_OUTER_OFFSET,(i+1)*2),i%2?0x83c77a:0x73bb70);
- const lineMat=new THREE.MeshBasicMaterial({color:0xf6f6ee});
- function rail(offset){
-   for(const y of [.52,.94]){
-     const points=Array.from({length:106},(_,i)=>{
-       const p=coursePoint(-45+i*(HALF_LAP_LENGTH+75)/105,offset);
-       return new THREE.Vector3(p.x,y,p.z);
+ let trackGroup=null,renderedTrackKey='';
+ function rebuildTrack(course,distance){
+   const key=course+':'+distance;
+   if(key===renderedTrackKey)return;
+   renderedTrackKey=key;
+   if(trackGroup){
+     scene.remove(trackGroup);
+     trackGroup.traverse(node=>{
+       node.geometry?.dispose();
+       if(node.material){
+         if(Array.isArray(node.material))node.material.forEach(m=>m.dispose());
+         else node.material.dispose();
+       }
      });
-     const curve=new THREE.CatmullRomCurve3(points);
-     const mesh=new THREE.Mesh(new THREE.TubeGeometry(curve,192,.043,5,false),lineMat);
-     scene.add(mesh);
    }
+   const lap=TOKYO_TURF[course].lap;
+   trackGroup=new THREE.Group();scene.add(trackGroup);
+   const positions=[],indices=[];
+   const strip=(a,b,color)=>{
+     const coords=[],faces=[],steps=240;
+     for(let i=0;i<=steps;i++){
+       const metre=i*lap/steps;
+       const inside=coursePoint(metre,a,course),outside=coursePoint(metre,b,course);
+       coords.push(inside.x,-.035,inside.z,outside.x,-.035,outside.z);
+       if(i<steps){const j=i*2;faces.push(j,j+2,j+1,j+1,j+2,j+3);}
+     }
+     const geometry=new THREE.BufferGeometry();
+     geometry.setAttribute('position',new THREE.Float32BufferAttribute(coords,3));
+     geometry.setIndex(faces);geometry.computeVertexNormals();
+     const mat=material(color);mat.side=THREE.DoubleSide;
+     trackGroup.add(new THREE.Mesh(geometry,mat));
+   };
+   for(let i=0;i<16;i++)strip(i*2,Math.min(TRACK_OUTER_OFFSET,(i+1)*2),i%2?0x83c77a:0x73bb70);
+   const railMat=new THREE.MeshBasicMaterial({color:0xf6f6ee});
    const postMat=material(0xf8f9f2);
-   for(let d=-45;d<=HALF_LAP_LENGTH+30;d+=5.8){
-     const p=coursePoint(d,offset);
-     const post=new THREE.Mesh(new THREE.CylinderGeometry(.047,.047,1,6),postMat);
-     post.position.set(p.x,.50,p.z);scene.add(post);
+   for(const offset of [0,TRACK_OUTER_OFFSET]){
+     for(const y of [.52,.94]){
+       const points=Array.from({length:144},(_,i)=>{
+         const p=coursePoint(i*lap/144,offset,course);
+         return new THREE.Vector3(p.x,y,p.z);
+       });
+       const curve=new THREE.CatmullRomCurve3(points,true);
+       const rail=new THREE.Mesh(new THREE.TubeGeometry(curve,240,.043,5,true),railMat);
+       trackGroup.add(rail);
+     }
+     for(let d=0;d<lap;d+=15){
+       const p=coursePoint(d,offset,course);
+       const post=new THREE.Mesh(new THREE.CylinderGeometry(.047,.047,1,6),postMat);
+       post.position.set(p.x,.50,p.z);trackGroup.add(post);
+     }
+   }
+   // Race-specific start line, permanent finish line.
+   const paint=new THREE.MeshBasicMaterial({color:0xfbfbf4,side:THREE.DoubleSide});
+   for(const d of [-distance,0]){
+     const a=coursePoint(d,0,course),b=coursePoint(d,TRACK_OUTER_OFFSET,course);
+     const dx=b.x-a.x,dz=b.z-a.z;
+     const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.20,Math.hypot(dx,dz)),paint);
+     stripe.rotation.x=-Math.PI/2;
+     stripe.rotation.z=-Math.atan2(dx,dz);
+     stripe.position.set((a.x+b.x)*.5,-.020,(a.z+b.z)*.5);
+     trackGroup.add(stripe);
    }
  }
- rail(0);rail(TRACK_OUTER_OFFSET);
- // White starting and finishing lines, independent from the camera.
- const paint=new THREE.MeshBasicMaterial({color:0xfbfbf4,side:THREE.DoubleSide});
- for(const d of [0,HALF_LAP_LENGTH]){
-   const a=coursePoint(d,0),b=coursePoint(d,TRACK_OUTER_OFFSET);
-   const dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
-   const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.16,length),paint);
-   stripe.rotation.x=-Math.PI/2;
-   stripe.rotation.z=-Math.atan2(dx,dz);
-   stripe.position.set((a.x+b.x)*.5,-.020,(a.z+b.z)*.5);
-   scene.add(stripe);
- }
- // Fixed distant scenery provides a sense of rotation without shaking the view.
+ // Trees stay outside the racing surface as fixed visual landmarks.
  const trees=material(0x256a3d);
  for(let i=0;i<32;i++){
    const angle=i*Math.PI*2/32;
-   const x=Math.cos(angle)*117,z=Math.sin(angle)*72;
+   const x=Math.cos(angle)*248,z=Math.sin(angle)*140;
    const tree=new THREE.Mesh(new THREE.SphereGeometry(1,7,5),trees);
    tree.position.set(x,2.4,z);tree.scale.set(2.0,2.1,2.0);scene.add(tree);
  }
@@ -327,19 +345,21 @@ export async function createThreeView(host){
  }
  const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i}));
  let disposed=false;
- let cameraReady=false,lastLeadS=0,lastCameraRace=null,lastCameraTime=null;
+ let cameraReady=false,lastLeadS=0,lastCameraRace=null,lastCameraTime=null,lastCameraCourse='A';
  let viewState=null;
  const cameraAim=new THREE.Vector3();
- function render(race,horses,time){
+ function render(race,horses,time,options={}){
    if(disposed)return;
    const entrants=horses?.length?horses.length:18;
+   const raceDistance=race?.distance||options.distance||2400;
+   const course=race?.course||options.course||'A';
+   rebuildTrack(course,raceDistance);
    const frame=race?.frames?.length ? interpolateRaceFrame(race.frames,time)
       : {t:time,horses:horses?.length?horses.map(h=>({id:h.id,x:0,lane:h.id-1})):neutral};
    const lead=Math.max(...frame.horses.map(h=>h.x));
-   const raceDistance=race?.distance||2200;
    const leadS=lengthAtMetres(lead,raceDistance);
    const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,2);
-   const displayed=raceDisplayPositions(race,frame,raceDistance);
+   const displayed=raceDisplayPositions(race,frame,raceDistance,course);
    // Use wall-clock time for leg cadence so 8x replay does not become frantic.
    const motionTime=performance.now()*.001;
    for(const model of models){
@@ -401,14 +421,14 @@ export async function createThreeView(host){
    // Start: diagonal front view, high enough to show all 18 horses side by side.
    // The camera gradually becomes a closer diagonal-front tracking shot.
    // Keep it forward of the horse's running direction throughout the half-lap.
-   const focusS=Math.min(leadS,HALF_LAP_LENGTH);
+   const focusS=leadS;
    const visible=frame.horses.filter(h=>lead-h.x<70);
    const meanLane=visible.length
       ?visible.reduce((sum,h)=>sum+h.lane,0)/visible.length:(entrants-1)/2;
-   const direction=coursePoint(focusS,0);
+   const direction=coursePoint(focusS,0,course);
    const insideX=direction.dz,insideZ=-direction.dx;
-   const startCenter=coursePoint(focusS,INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5);
-   const trackCenter=coursePoint(focusS,INSIDE_MARGIN+meanLane*LANE_WIDTH);
+   const startCenter=coursePoint(focusS,INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5,course);
+   const trackCenter=coursePoint(focusS,INSIDE_MARGIN+meanLane*LANE_WIDTH,course);
    const startCamera=new THREE.Vector3(
      startCenter.x+direction.dx*(23+entrants*1.12)+insideX*(9+entrants*.5),6.8+entrants*.25,
      startCenter.z+direction.dz*(23+entrants*1.12)+insideZ*(9+entrants*.5)
@@ -436,13 +456,13 @@ export async function createThreeView(host){
    const raceTime=Number(frame.t)||0;
    const delta=lastCameraTime===null?0:raceTime-lastCameraTime;
    const manuallySeeked=lastCameraTime!==null && (delta<-.25||delta>2.0);
-   if(!cameraReady||race!==lastCameraRace||manuallySeeked){
+   if(!cameraReady||race!==lastCameraRace||course!==lastCameraCourse||manuallySeeked){
      camera.position.copy(wanted);cameraAim.copy(wantedAim);cameraReady=true;
    }else{
      const follow=Math.min(.36,1-Math.exp(-Math.max(0,delta)*1.2));
      camera.position.lerp(wanted,follow);cameraAim.lerp(wantedAim,follow);
    }
-   lastLeadS=focusS;lastCameraRace=race;lastCameraTime=raceTime;
+   lastLeadS=focusS;lastCameraRace=race;lastCameraTime=raceTime;lastCameraCourse=course;
    camera.lookAt(cameraAim);
    camera.updateMatrixWorld();
    // Share the ACTUAL 3D camera position and frustum with the upper overview.
@@ -477,6 +497,7 @@ export async function createThreeView(host){
      m.nameLabel.sprite.material.dispose();
      m.nameLabel.tex.dispose();
    }
+   if(trackGroup){scene.remove(trackGroup);trackGroup.traverse(node=>{node.geometry?.dispose();if(node.material){if(Array.isArray(node.material))node.material.forEach(m=>m.dispose());else node.material.dispose();}})}
    renderer.dispose();renderer.domElement.remove();
  }
  render(null,null,0);
