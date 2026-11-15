@@ -140,6 +140,15 @@ export async function createThreeView(host){
    face.renderOrder=1;
    return face;
  }
+
+ // Lightweight tack curves, parented to the moving head or horse body.
+ const leather=material(0x241c1b), saddleLeather=material(0x3c3029), steel=material(0xcbd7d8);
+ const trim=material(0xe6d9bc);
+ const tackCurve=(parent,points,mat=leather,thickness=.032)=>{
+   const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p)));
+   const tube=new THREE.Mesh(new THREE.TubeGeometry(curve,10,thickness,5,false),mat);
+   parent.add(tube);return tube;
+ };
  function horseModel(id){
    const group=new THREE.Group();scene.add(group);
    const appearance=getHorseAppearance(id);
@@ -169,6 +178,13 @@ export async function createThreeView(host){
      const inner=part(headPivot,cone,earInner,-.12,.70,side*.34,.085,.21,.075);
      inner.rotation.z=side*.09;
    }
+   // Bridle: browband, noseband, cheekpieces and a visible bit on both sides.
+   for(const side of [-1,1]){
+     tackCurve(headPivot,[[-.13,.40,side*.39],[.04,.42,side*.58],[.21,.28,side*.61]],leather,.040);
+     tackCurve(headPivot,[[.05,.40,side*.56],[.29,.05,side*.62],[.66,-.31,side*.43]],leather,.040);
+     tackCurve(headPivot,[[.67,-.32,side*.44],[.90,-.31,side*.44],[1.02,-.26,side*.31]],leather,.055);
+     part(headPivot,sphere,steel,.93,-.34,side*.42,.085,.075,.060);
+   }
    // Small tufts on the forehead and a fluffy mane along the neck.
    for(let i=0;i<4;i++){
      const tuft=part(headPivot,sphere,mane,-.30+i*.17,.53-i*.075,0,.14,.20,.29-i*.028);
@@ -191,8 +207,22 @@ export async function createThreeView(host){
      part(knee,hoofGeom,hoofMat,.12,-.43,0,1,1,1);
      legs.push({hip,knee,front:x>0,side:z>0});
    }
-   // Flat saddlecloth, showing the horse number on both sides without external image files.
+   // Racing saddle and colored saddlecloth, with girth and visible stirrups.
    part(group,sphere,saddleMat,-.23,1.77,0,.55,.15,.56);
+   const seat=part(group,sphere,saddleLeather,-.29,1.86,0,.46,.18,.48);
+   seat.rotation.z=-.09;
+   for(const side of [-1,1]){
+     part(group,sphere,saddleLeather,-.35,1.56,side*.57,.38,.29,.095);
+     // Girth, under the belly behind the forelegs.
+     tackCurve(group,[[-.19,1.83,side*.49],[-.19,1.43,side*.62],[-.19,.98,side*.54]],leather,.057);
+     // Stirrup leather and a silver stirrup loop next to the jockey boot.
+     tackCurve(group,[[-.49,1.82,side*.52],[-.60,1.50,side*.71],[-.61,1.30,side*.75]],leather,.031);
+     tackCurve(group,[[-.76,1.34,side*.75],[-.76,1.22,side*.75],[-.45,1.22,side*.75],[-.45,1.34,side*.75]],steel,.030);
+     // Reins from the bit toward the jockey's hands.
+     tackCurve(group,[[2.02,1.66,side*.41],[1.48,1.86,side*.55],[.95,2.06,side*.49],[.46,2.21,side*.30]],leather,.030);
+     // Breastplate strap below neck.
+     tackCurve(group,[[.60,1.86,side*.53],[.47,1.25,side*.62],[.08,1.10,side*.52]],leather,.039);
+   }
    const numberTexture=raceNumberTexture(id,appearance);
    const numberMat=new THREE.MeshBasicMaterial({map:numberTexture,side:THREE.DoubleSide});
    for(const side of [-1,1]){
@@ -205,8 +235,14 @@ export async function createThreeView(host){
    const riderPivot=new THREE.Group();riderPivot.position.set(-.30,2.00,0);group.add(riderPivot);
    const chest=part(riderPivot,sphere,silk,.15,.30,0,.39,.46,.34);
    chest.rotation.z=-.30;
+   const uniformAccent=material(appearance.silkAccent);
+   // A slim racing-silk band and shoulder flashes, not a solid frame-colored jacket.
+   part(riderPivot,sphere,uniformAccent,.20,.43,-.308,.24,.105,.035);
+   part(riderPivot,sphere,uniformAccent,.20,.43,.308,.24,.105,.035);
    part(riderPivot,sphere,skin,.29,.91,0,.29,.30,.285);
    part(riderPivot,sphere,helmetMat,.27,1.14,0,.40,.20,.37);
+   // Contrasting cap edging makes the white and black frames readable.
+   part(riderPivot,sphere,steel,.27,1.045,0,.38,.042,.358);
    part(riderPivot,sphere,helmetMat,.35,1.035,-.10,.37,.065,.30);
    part(riderPivot,sphere,hoofMat,.35,.98,-.23,.31,.068,.085);
    for(const side of [-1,1]){
