@@ -1,5 +1,6 @@
 import {SCENARIOS} from './engine.mjs';
 import {getHorseAppearance} from './appearance.mjs';
+import {coursePoint,lengthAtMetres,HALF_LAP_LENGTH,INSIDE_MARGIN,LANE_WIDTH,TRACK_OUTER_OFFSET} from './course.mjs';
 const BASE_W=1000,BASE_H=560;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 function label(ctx,text,x,y,opts={}){
@@ -163,24 +164,57 @@ function renderChase(ctx,frame,horses,distance){
  });
 }
 function renderTop(ctx,frame,horses,distance){
- ctx.fillStyle='#134332';ctx.fillRect(0,0,1000,560);
- for(let i=0;i<11;i++){ctx.fillStyle=i%2===0?'rgba(255,255,255,.015)':'rgba(0,0,0,.018)';ctx.fillRect(0,i*51,1000,51)}
- const lead=Math.max(...frame.horses.map(h=>h.x));
- ctx.fillStyle='#dbca9f';rounded(ctx,28,107,943,356,30);ctx.fill();
- ctx.fillStyle='#8fbe8a';rounded(ctx,28,113,943,343,27);ctx.fill();
- ctx.strokeStyle='rgba(252,255,252,.67)';ctx.lineWidth=3;
- for(let i=0;i<=7;i++){const y=134+i*42;ctx.beginPath();ctx.moveTo(45,y);ctx.lineTo(952,y);ctx.stroke()}
- label(ctx,'← 先頭',75,93,{size:19,bold:true,color:'#dafff3'});
- label(ctx,'後方 →',940,93,{size:19,bold:true,color:'#dafff3',align:'right'});
- for(const h of frame.horses){
-  const diff=lead-h.x;const x=clamp(90+diff*10.6,75,940);const y=136+h.lane*42;
-  ctx.fillStyle='rgba(1,35,20,.22)';ctx.beginPath();ctx.ellipse(x,y+7,20,7,0,0,2*Math.PI);ctx.fill();
-  ctx.fillStyle=getHorseAppearance(h.id).helmet;ctx.strokeStyle='#f7f7ee';ctx.lineWidth=2;
-  ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.fill();ctx.stroke();
-  label(ctx,String(h.id),x,y+7,{size:20,bold:true,align:'center',color:getHorseAppearance(h.id).helmetNumberColor});
+ // Map of the same left-handed half-oval used in the Three.js scene.
+ ctx.fillStyle='#1b5638';ctx.fillRect(0,0,1000,560);
+ const toXY=p=>({x:145+(p.x+50)*5.2,y:280-p.z*4.4});
+ function band(a,b,color){
+   ctx.beginPath();
+   for(let i=0;i<=140;i++){
+     const p=toXY(coursePoint(i*HALF_LAP_LENGTH/140,a));
+     if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y);
+   }
+   for(let i=140;i>=0;i--){
+     const p=toXY(coursePoint(i*HALF_LAP_LENGTH/140,b));
+     ctx.lineTo(p.x,p.y);
+   }
+   ctx.closePath();ctx.fillStyle=color;ctx.fill();
  }
- ctx.fillStyle='rgba(11,32,34,.87)';rounded(ctx,25,18,530,52,11);ctx.fill();
- label(ctx,`隊列図  •  残り ${Math.ceil(Math.max(0,distance-lead))}m`,43,52,{size:23,bold:true});
+ for(let i=0;i<7;i++)band(i*2,Math.min((i+1)*2,TRACK_OUTER_OFFSET),i%2?'#85c983':'#72b877');
+ for(const off of [0,TRACK_OUTER_OFFSET]){
+   ctx.strokeStyle='#fcfcf7';ctx.lineWidth=3.8;ctx.beginPath();
+   for(let i=0;i<=140;i++){
+     const p=toXY(coursePoint(i*HALF_LAP_LENGTH/140,off));
+     if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y);
+   }
+   ctx.stroke();
+ }
+ // Start and finish edges are shown as white tick marks.
+ for(const [s,title] of [[0,'START'],[HALF_LAP_LENGTH,'GOAL']]){
+   const a=toXY(coursePoint(s,0)),b=toXY(coursePoint(s,TRACK_OUTER_OFFSET));
+   ctx.strokeStyle='#f9f7ea';ctx.lineWidth=4;ctx.beginPath();
+   ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+   label(ctx,title,a.x-15,a.y-12,{size:13,bold:true,color:'#fefefe'});
+ }
+ label(ctx,'左回り  ↶',817,107,{size:24,bold:true,color:'#edffef'});
+ label(ctx,'スタート後、空いた進路から内ラチへ',316,502,{size:19,bold:true,color:'#edffef'});
+ const lead=Math.max(...frame.horses.map(h=>h.x));
+ const leadS=lengthAtMetres(lead,distance);
+ const positions=[...frame.horses].sort((a,b)=>a.x-b.x);
+ for(const h of positions){
+   const diff=Math.max(0,lead-h.x);
+   // Stretch the local group visually so number markers remain legible.
+   const point=coursePoint(leadS-diff*.55,INSIDE_MARGIN+h.lane*LANE_WIDTH);
+   const q=toXY(point),a=getHorseAppearance(h.id);
+   ctx.fillStyle='rgba(6,35,18,.3)';ctx.beginPath();
+   ctx.ellipse(q.x+2,q.y+5,10,5,0,0,Math.PI*2);ctx.fill();
+   ctx.fillStyle=a.helmet;ctx.strokeStyle='#f9faf6';ctx.lineWidth=2;
+   ctx.beginPath();ctx.arc(q.x,q.y,9.7,0,Math.PI*2);ctx.fill();ctx.stroke();
+   label(ctx,String(h.id),q.x,q.y+4,{size:12,bold:true,align:'center',color:a.helmetNumberColor});
+ }
+ ctx.fillStyle='rgba(7,27,29,.85)';rounded(ctx,20,18,553,49,11);ctx.fill();
+ label(ctx,'左回り・芝半周コース',37,50,{size:23,bold:true,color:'#fff'});
+ ctx.fillStyle='rgba(7,27,29,.85)';rounded(ctx,714,18,265,49,11);ctx.fill();
+ label(ctx,'残り '+Math.ceil(Math.max(0,distance-lead))+'m',957,50,{size:23,bold:true,color:'#fff',align:'right'});
 }
 export function interpolateRaceFrame(frames, time) {
  if(frames.length===1 || time<=frames[0].t)return frames[0];
