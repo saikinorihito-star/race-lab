@@ -30,3 +30,35 @@
  .tiny-toggle button{font-size:9px;padding:7px 6px}
  .visual-panel .panel-head{gap:6px}
 }
+
+
+/* Live broadcast layout: position overview above the race, 18 names below. */
+.race-overview{background:#0b171a;border-top:1px solid #203c38;border-bottom:1px solid #375b45;padding:12px 15px 4px}
+.race-overview-head,.race-standings-head{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:12px}
+.race-overview-head strong,.race-standings-head strong{color:#effdf0;font-size:13px;letter-spacing:.3px}
+.race-overview-hint{color:#b6dab5;font-weight:500;font-size:11px;margin-left:6px}
+.overview-remaining{font-weight:800;font-variant-numeric:tabular-nums;color:#e9c777}
+#overview-map{display:block;width:100%;height:auto;max-height:220px;min-height:100px}
+.race-standings{background:#091118;border-top:2px solid #52765b;border-bottom:1px solid #2c3e48;padding:11px 16px 12px}
+.race-standings-head{padding-bottom:9px;border-bottom:1px solid #253344}
+.race-standings-head span{font-size:10px;color:#9badc0;white-space:nowrap}
+.race-standings-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding-top:8px}
+.race-standings-column{min-width:0;display:flex;flex-direction:column;gap:2px}
+.race-entry{min-width:0;display:flex;align-items:center;gap:7px;padding:2px 4px;min-height:26px;border-radius:5px;font-variant-numeric:tabular-nums}
+.race-entry.leader{background:#183022}
+.race-place{font-size:11px;font-weight:800;color:#c4d3db;min-width:17px;text-align:right;flex:0 0 17px}
+.race-frame-chip{flex:0 0 27px;min-width:27px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:5px;border:1px solid rgba(255,255,255,.5);font-size:11px;font-weight:900}
+.race-horse-name{min-width:0;flex:1;font-size:12px;font-weight:700;color:#f1f5fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.race-entry.leader .race-horse-name{color:#f5d999}
+@media(max-width:650px){
+ .race-overview{padding:9px 9px 3px}
+ .race-overview-head strong,.race-standings-head strong{font-size:12px}
+ #overview-map{min-height:85px}
+ .race-standings{padding:9px 9px 10px}
+ .race-standings-columns{gap:5px;padding-top:6px}
+ .race-standings-head span{font-size:9px}
+ .race-entry{gap:4px;min-height:25px;padding:2px}
+ .race-place{min-width:14px;flex-basis:14px;font-size:10px}
+ .race-frame-chip{flex-basis:24px;min-width:24px;height:21px;font-size:10px}
+ .race-horse-name{font-size:11px}
+}
