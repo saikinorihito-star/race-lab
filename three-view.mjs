@@ -43,7 +43,7 @@ export async function createThreeView(host){
    const mesh=new THREE.Mesh(geometry,mat);scene.add(mesh);
  }
  // All racing surface is turf. Alternate mowing shades across the track width.
- for(let i=0;i<7;i++)strip(i*2,Math.min(TRACK_OUTER_OFFSET,(i+1)*2),i%2?0x83c77a:0x73bb70);
+ for(let i=0;i<16;i++)strip(i*2,Math.min(TRACK_OUTER_OFFSET,(i+1)*2),i%2?0x83c77a:0x73bb70);
  const lineMat=new THREE.MeshBasicMaterial({color:0xf6f6ee});
  function rail(offset){
    for(const y of [.52,.94]){
@@ -311,7 +311,7 @@ export async function createThreeView(host){
    model.nameLabel=nameLabel;
    model.lastName='';
  }
- const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i%6}));
+ const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i}));
  let disposed=false;
  let cameraReady=false,lastLeadS=0;
  const cameraAim=new THREE.Vector3();
@@ -374,23 +374,43 @@ export async function createThreeView(host){
      const shadowSize=1-lift*.14;
      model.shadow.scale.set(1.42*shadowSize,.60*shadowSize,1);
    }
-   // The camera follows the field through the left-hand turn.
-   // Soft position easing, no rhythmic shaking (better for eye comfort).
+   // Start: diagonal front view, high enough to show all 18 horses side by side.
+   // The camera gradually becomes a closer diagonal-front tracking shot.
+   // Keep it forward of the horse's running direction throughout the half-lap.
    const focusS=Math.min(leadS,HALF_LAP_LENGTH);
-   const focus=coursePoint(focusS,5.1);
-   const outwardX=focus.dz,outwardZ=-focus.dx;
-   const wanted=new THREE.Vector3(
-     focus.x+outwardX*17-focus.dx*7,6.20,
-     focus.z+outwardZ*17-focus.dz*7
+   const visible=frame.horses.filter(h=>lead-h.x<70);
+   const meanLane=visible.length
+      ?visible.reduce((sum,h)=>sum+h.lane,0)/visible.length:8.5;
+   const direction=coursePoint(focusS,0);
+   const insideX=direction.dz,insideZ=-direction.dx;
+   const startCenter=coursePoint(focusS,15.2);
+   const trackCenter=coursePoint(focusS,2+meanLane*1.55);
+   const startCamera=new THREE.Vector3(
+     startCenter.x+direction.dx*43+insideX*18,11.4,
+     startCenter.z+direction.dz*43+insideZ*18
    );
-   const wantedAim=new THREE.Vector3(
-     focus.x+focus.dx*3,1.65,
-     focus.z+focus.dz*3
+   const followCamera=new THREE.Vector3(
+     trackCenter.x+direction.dx*17+insideX*18,7.5,
+     trackCenter.z+direction.dz*17+insideZ*18
    );
+   const startAim=new THREE.Vector3(
+     startCenter.x-direction.dx*1.8,1.80,
+     startCenter.z-direction.dz*1.8
+   );
+   const followAim=new THREE.Vector3(
+     trackCenter.x+direction.dx*2.8,1.75,
+     trackCenter.z+direction.dz*2.8
+   );
+   // 0-7s: front diagonal, 7-21s: ease to the race tracking camera.
+   const transition=Math.max(0,Math.min(1,(frame.t-7)/14));
+   const ease=transition*transition*(3-2*transition);
+   const wanted=startCamera.lerp(followCamera,ease);
+   const wantedAim=startAim.lerp(followAim,ease);
+   // Gentle smoothing prevents abrupt camera shifts during lane changes.
    if(!cameraReady||Math.abs(lastLeadS-focusS)>10){
      camera.position.copy(wanted);cameraAim.copy(wantedAim);cameraReady=true;
    }else{
-     camera.position.lerp(wanted,.19);cameraAim.lerp(wantedAim,.19);
+     camera.position.lerp(wanted,.18);cameraAim.lerp(wantedAim,.18);
    }
    lastLeadS=focusS;
    camera.lookAt(cameraAim);
