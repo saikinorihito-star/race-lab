@@ -117,12 +117,12 @@ export function lengthAtMetres(progress,raceDistance){
  return Number(progress)-Number(raceDistance||2400);
 }
 // JRA furlong markers: 2, 4 and 6 signify 200m, 400m and 600m to go.
-// Mount them just outside the outer turf rail so the horses never intersect.
+// Mount the posts on the infield side of the inner rail, clear of racing lanes.
 export const FURLONG_MARKERS=Object.freeze([600,400,200]);
 export function furlongMarkerPositions(course='A',venue='tokyo',layout='outer'){
  return FURLONG_MARKERS.map(remaining=>({
    remaining,number:String(remaining/100),
-   point:coursePoint(-remaining,TRACK_OUTER_OFFSET+2.7,course,venue,layout)
+   point:coursePoint(-remaining,-3.2,course,venue,layout)
  }));
 }
 export function horseCoursePoint(progress,distance,lane,course='A',venue='tokyo',layout='outer'){
