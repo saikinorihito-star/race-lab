@@ -152,7 +152,7 @@ export function runRace(horses, options = {}) {
       // Keep an entire horse-length buffer before entering another corridor.
       // This also prevents two horses from simultaneously cutting across each other.
       const sideCollision=snapshot.some(other=>other.id!==h.id&&!other.finished&&
-        Math.abs(other.x-h.x)<9&&Math.abs(other.lane-nextLane)<1.1);
+        Math.abs(other.x-h.x)<6&&Math.abs(other.lane-nextLane)<1.1);
       if(!sideCollision||Math.abs(lateral)<.01)h.lane=nextLane;
       else h.targetLane=Math.round(h.lane);
 
@@ -166,6 +166,9 @@ export function runRace(horses, options = {}) {
       }
       // An outside path is slightly longer, particularly around bends.
       desiredSpeed-=h.lane*(curve?.032:.012);
+      // Outer starters briefly tuck behind an inside runner before cutting over.
+      const breakIn=clamp(1-Math.max(0,h.x)/120,0,1);
+      desiredSpeed-=h.lane*.75*breakIn;
       desiredSpeed=clamp(desiredSpeed,12.1,19.6);
       const accel=clamp(desiredSpeed-h.speedNow,-.37,.37);
       const velocity=h.speedNow>10?clamp(h.speedNow+accel,12.1,19.6):desiredSpeed;
