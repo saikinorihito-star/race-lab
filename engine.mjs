@@ -55,13 +55,14 @@ export function runRace(horses, options = {}) {
   const scenario=SCENARIOS[options.scenario]?options.scenario:'normal';
   const seed=(options.seed??20261115)>>>0;
   const record=options.record!==false;
-  const rng=random(seed), dt=.5, limit=6;
+  const rng=random(seed), dt=.5, limit=17;
   const states=horses.map((horse,index)=>{
-    // Six starting corridors, three rows. Horses settle towards the rail once moving.
-    const lane=index%6;
+    // All 18 start on one straight starting line, occupying separate lateral stalls.
+    // After the break they find room to merge gradually toward the inner rail.
+    const lane=index;
     return {...horse,
-      x:-((index/6)|0)*7.1-rng()*.12,
-      lane, targetLane:lane, nextDecision:.40+rng()*.55,
+      x:0,
+      lane, targetLane:lane, nextDecision:3.0+rng()*.5,
       form:clamp(normal(rng)*.115,-.32,.32),
       sway:rng()*Math.PI*2,
       finishTime:null, speedNow:0, overtakes:0};
@@ -115,7 +116,7 @@ export function runRace(horses, options = {}) {
       // Re-evaluate the racing line every ~1 second, or sooner when trapped.
       const current=corridor(snapshot,h,h.lane);
       const trapped=current.forward<6.0;
-      if(t>=h.nextDecision || (trapped&&t+dt>=h.nextDecision-.55)){
+      if(t>=3 && (t>=h.nextDecision || (trapped&&t+dt>=h.nextDecision-.55))){
         const base=clamp(Math.round(h.lane),0,limit);
         const candidates=[base,base-1,base+1].filter(v=>v>=0&&v<=limit);
         let best=base,bestCost=Infinity;
@@ -130,7 +131,7 @@ export function runRace(horses, options = {}) {
               Math.abs(other.lane-halfway)<.67);
           }
           // Strong inside preference, relieved only by imminent traffic.
-          const inside=target*(p<.16?.43:curve?.24:.19);
+          const inside=target*(p<.16?.54:curve?.24:.19);
           const ahead=space.forward<9?(9-space.forward)*.30:0;
           const close=space.forward<3.6?1.15:0;
           const unsafe=alongside?8:0;
@@ -146,7 +147,7 @@ export function runRace(horses, options = {}) {
         h.nextDecision=t+1.0+rng()*.6;
       }
       // Lateral motion is bounded: no teleporting or instantaneous weaving.
-      const lateral=clamp(h.targetLane-h.lane,-.44,.44);
+      const lateral=t<3?0:clamp(h.targetLane-h.lane,-.44,.44);
       const nextLane=clamp(h.lane+lateral,0,limit);
       const halfway=(h.lane+nextLane)*.5;
       // Keep an entire horse-length buffer before entering another corridor.
@@ -168,7 +169,9 @@ export function runRace(horses, options = {}) {
       desiredSpeed-=h.lane*(curve?.032:.012);
       // Outer starters briefly tuck behind an inside runner before cutting over.
       const breakIn=clamp(1-Math.max(0,h.x)/120,0,1);
-      desiredSpeed-=h.lane*.75*breakIn;
+      desiredSpeed-=h.lane*.22*breakIn;
+      // An even break keeps the field side-by-side for the opening moments.
+      if(t<3)desiredSpeed=16.4+(Number(h.speed)-70)*.002;
       desiredSpeed=clamp(desiredSpeed,12.1,19.6);
       const accel=clamp(desiredSpeed-h.speedNow,-.37,.37);
       const velocity=h.speedNow>10?clamp(h.speedNow+accel,12.1,19.6):desiredSpeed;
