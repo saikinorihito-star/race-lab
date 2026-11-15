@@ -70,13 +70,8 @@ function renderStats(stats){
  }
 }
 function renderCanvas(){
- const frames=state.race?.frames;
- let idx=0;
- if(frames?.length){
-  // Frame snapshots are one second apart, except the final snapshot.
-  idx=Math.min(frames.length-1,Math.max(0,Math.round(state.currentT)));
- }
- renderFrame(canvas,state.race,state.horses,idx,state.view);
+ // Render interpolated horse positions using continuous elapsed time.
+ renderFrame(canvas,state.race,state.horses,state.currentT,state.view);
  const end=state.race?.elapsed||0;
  $('seek').value=end?String(Math.min(100,100*state.currentT/end)):'0';
  const duration=(s)=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
