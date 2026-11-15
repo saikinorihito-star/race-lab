@@ -39,7 +39,8 @@
         <div class="panel-head"><h2><span class="step">02</span> レース再生</h2><div class="tiny-toggle"><button class="active" data-view="chase" aria-pressed="true">追走ビュー</button><button data-view="top" aria-pressed="false">上空ビュー</button><button data-view="three" aria-pressed="false">3Dビュー</button></div></div>
         <section class="race-overview" aria-label="レース全体の位置図">
           <div class="race-overview-head"><strong>全体像 <span class="race-overview-hint">左回り・芝</span></strong><span id="overview-remaining" class="overview-remaining">スタート前</span></div>
-          <svg id="overview-map" viewBox="0 0 900 226" role="img" aria-label="左回り半周コースの馬群位置図。丸の数字は馬番です。"></svg>
+          <svg id="overview-map" viewBox="0 0 900 226" role="img" aria-label="3D映像と同じ座標による左回り半周コースの馬群位置図。黄色い点は3Dカメラ位置です。"></svg>
+          <p class="overview-legend" id="overview-legend">点は馬の実位置</p>
         </section>
         <div class="canvas-wrap"><canvas id="race-canvas" width="1000" height="560" aria-label="競走馬の位置関係を示すレースアニメーション"></canvas><div id="three-host" class="three-host" hidden></div><div class="canvas-label" id="canvas-label">スタート前</div></div>
         <section class="race-standings" aria-label="18頭の馬名と現在の順位">
