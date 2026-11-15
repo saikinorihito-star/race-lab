@@ -17,7 +17,7 @@
 <div class="app-shell">
 <header class="topbar">
   <div class="brand"><span class="brand-mark">R<span class="dot">.</span></span><div><strong>RACE LAB</strong><small>競馬レース展開シミュレーター</small></div></div>
-  <span class="beta">DEMO v0.1</span>
+  <span class="beta">DEMO v0.2</span>
 </header>
 <main class="content">
   <section class="intro">
@@ -36,13 +36,13 @@
         <p id="status" class="small-status" role="status" aria-live="polite">開始ボタンを押すと1レースを再生し、1,000回の着順分布を集計します。</p>
       </article>
       <article class="panel visual-panel">
-        <div class="panel-head"><h2><span class="step">02</span> レース再生</h2><div class="tiny-toggle"><button class="active" data-view="chase" aria-pressed="true">追走ビュー</button><button data-view="top" aria-pressed="false">上空ビュー</button></div></div>
-        <div class="canvas-wrap"><canvas id="race-canvas" width="1000" height="560" aria-label="競走馬の位置関係を示すレースアニメーション"></canvas><div class="canvas-label" id="canvas-label">スタート前</div></div>
+        <div class="panel-head"><h2><span class="step">02</span> レース再生</h2><div class="tiny-toggle"><button class="active" data-view="chase" aria-pressed="true">追走ビュー</button><button data-view="top" aria-pressed="false">上空ビュー</button><button data-view="three" aria-pressed="false">3Dビュー</button></div></div>
+        <div class="canvas-wrap"><canvas id="race-canvas" width="1000" height="560" aria-label="競走馬の位置関係を示すレースアニメーション"></canvas><div id="three-host" class="three-host" hidden></div><div class="canvas-label" id="canvas-label">スタート前</div></div>
         <div class="playback">
           <div class="playback-line"><button id="toggle-play" class="play-button" title="再生／一時停止" aria-label="再生">▶</button><input id="seek" type="range" min="0" max="100" value="0" aria-label="再生位置"><span id="play-time" class="time">0:00 / 0:00</span></div>
           <div class="playback-options"><label>再生速度 <select id="speed"><option value="1">1倍</option><option value="2">2倍</option><option value="4">4倍</option><option value="8" selected>8倍</option><option value="12">12倍</option></select></label><button class="btn secondary-btn" id="save-video">動画保存</button></div>
         </div>
-        <p class="helptext">現在の表示は軽量な2D/疑似3Dです。本格的な3Dモデル化は次の開発段階です。動画保存はブラウザーの対応状況によって利用できない場合があります。</p>
+        <p class="helptext">3Dビューでは軽量な立体モデルを使用します（ネット接続が必要）。動画保存はブラウザーや端末の対応状況によって利用できない場合があります。</p>
       </article>
       <article class="panel results-panel">
         <div class="panel-head"><h2><span class="step">03</span> 予想結果</h2><span class="minor">1,000回の仮想試行</span></div>
