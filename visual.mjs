@@ -8,9 +8,9 @@ function label(ctx,text,x,y,opts={}){
 }
 function rounded(ctx,x,y,w,h,r=12){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
 // Cartoon chase-view counterpart of the shared 3D horse design.
-// Horses face right, matching the chase camera's screen direction and the 3D models.
+// Broadcast chase perspective: all horse silhouettes face LEFT, with the leader at the left edge.
 function drawHorse(ctx,x,y,size,horse,appearance,phase=0){
- ctx.save();ctx.translate(x,y);ctx.scale(size,size);
+ ctx.save();ctx.translate(x,y);ctx.scale(-size,size);
  const edge=appearance.outline,coat=appearance.coat;
  const shape=(cx,cy,rx,ry,fill,rotation=0,stroke=edge,weight=3.5)=>{
    ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,rotation,0,Math.PI*2);
@@ -85,7 +85,7 @@ function drawHorse(ctx,x,y,size,horse,appearance,phase=0){
 }
 function backgroundChase(ctx,t){
  const sky=ctx.createLinearGradient(0,0,0,350);sky.addColorStop(0,'#64b6db');sky.addColorStop(1,'#e0f5ed');ctx.fillStyle=sky;ctx.fillRect(0,0,1000,560);
- ctx.fillStyle='#557f77';for(let i=0;i<24;i++){const x=(i*81-(t*4)%81);ctx.beginPath();ctx.ellipse(x,240,70,24,0,0,2*Math.PI);ctx.fill()}
+ ctx.fillStyle='#557f77';for(let i=0;i<24;i++){const x=(i*81+(t*4)%81);ctx.beginPath();ctx.ellipse(x,240,70,24,0,0,2*Math.PI);ctx.fill()}
  ctx.fillStyle='#315c72';ctx.beginPath();ctx.moveTo(695,120);ctx.lineTo(1000,37);ctx.lineTo(1000,290);ctx.lineTo(760,270);ctx.closePath();ctx.fill();
  ctx.fillStyle='#e8e7e1';for(let j=0;j<6;j++){ctx.beginPath();ctx.moveTo(730+j*12,145+j*10);ctx.lineTo(1000,75+j*24);ctx.lineTo(1000,87+j*24);ctx.lineTo(730+j*12,156+j*10);ctx.fill()}
  const grass=ctx.createLinearGradient(0,260,0,560);grass.addColorStop(0,'#8cc976');grass.addColorStop(1,'#42a16e');ctx.fillStyle=grass;ctx.fillRect(0,260,1000,300);
@@ -94,23 +94,24 @@ function backgroundChase(ctx,t){
  ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,528);ctx.lineTo(1000,380);ctx.stroke();
  // subtle motion stripes
  ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=2;
- for(let x=-80;x<1050;x+=160){const dx=(x-t*7)%1120;ctx.beginPath();ctx.moveTo(dx,400);ctx.lineTo(dx+65,400);ctx.stroke()}
+ for(let x=-80;x<1050;x+=160){const dx=(x+t*7)%1120;ctx.beginPath();ctx.moveTo(dx,400);ctx.lineTo(dx+65,400);ctx.stroke()}
 }
 function renderChase(ctx,frame,horses,distance){
  backgroundChase(ctx,frame.t);
  const lead=Math.max(...frame.horses.map(h=>h.x));
  const records=frame.horses.map(h=>({...h,meta:horses.find(x=>x.id===h.id)}));
- // Leaders are to the right, lagging horses to the left. The background scrolls left.
+ // Screen travel points LEFT: leaders are on the left, followers are farther right.
  records.sort((a,b)=>a.x-b.x);
  for(const h of records){
-  const diff=lead-h.x;const x=780-diff*12;
-  if(x< -145)continue;
+  const diff=lead-h.x;const x=160+diff*12;
+  if(x>1145)continue;
   const scale=clamp(1.18-diff*.012,.4,1.18);
   const y=418-(h.lane*31)-diff*.11;
   drawHorse(ctx,x,y,scale,h,getHorseAppearance(h.id),frame.t*4.2+h.id*.34);
  }
  ctx.fillStyle='rgba(7,27,36,.78)';rounded(ctx,22,22,325,57,13);ctx.fill();
  label(ctx,'RACE LAB  •  LIVE SIMULATION',38,57,{size:21,bold:true,color:'#d8fff1'});
+ label(ctx,'← 進行方向',382,57,{size:21,bold:true,color:'#ffffff'});
  const remaining=Math.max(0,Math.ceil(distance-lead));
  label(ctx,`残り ${remaining.toLocaleString()}m`,970,54,{size:28,bold:true,align:'right'});
  ctx.fillStyle='rgba(7,27,36,.78)';rounded(ctx,730,19,252,49,12);ctx.fill();
