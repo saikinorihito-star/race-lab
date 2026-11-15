@@ -2,6 +2,36 @@
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
+// Four-beat transverse gallop: trailing hind -> leading hind -> trailing fore -> leading fore.
+// The right/left lead determines which side touches down first. Each leg gets its
+// own contact time, support phase and lifted recovery instead of a mirrored sine wave.
+function gallopLegPose(front, nearSide, rightLead, cycle) {
+ const isLeading=nearSide===rightLead;
+ const contact=front?(isLeading?.50:.35):(isLeading?.14:0);
+ const t=((cycle-contact)%1+1)%1;
+ // Keyframes: ground contact, support, push-off, knee tuck, forward reach, landing.
+ const keys=[
+  [0,.43,.025],
+  [.12,-.04,-.045],
+  [.24,-.40,.015],
+  [.43,-.22,.34],
+  [.68,.24,.34],
+  [.87,.41,.09],
+  [1,.43,.025]
+ ];
+ for(let i=0;i<keys.length-1;i++){
+  const a=keys[i],b=keys[i+1];
+  if(t<=b[0]){
+   const u=Math.max(0,Math.min(1,(t-a[0])/(b[0]-a[0])));
+   const smooth=u*u*(3-2*u);
+   const hip=a[1]+(b[1]-a[1])*smooth;
+   const knee=a[2]+(b[2]-a[2])*smooth;
+   return {hip:hip*(front?1:.89),knee:knee*(front?1:-.75)};
+  }
+ }
+ return {hip:.43,knee:.025};
+}
+
 export async function createThreeView(host){
  const THREE = await import(THREE_URL);
  const renderer = new THREE.WebGLRenderer({alpha:false,antialias:true,powerPreference:'low-power'});
@@ -254,26 +284,28 @@ export async function createThreeView(host){
          model.lastName=name;
        }
      }
-     // Noticeably brisk but controlled gallop. Limb amplitude stays moderate
-     // and the animation remains independent of the 8x race playback clock.
-     const pace=Math.max(.94,Math.min(1.10,(item.speed || 16.5)/16.5));
-     const gait=motionTime*10.0*pace+model.id*.40;
-     const lift=Math.pow(Math.max(0,Math.sin(gait+.42)),1.35);
-     model.group.position.y=.017+lift*.105;
-     // Keep body lean and rider counter-motion restrained to avoid eye fatigue.
-     model.group.rotation.z=-.018+Math.sin(gait+.70)*.047;
-     model.group.rotation.x=Math.sin(gait*.50+model.id)*.010;
-     for(let j=0;j<model.legs.length;j++){
-       const leg=model.legs[j];
-       const phase=gait+(leg.front?0:Math.PI*.85)+(leg.side?.28:-.28);
-       const stride=leg.front?.29:.27;
-       leg.hip.rotation.z=Math.sin(phase)*stride;
-       leg.knee.rotation.z=Math.max(0,Math.cos(phase+.35))*.175-.065;
+     // Racing gallop at about 2.4-2.7 strides per wall-clock second, even at 8x replay.
+     // Keep camera stable; unequal left/right touchdown timing provides realism.
+     const pace=Math.max(.95,Math.min(1.08,(item.speed || 16.5)/16.5));
+     const cycle=(motionTime*2.48*pace+model.id*.071)%1;
+     const theta=cycle*Math.PI*2;
+     const rightLead=model.id%2===0;
+     // Brief suspension follows the fourth footfall; the horse lifts as one body.
+     const airborne=cycle>.66&&cycle<.91
+       ?Math.sin(Math.PI*(cycle-.66)/.25):0;
+     const lift=Math.max(0,airborne);
+     model.group.position.y=.020+lift*.093+Math.sin(theta-.50)*.013;
+     model.group.rotation.z=-.014+Math.sin(theta+.42)*.049;
+     model.group.rotation.x=Math.sin(theta*.50+model.id)*.008;
+     for(const leg of model.legs){
+       const pose=gallopLegPose(leg.front,leg.side,rightLead,cycle);
+       leg.hip.rotation.z=pose.hip;
+       leg.knee.rotation.z=pose.knee;
      }
-     model.headPivot.rotation.z=-.012+Math.sin(gait+.94)*.047;
-     model.tailPivot.rotation.y=Math.sin(gait*.46)*.105;
-     model.riderPivot.rotation.z=-.048-Math.sin(gait+.46)*.052;
-     model.riderPivot.position.y=2.00-Math.max(0,Math.cos(gait+.36))*.050;
+     model.headPivot.rotation.z=-.014+Math.sin(theta+.94)*.044;
+     model.tailPivot.rotation.y=Math.sin(theta+.34)*.108;
+     model.riderPivot.rotation.z=-.055-Math.sin(theta+.56)*.046;
+     model.riderPivot.position.y=2.00-Math.max(0,Math.sin(theta+.85))*.044;
      model.shadow.position.x=model.group.position.x;
      model.shadow.position.z=model.group.position.z;
      const shadowSize=1-lift*.14;
