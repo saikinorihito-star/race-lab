@@ -266,6 +266,10 @@ export function courseSlope(remaining,venue='tokyo',layout='outer',course='A'){
 }
 export function safeRacePositions(horses,lead,raceDistance,course='A',venue='tokyo',layout='outer') {
  const leadS=lengthAtMetres(lead,raceDistance);
+ // Smaller A-D maximum widths reduce the display horse scale proportionally.
+ // Use the same reduction for on-screen contact clearance, avoiding false
+ // collisions at the gate on narrow Kyoto D and Tokyo D tracks.
+ const clearanceScale=Math.sqrt(getTurfProfile(venue,course,layout).maxWidth/41);
  const placed=[],byId=new Map();
  const order=[...horses].sort((a,b)=>b.x-a.x||a.id-b.id);
  for(const horse of order){
@@ -279,11 +283,11 @@ export function safeRacePositions(horses,lead,raceDistance,course='A',venue='tok
        const tx=(point.dx+ahead.point.dx)*.5,tz=(point.dz+ahead.point.dz)*.5;
        const along=Math.abs(dx*tx+dz*tz);
        const across=Math.abs(dx*tz-dz*tx);
-       if(along<3.19&&across<1.20){interfering=ahead;break;}
+       if(along<3.19*clearanceScale&&across<1.20*clearanceScale){interfering=ahead;break;}
      }
      if(!interfering)break;
      // The longitudinal safety gap is in display units; path s is now metres.
-     s=Math.min(s,interfering.s-3.72/SCENE_METRE_SCALE);
+     s=Math.min(s,interfering.s-3.72*clearanceScale/SCENE_METRE_SCALE);
      point=raceCoursePoint(s,offset,raceDistance,course,venue,layout);
    }
    placed.push({id:horse.id,s,point});
