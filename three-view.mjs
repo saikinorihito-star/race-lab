@@ -451,7 +451,10 @@ export async function createThreeView(host){
    riderPivot.position.set(-.30,1.94,0);
    riderPivot.scale.set(1.12,1.12,1.12); // Rider only; keep the horse unchanged.
    group.add(riderPivot);
-   const breeches=material(0xf4f5f0),boots=material(0x262a30);
+   // For this demo the whole riding outfit, including breeches, is one
+   // frame color; otherwise the visible white trousers can look like a
+   // different uniform when the jockey is small on an iPhone screen.
+   const breeches=uniformMat,boots=material(0x262a30);
    const gloves=material(0x302d2c);
    // Seat and pelvis make contact with the saddle, not floating above the horse.
    part(riderPivot,sphere,breeches,-.04,-.02,0,.30,.20,.37);
