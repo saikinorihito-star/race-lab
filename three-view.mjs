@@ -21,6 +21,20 @@ export async function createThreeView(host){
  const camera=new THREE.PerspectiveCamera(44,1000/560,0.1,300);
  camera.position.set(8,4.3,11.5);
  camera.lookAt(-1.4,1.65,0);
+ let viewportWidth=1000,viewportHeight=560;
+ function resize(){
+   // Reallocate only when dimensions change. This is important on iPhone
+   // portrait fullscreen: the WebGL camera must not remain 1000/560.
+   const rect=host.getBoundingClientRect?.();
+   const w=Math.round(rect?.width||host.clientWidth||0);
+   const h=Math.round(rect?.height||host.clientHeight||0);
+   if(w<64||h<64)return;
+   if(Math.abs(w-viewportWidth)<2&&Math.abs(h-viewportHeight)<2)return;
+   viewportWidth=w;viewportHeight=h;
+   renderer.setSize(w,h,false);
+   camera.aspect=w/h;
+   camera.updateProjectionMatrix();
+ }
  scene.add(new THREE.HemisphereLight(0xffffff,0x416e50,2.15));
  const sun=new THREE.DirectionalLight(0xffffff,2.2);
  sun.position.set(-18,35,10);scene.add(sun);
@@ -565,10 +579,33 @@ export async function createThreeView(host){
  const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i}));
  let disposed=false;
  let cameraReady=false,lastLeadS=0,lastCameraRace=null,lastCameraTime=null,lastCameraCourse='A';
+ let turnCueRace=null,turnCueKey='',turnCueTime=null;
+ function firstTurnCueTime(race,distance,course,venue,layout){
+   if(!race?.frames?.length)return null;
+   const key=[distance,course,venue,layout].join(':');
+   if(race===turnCueRace&&key===turnCueKey)return turnCueTime;
+   turnCueRace=race;turnCueKey=key;turnCueTime=null;
+   // Detect the first substantial course bend using the actual route
+   // heading, rather than guessing a time/distance for each start pocket.
+   const frames=race.frames,stride=Math.max(1,Math.floor(frames.length/350));
+   for(let i=0;i<frames.length;i+=stride){
+     const snap=frames[i];
+     if(snap.t<4)continue;
+     const leadX=Math.max(...snap.horses.map(h=>h.x));
+     if(leadX<Math.min(75,distance*.04)||leadX>distance*.70)continue;
+     const p=lengthAtMetres(leadX,distance);
+     const a=raceCoursePoint(p-32,0,distance,course,venue,layout);
+     const b=raceCoursePoint(p+32,0,distance,course,venue,layout);
+     const dot=Math.max(-1,Math.min(1,a.dx*b.dx+a.dz*b.dz));
+     if(Math.acos(dot)>.15){turnCueTime=snap.t;break;}
+   }
+   return turnCueTime;
+ }
  let viewState=null;
  const cameraAim=new THREE.Vector3();
  function render(race,horses,time,options={}){
    if(disposed)return;
+   resize();
    const entrants=horses?.length?horses.length:18;
    const raceDistance=race?.distance||options.distance||2400;
    const course=race?.course||options.course||'A';
@@ -686,38 +723,66 @@ export async function createThreeView(host){
      const shadowSize=1-lift*.20;
      model.shadow.scale.set(1.42*shadowSize*horseScale,.60*shadowSize*horseScale,1);
    }
-   // Start: diagonal front view, high enough to show all 18 horses side by side.
-   // The camera gradually becomes a closer diagonal-front tracking shot.
-   // Keep it forward of the horse's running direction throughout the half-lap.
-   const focusS=leadS;
-   const visible=frame.horses.filter(h=>lead-h.x<70);
+   // Broadcast director: follow the field more closely and, at the
+   // first genuine bend, scan from the leading horses towards the back.
+   // All geometry is still positioned by the same shared race course data.
+   const firstBend=firstTurnCueTime(race,raceDistance,course,venue,layout);
+   const shotU=firstBend===null?-1:(frame.t-(firstBend-3))/23;
+   const inTurnShot=shotU>0&&shotU<1;
+   const ease01=v=>{const u=Math.max(0,Math.min(1,v));return u*u*(3-2*u);};
+   // From the front to the rearmost horse, then back to the leader.
+   const rearSweep=inTurnShot
+      ?(shotU<.73?ease01(shotU/.73):1-ease01((shotU-.73)/.27)):0;
+   const turnZoom=inTurnShot?Math.sin(Math.PI*shotU)**2:0;
+   const tailX=Math.min(...frame.horses.map(h=>h.x));
+   const gap=Math.min(100,Math.max(0,lead-tailX));
+   const focusX=Math.max(0,lead-gap*rearSweep);
+   const focusS=lengthAtMetres(focusX,raceDistance);
+   const nearest=frame.horses.reduce((a,b)=>
+      Math.abs(b.x-focusX)<Math.abs(a.x-focusX)?b:a,frame.horses[0]);
+   const visible=frame.horses.filter(h=>Math.abs(focusX-h.x)<65);
    const meanLane=visible.length
       ?visible.reduce((sum,h)=>sum+h.lane,0)/visible.length:(entrants-1)/2;
+   const focusLane=meanLane*(1-rearSweep*.65)+nearest.lane*rearSweep*.65;
    const direction=raceCoursePoint(focusS,0,raceDistance,course,venue,layout);
    const insideSign=venue==='kyoto'?-1:1;
    const insideX=insideSign*direction.dz,insideZ=-insideSign*direction.dx;
    const startCenter=raceCoursePoint(focusS,INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5,raceDistance,course,venue,layout);
-   const trackCenter=raceCoursePoint(focusS,INSIDE_MARGIN+meanLane*LANE_WIDTH,raceDistance,course,venue,layout);
+   const trackCenter=raceCoursePoint(focusS,INSIDE_MARGIN+focusLane*LANE_WIDTH,raceDistance,course,venue,layout);
    const focusHeight=raceCourseHeightMetres(-focusS,raceDistance,venue,layout,course);
+   const inFullscreen=!!options.fullscreen;
+   const pullBack=options.fitEntireVideo?1.42:1;
+   // A narrower camera angle is deliberately used when scanning the bend,
+   // without stretching horses on portrait screens.
+   const targetFov=(inFullscreen?(camera.aspect<.8?55:41):44)
+      +(options.fitEntireVideo?11:0)-turnZoom*6;
+   if(Math.abs(camera.fov-targetFov)>.07){
+     camera.fov=targetFov;camera.updateProjectionMatrix();
+   }
+   const introScale=(inFullscreen?.79:1)*pullBack;
+   const followScale=(inFullscreen?.82:1)*pullBack*(1-.24*turnZoom);
    const startCamera=new THREE.Vector3(
-     startCenter.x+direction.dx*(23+entrants*1.12)+insideX*(9+entrants*.5),focusHeight+6.8+entrants*.25,
-     startCenter.z+direction.dz*(23+entrants*1.12)+insideZ*(9+entrants*.5)
+     startCenter.x+direction.dx*(23+entrants*.92)*introScale+
+       insideX*(9+entrants*.40)*introScale,
+     focusHeight+(6.3+entrants*.21)*introScale,
+     startCenter.z+direction.dz*(23+entrants*.92)*introScale+
+       insideZ*(9+entrants*.40)*introScale
    );
    const followCamera=new THREE.Vector3(
-     trackCenter.x+direction.dx*17+insideX*18,focusHeight+7.5,
-     trackCenter.z+direction.dz*17+insideZ*18
+     trackCenter.x+direction.dx*15*followScale+insideX*15*followScale,
+     focusHeight+6.3*followScale,
+     trackCenter.z+direction.dz*15*followScale+insideZ*15*followScale
    );
    const startAim=new THREE.Vector3(
      startCenter.x-direction.dx*1.8,focusHeight+1.80,
      startCenter.z-direction.dz*1.8
    );
    const followAim=new THREE.Vector3(
-     trackCenter.x+direction.dx*2.8,focusHeight+1.75,
-     trackCenter.z+direction.dz*2.8
+     trackCenter.x+direction.dx*1.2,focusHeight+1.75,
+     trackCenter.z+direction.dz*1.2
    );
-   // 0-7s: front diagonal, 7-21s: ease to the race tracking camera.
    const transition=Math.max(0,Math.min(1,(frame.t-7)/14));
-   const ease=transition*transition*(3-2*transition);
+   const ease=ease01(transition);
    const wanted=startCamera.lerp(followCamera,ease);
    const wantedAim=startAim.lerp(followAim,ease);
    // Gentle smoothing prevents abrupt camera shifts during lane changes.
@@ -750,7 +815,9 @@ export async function createThreeView(host){
    viewState={
      camera:{x:camera.position.x,z:camera.position.z},
      target:{x:cameraAim.x,z:cameraAim.z},
-     visibleIds
+     visibleIds,
+     turnShot:inTurnShot,
+     scanProgress:rearSweep
    };
    renderer.render(scene,camera);
  }
@@ -771,5 +838,5 @@ export async function createThreeView(host){
    renderer.dispose();renderer.domElement.remove();
  }
  render(null,null,0);
- return {render,dispose,canvas:renderer.domElement,getViewState:()=>viewState};
+ return {render,resize,dispose,canvas:renderer.domElement,getViewState:()=>viewState};
 }
