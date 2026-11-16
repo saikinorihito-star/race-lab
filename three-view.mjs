@@ -733,16 +733,15 @@ export async function createThreeView(host){
      return t*t*(3-2*t);
    };
    const runners=[...frame.horses].sort((a,b)=>b.x-a.x);
-   const liveModels=models.filter(m=>m.group.visible);
+   // Follow most of the moving field without forcing the very last
+   // stragglers into every shot. Keep a stable 80% of the field in view.
+   const coverageCount=Math.max(2,Math.min(entrants,Math.ceil(entrants*.80)));
    const runnerPoint=h=>{
      const m=models.find(model=>model.id===h.id);
      const p=m?.group.position;
      return p?new THREE.Vector3(p.x,p.y+1.55,p.z):null;
    };
-   const fullPoints=liveModels.map(m=>{
-     const p=m.group.position;
-     return new THREE.Vector3(p.x,p.y+1.55,p.z);
-   });
+   const fullPoints=runners.slice(0,coverageCount).map(runnerPoint).filter(Boolean);
    const midpoint=points=>{
      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,
        minZ=Infinity,maxZ=-Infinity;
@@ -774,13 +773,19 @@ export async function createThreeView(host){
    const frontPoints=frontGroup.map(runnerPoint).filter(Boolean);
    const backPoints=backGroup.map(runnerPoint).filter(Boolean);
    const fullAim=midpoint(fullPoints);
+   // Leave visible track ahead of the front runner. Offset the viewing
+   // target in the direction of travel instead of centering the horses.
+   const leaderS=lengthAtMetres(runners[0].x,raceDistance);
+   const leadDirection=raceCoursePoint(leaderS,0,raceDistance,course,venue,layout);
+   const aheadRoom=options.fitEntireVideo?6.0:8.2; // 3D scene units
+   fullAim.x+=leadDirection.dx*aheadRoom;
+   fullAim.z+=leadDirection.dz*aheadRoom;
    const frontAim=midpoint(frontPoints.length?frontPoints:fullPoints);
    const backAim=midpoint(backPoints.length?backPoints:fullPoints);
    const fit=!!options.fitEntireVideo;
    const isPortrait=camera.aspect<.90;
-   // Wide shot uses a sufficiently broad lens; phone portrait does not
-   // sacrifice the trailing horses in order to magnify the leader.
-   const fov=(isPortrait?56:43)+(fit?6:0);
+   // Keep a practical field of view with a lower, trackside perspective.
+   const fov=(isPortrait?54:43)+(fit?6:0);
    if(Math.abs(camera.fov-fov)>.05){
      camera.fov=fov;
      camera.updateProjectionMatrix();
@@ -790,11 +795,11 @@ export async function createThreeView(host){
      const dir=raceCoursePoint(s,0,raceDistance,course,venue,layout);
      const sign=venue==='kyoto'?-1:1;
      const sideX=sign*dir.dz,sideZ=-sign*dir.dx;
-     // Side-on with a little forward angle makes order and overtaking clear;
-     // high camera elevation exposes inside/outside lanes on the bends.
-     let ox=sideX+dir.dx*(close?.34:.24);
-     let oy=close?.64:.92;
-     let oz=sideZ+dir.dz*(close?.34:.24);
+     // Lower the virtual camera toward the rail compared with the previous
+     // high overhead view. Some forward angle preserves a view of the course.
+     let ox=sideX+dir.dx*(close?.26:.18);
+     let oy=close?.40:.54;
+     let oz=sideZ+dir.dz*(close?.26:.18);
      const norm=Math.hypot(ox,oy,oz)||1;
      ox/=norm;oy/=norm;oz/=norm;
      // Orthonormal camera axes. Positive camera-out vector points from
@@ -822,8 +827,8 @@ export async function createThreeView(host){
        aim
      };
    };
-   // Regular wide coverage is computed using all 2-18 horses at once,
-   // including stragglers. During the insert only, fit the selected subgroup.
+   // Normal coverage is ~80% of runners; the first-corner insert still
+   // shows the leaders and then the rear before returning to this shot.
    const fullMidX=(runners[0].x+runners[runners.length-1].x)*.5;
    const wide=poseFor(fullAim,fullPoints,fullMidX,false);
    const closeFront=poseFor(frontAim,frontPoints.length?frontPoints:fullPoints,frontTarget,true);
@@ -869,7 +874,9 @@ export async function createThreeView(host){
      visibleIds,
      turnShot:insertLevel>.05,
      scanProgress:rearSweep,
-     frameMode:insertLevel>.05?(rearSweep<.5?'先頭アップ':'後方アップ'):'全体像'
+     frameMode:insertLevel>.05?(rearSweep<.5?'先頭アップ':'後方アップ'):'馬群・前方',
+     coverageCount,
+     aheadRoom
    };
    renderer.render(scene,camera);
  }
