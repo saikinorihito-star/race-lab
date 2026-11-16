@@ -4,12 +4,12 @@
 export const GAIT_HZ=2.48;
 export function gallopDynamics(speedNow=16.5,replaySpeed=4){
  const velocity=Math.max(12,Math.min(20,Number(speedNow)||16.5));
- const replay=Math.max(1,Math.min(12,Number(replaySpeed)||4));
+ const replay=Math.max(.5,Math.min(12,Number(replaySpeed)||4));
  const exertion=Math.max(0,Math.min(1,(velocity-12)/8));
  // Animated cadence remains legible even when playback runs at 8x/12x.
  const playbackFactor=Math.sqrt(replay/4);
  return {
-  hz:Math.max(2.0,Math.min(4.8,(2.65+exertion*1.05)*playbackFactor)),
+  hz:Math.max(1.4,Math.min(4.8,(2.65+exertion*1.05)*playbackFactor)),
   stride:1.18+exertion*.28,
   bob:.13+exertion*.045,
   neck:.15+exertion*.055
