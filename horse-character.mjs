@@ -141,6 +141,60 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
    texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=2;
    return texture;
  }
+ // Static pieces within each animated joint are merged by material.
+ // This keeps the detailed face/tack/silks while reducing mobile draw calls.
+ // Hip/knee/neck/head/rider remain independent animated groups.
+ function batchStaticPieces(root){
+   for(const child of root.children.slice()){
+     if(child.isGroup)batchStaticPieces(child);
+   }
+   const byMaterial=new Map();
+   for(const mesh of root.children){
+     if(!mesh.isMesh || Array.isArray(mesh.material))continue;
+     const attrs=Object.keys(mesh.geometry.attributes).sort().join('|');
+     let sets=byMaterial.get(mesh.material);
+     if(!sets){sets=new Map();byMaterial.set(mesh.material,sets);}
+     const meshes=sets.get(attrs)||[];
+     meshes.push(mesh);sets.set(attrs,meshes);
+   }
+   for(const [mat,sets] of byMaterial)for(const [signature,meshes] of sets){
+     if(meshes.length<2)continue;
+     const keys=signature.split('|');
+     const transformed=meshes.map(mesh=>{
+       mesh.updateMatrix();
+       const g=mesh.geometry.clone();
+       g.applyMatrix4(mesh.matrix);
+       return g;
+     });
+     const totalVertices=transformed.reduce((n,g)=>n+g.attributes.position.count,0);
+     const merged=new THREE.BufferGeometry();
+     for(const key of keys){
+       const first=transformed[0].getAttribute(key);
+       const itemSize=first.itemSize;
+       const data=new Float32Array(totalVertices*itemSize);
+       let cursor=0;
+       for(const g of transformed){
+         const attr=g.getAttribute(key);
+         data.set(attr.array,cursor);
+         cursor+=attr.array.length;
+       }
+       merged.setAttribute(key,new THREE.BufferAttribute(data,itemSize,first.normalized));
+     }
+     const indices=[];let offset=0;
+     for(const g of transformed){
+       const index=g.getIndex();
+       if(index)for(const v of index.array)indices.push(v+offset);
+       else for(let n=0;n<g.attributes.position.count;n++)indices.push(n+offset);
+       offset+=g.attributes.position.count;
+     }
+     merged.setIndex(indices);
+     merged.computeBoundingSphere();
+     const combined=new THREE.Mesh(merged,mat);
+     for(const mesh of meshes)root.remove(mesh);
+     root.add(combined);
+     for(const g of transformed)g.dispose();
+   }
+ }
  function build(id){
    const a=getHorseAppearance(id),group=new THREE.Group();scene.add(group);
    const coat=new THREE.MeshPhongMaterial({color:a.coat,shininess:52,specular:0x505050});
@@ -290,6 +344,7 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
      shape(riderPivot,sphere,bootMat,hand,[.114,.095,.103]);
    }
    group.scale.set(.77,.88,.77);
+   batchStaticPieces(group);
    return {id,group,legs,neckPivot,headPivot,riderPivot,tailPivot,
      gaitPhase:0,gaitLastTimestamp:null,gaitRace:null,numberTexture,numberMat,
      uniformMat,silkMat:uniformMat,helmetMat:uniformMat,helmetTrimMat,
