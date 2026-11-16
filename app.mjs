@@ -404,21 +404,44 @@ function renderStats(stats){
   tr.append(horseCell,win,place,avg);body.append(tr);
  }
 }
+// Fullscreen mode keeps the existing custom play/pause, seek and speed controls.
+// iPhone Safari still restricts standard Element.requestFullscreen() for arbitrary
+// div/canvas elements, so the fixed-position immersive player is the reliable
+// fallback. A supported browser additionally enters native fullscreen.
+let videoFullscreen=false;
+function openVideoFullscreen(){
+ if(videoFullscreen)return;
+ videoFullscreen=true;
+ const player=$('race-player');
+ player.classList.add('is-fullscreen');
+ document.body.classList.add('race-fullscreen-open');
+ $('exit-fullscreen').hidden=false;
+ updateVideoTouchControl();
+ if(document.fullscreenEnabled&&typeof player.requestFullscreen==='function'){
+   try{
+     const promise=player.requestFullscreen();
+     promise?.catch?.(()=>{}); // Keep CSS fullscreen if native mode fails.
+   }catch{ /* Immersive CSS mode remains active. */ }
+ }
+}
+function closeVideoFullscreen(){
+ if(!videoFullscreen)return;
+ videoFullscreen=false;
+ $('race-player').classList.remove('is-fullscreen');
+ document.body.classList.remove('race-fullscreen-open');
+ $('exit-fullscreen').hidden=true;
+ updateVideoTouchControl();
+ if(document.fullscreenElement===$('race-player')&&typeof document.exitFullscreen==='function'){
+   try{const promise=document.exitFullscreen();promise?.catch?.(()=>{});}catch{}
+ }
+}
 function updateVideoTouchControl(){
  const button=$('race-touch-control'),prompt=$('race-touch-prompt'),hint=$('race-touch-hint');
- const finished=!!state.race&&state.currentT>=state.race.elapsed;
- const playing=state.playing;
- const action=state.recording?'録画中は操作できません':
-   playing?'一時停止':!state.race?'レース開始':finished?'最初から再生':'再生';
- button.disabled=state.recording;
- button.classList.toggle('playing',playing);
- button.setAttribute('aria-label','レース映像をタップして'+action);
- prompt.textContent=state.recording?'録画中':
-   playing?'Ⅱ 一時停止':!state.race?'▶ レース開始':
-   finished?'↻ 最初から再生':'▶ 再生';
- hint.textContent=playing?'映像をタップで一時停止':
-   !state.race?'映像をタップして開始':
-   finished?'映像をタップして最初から再生':'映像をタップして再開';
+ button.disabled=false;
+ button.classList.toggle('playing',state.playing||videoFullscreen);
+ button.setAttribute('aria-label',videoFullscreen?'全画面表示を終了':'レース映像を全画面表示');
+ prompt.textContent=videoFullscreen?'× 全画面を終了':'⛶ 全画面表示';
+ hint.textContent=videoFullscreen?'映像をタップして戻る':'映像をタップして全画面表示';
 }
 function renderCanvas(){
  // WebGL is opt-in; preserve existing 2D views for low-power and offline use.
@@ -631,9 +654,21 @@ $('toggle-play').addEventListener('click',()=>{
  setPlay(!state.playing);
 });
 $('race-touch-control').addEventListener('click',()=>{
- if(state.recording)return;
- if(!state.race){startSimulation();return;}
- setPlay(!state.playing);
+ if(videoFullscreen)closeVideoFullscreen();
+ else openVideoFullscreen();
+});
+$('exit-fullscreen').addEventListener('click',e=>{
+ e.stopPropagation();
+ closeVideoFullscreen();
+});
+document.addEventListener('fullscreenchange',()=>{
+ if(videoFullscreen&&document.fullscreenEnabled&&
+    document.fullscreenElement!==$('race-player')){
+   closeVideoFullscreen();
+ }
+});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&videoFullscreen)closeVideoFullscreen();
 });
 // Pause while the user drags the timeline, then resume only if the
 // race had been playing beforehand. Input is also keyboard-accessible.
