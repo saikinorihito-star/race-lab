@@ -17,11 +17,11 @@
 <div class="app-shell">
 <header class="topbar">
   <div class="brand"><span class="brand-mark">R<span class="dot">.</span></span><div><strong>RACE LAB</strong><small>競馬レース展開シミュレーター</small></div></div>
-  <span class="beta">DEMO v0.42</span>
+  <span class="beta">DEMO v0.43</span>
 </header>
 <main class="content">
 <div style="padding:12px 16px;margin:0 0 16px;border:1px solid #496a7e;border-radius:11px;background:#172c3c;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-  <div><strong style="font-size:13px">馬と騎手の3Dモデル新作・1頭試作</strong><div style="font-size:11px;color:#a9bacb;margin-top:4px">Design 01モデルを全馬のレース映像に採用。こちらで1頭の造形も確認できます。</div></div>
+  <div><strong style="font-size:13px">馬と騎手の3Dモデル新作・1頭試作</strong><div style="font-size:11px;color:#a9bacb;margin-top:4px">実ファイルのGLBを全18頭のレース映像に読み込みます。読込状況はレース画面上部に表示します。</div></div>
   <a href="./model-preview.html" style="color:#08212c;text-decoration:none;font-size:13px;font-weight:800;border-radius:9px;padding:12px 15px;background:#8be5d3">3D試作を見る</a>
 </div>
   <section class="intro">
@@ -43,6 +43,7 @@
         <p id="course-data" class="course-data" aria-live="polite">東京芝Aコース｜左回り｜1周 2,083.1m｜直線 525.9m｜高低差 2.7m</p><p id="status" class="small-status" role="status" aria-live="polite">開始ボタンを押すと1レースを再生し、1,000回の着順分布を集計します。</p>
       </article>
       <article class="panel visual-panel">
+        <div id="design-glb-status" role="status" style="padding:8px 16px 0;color:#a1ead4;font-size:11px">Design 01：GLB読込待機中</div>
         <div class="panel-head"><h2><span class="step">02</span> レース再生</h2><div class="tiny-toggle"><button data-view="top" aria-pressed="false">上空ビュー</button><button class="active" data-view="three" aria-pressed="true">3Dビュー</button></div></div>
         <section class="race-overview" aria-label="レース全体の位置図">
           <div class="race-overview-head"><strong>全体像 <span class="race-overview-hint" id="overview-course">東京芝A・左回り</span></strong><span id="overview-remaining" class="overview-remaining">スタート前</span></div>
@@ -115,6 +116,12 @@
 </main>
 <footer>RACE LAB / PROTOTYPE — 学習・研究用の架空シミュレーションです。</footer>
 </div>
+<script type="importmap">
+{"imports":{
+ "three":"https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js",
+ "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.185.0/examples/jsm/"
+}}
+</script>
 <script type="module" src="./app.mjs"></script>
 </body>
 </html>
