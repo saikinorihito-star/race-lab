@@ -22,7 +22,7 @@ function restore() {
   } catch {return structuredClone(DEFAULTS);}
 }
 const saved=restore();
-const state={...saved,selected:1,race:null,stats:null,playing:false,recording:false,view:'top',currentT:0,speed:4,lastTick:null,worker:null,seed:20261115};
+const state={...saved,selected:1,race:null,stats:null,playing:false,recording:false,view:'top',currentT:0,speed:4,lastTick:null,worker:null,seed:20261115,focusHorse:0};
 const canvas=$('race-canvas');
 let threeView=null;
 function activeHorses(){return [...state.horses].sort((a,b)=>a.id-b.id).slice(0,state.count);}
@@ -278,7 +278,13 @@ function updateRaceHud(){
   const xy=hudPoint(point);
   const dot=hudMarkers.get(h.id);
   dot.setAttribute('transform','translate('+xy.x.toFixed(2)+' '+xy.y.toFixed(2)+')');
-  dot.setAttribute('opacity',cameraView&&!shown.has(h.id)?'.40':'1');
+  dot.setAttribute('opacity',h.id===state.focusHorse?'1':
+      cameraView&&!shown.has(h.id)?'.40':'1');
+  const icon=dot.firstElementChild;
+  if(icon){
+    icon.setAttribute('stroke',h.id===state.focusHorse?'#fbd865':'#fff');
+    icon.setAttribute('stroke-width',h.id===state.focusHorse?'4':'1.5');
+  }
   dot.setAttribute('aria-label',h.id+'番 '+(state.horses.find(v=>v.id===h.id)?.name||''));
   $('overview-map').append(dot);
  }
@@ -288,7 +294,7 @@ function updateRaceHud(){
    ?'黄色＝3Dカメラ　明るい点＝映像内　薄い点＝映像外'
    :'点は馬の実位置（映像は別の視点）';
  const nameKey=activeHorses().map(h=>h.id+':'+h.name).join('|');
- const rankKey=(state.race?'race:':'before:')+ranked.map(h=>h.id).join(',')+'|'+nameKey;
+ const rankKey=(state.race?'race:':'before:')+ranked.map(h=>h.id).join(',')+'|'+nameKey+'|focus:'+state.focusHorse;
  if(rankKey===hudRankKey)return;
  hudRankKey=rankKey;
  const columns=$('race-standings-list').children;
@@ -297,6 +303,7 @@ function updateRaceHud(){
   entry.place.textContent=String(i+1);
   entry.name.textContent=state.horses.find(item=>item.id===h.id)?.name||'馬番'+h.id;
   entry.row.classList.toggle('leader',!!state.race&&i<3);
+  entry.row.classList.toggle('focused',h.id===state.focusHorse);
   columns[i<Math.ceil(state.count/2)?0:1].append(entry.row);
  }
 }
@@ -342,6 +349,21 @@ function resetHud(){
  $('overview-map').replaceChildren();$('race-standings-list').replaceChildren();
  $('elevation-chart').replaceChildren();
 }
+function refreshFocusHorseSelect(){
+ const select=$('focus-horse');
+ if(state.focusHorse>state.count)state.focusHorse=0;
+ select.replaceChildren();
+ const general=document.createElement('option');
+ general.value='0';general.textContent='全体カメラ';
+ select.append(general);
+ for(const horse of activeHorses()){
+   const item=document.createElement('option');
+   item.value=String(horse.id);
+   item.textContent=horse.id+'番 '+horse.name;
+   select.append(item);
+ }
+ select.value=String(state.focusHorse);
+}
 function renderPicker(){
  picker.replaceChildren();
  for(const h of activeHorses()){
@@ -354,6 +376,7 @@ function renderPicker(){
   picker.append(button);
  }
  $('field-count-label').textContent=`出走 ${state.count}頭`;
+ refreshFocusHorseSelect();
 }
 function renderEditor(){
  const h=currentHorse();if(!h)return;
@@ -481,7 +504,8 @@ function updateVideoTouchControl(){
 }
 function renderCanvas(){
  // WebGL is opt-in; preserve existing 2D views for low-power and offline use.
- if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT,{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance,replaySpeed:state.speed,fullscreen:videoFullscreen,fitEntireVideo});
+ if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT,{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance,replaySpeed:state.speed,fullscreen:videoFullscreen,fitEntireVideo,
+     focusHorse:state.focusHorse});
  else renderFrame(canvas,state.race,activeHorses(),state.currentT,'top',{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance});
  const end=state.race?.elapsed||0;
  const seek=$('seek');
@@ -501,6 +525,20 @@ function renderCanvas(){
  const liveFrame=state.race?.frames?.length
    ?interpolateRaceFrame(state.race.frames,state.currentT):null;
  const liveLead=liveFrame?Math.max(...liveFrame.horses.map(h=>h.x)):0;
+ const followed=state.focusHorse?activeHorses().find(h=>h.id===state.focusHorse):null;
+ if(followed){
+   const raceRunner=liveFrame?.horses.find(h=>h.id===followed.id);
+   const ranking=raceRunner?
+      [...liveFrame.horses].sort((a,b)=>b.x-a.x||a.id-b.id)
+        .findIndex(h=>h.id===followed.id)+1:0;
+   const nowSpeed=raceRunner&&Number.isFinite(raceRunner.speedNow)?
+     '・速度 '+(raceRunner.speedNow*3.6).toFixed(1)+' km/h':'';
+   $('focus-info').textContent=followed.id+'番 '+followed.name+
+     '｜速 '+followed.speed+'・持 '+followed.stamina+'・末 '+followed.kick+
+     (ranking?'｜'+ranking+'位'+nowSpeed:'');
+ }else{
+   $('focus-info').textContent='注目馬を選ぶと3D映像で馬名を固定表示し、能力と現在速度を確認できます。';
+ }
  updateElevationProgress(liveLead,state.race?.distance||state.distance);
  updateVideoTouchControl();
  updateRaceHud();
@@ -770,6 +808,12 @@ function jumpPlayback(seconds){
 }
 $('jump-back').addEventListener('click',()=>jumpPlayback(-10));
 $('jump-forward').addEventListener('click',()=>jumpPlayback(10));
+$('focus-horse').addEventListener('change',e=>{
+ const value=Number(e.target.value)||0;
+ state.focusHorse=value>=1&&value<=state.count?value:0;
+ hudLastPaint=0;
+ renderCanvas();
+});
 $('speed').addEventListener('change',e=>state.speed=Number(e.target.value));
 $('save-video').addEventListener('click',exportVideo);
 // Load 3D by default; use overhead course view as the offline fallback.
