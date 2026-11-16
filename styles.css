@@ -538,3 +538,10 @@ body.race-fullscreen-open .visual-panel{overflow:visible}
   .focus-controls select{width:min(175px,57vw)}
   .focus-info{flex-basis:100%;font-size:10px}
 }
+
+/* Selected runner is identifiable in both the race overview and rankings. */
+.race-entry.focused{
+  border-radius:7px;
+  background:rgba(251,216,101,.15);
+  box-shadow:inset 3px 0 #fbd865;
+}
