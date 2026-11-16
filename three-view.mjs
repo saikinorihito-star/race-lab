@@ -3,6 +3,7 @@ import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 import {gallopCycle,gallopLegPose,gallopDynamics} from './gait.mjs';
 import {makeDesign01Builder} from './design01-race.mjs';
+import {loadDesign01GLB,updateDesign01GLBAppearance} from './design01-loader.mjs';
 import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,getTurfProfile,furlongMarkerPositions,courseHeightMetres,courseSlope,raceCoursePoint,startPocket,raceCourseHeightMetres,raceCourseSlope} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
@@ -366,7 +367,9 @@ export async function createThreeView(host){
  // Refresh only the appearance-specific materials when the field size changes.
  // Unused models stay hidden rather than remaining at their previous position.
  function setFieldAppearance(model,count){
-   horseBuilder.updateAppearance(model,count);
+   if(model.nativeDesign01){
+     updateDesign01GLBAppearance(THREE,model,getHorseAppearance(model.id,count),count);
+   }else horseBuilder.updateAppearance(model,count);
  }
   const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i}));
  let disposed=false;
@@ -497,6 +500,11 @@ export async function createThreeView(host){
      model.group.rotation.z=-.019+Math.sin(theta+.32)*.075+
        Math.max(-.12,Math.min(.12,grade*2.2));
      model.group.rotation.x=Math.sin(theta*.5+model.id)*.007;
+     if(model.nativeDesign01 && model.assetMixer){
+       // GLB contains 13 native animation tracks: four hip/knee pairs,
+       // neck, head, tail, rider and the vertical body movement.
+       model.assetMixer.update(deltaTime*Math.max(.55,dynamics.hz/1.25));
+     }else{
      for(const leg of model.legs){
        const pose=gallopLegPose(leg.front,leg.side,cycle,dynamics.stride);
        // The front legs reach forward; rear legs actively kick backward.
@@ -513,6 +521,7 @@ export async function createThreeView(host){
      model.tailPivot.rotation.y=Math.sin(theta+.34)*.135;
      model.riderPivot.rotation.z=-.018-Math.sin(theta+.56)*.030;
      model.riderPivot.position.y=(model.riderRestY??1.94)-Math.max(0,Math.sin(theta+.85))*.026;
+     }
      model.shadow.position.x=model.group.position.x;
      model.shadow.position.z=model.group.position.z;
      model.shadow.position.y=trackHeight+.023;
@@ -712,5 +721,12 @@ export async function createThreeView(host){
    renderer.dispose();renderer.domElement.remove();
  }
  render(null,null,0);
+ loadDesign01GLB(THREE,models,getHorseAppearance).then(()=>{
+   if(!disposed)renderer.render(scene,camera);
+ }).catch(error=>{
+   console.error('Design01 GLB load error; fallback kept',error);
+   const elem=document.getElementById('design-glb-status');
+   if(elem){elem.textContent='GLB読込失敗：簡易3Dで表示中';elem.style.color='#ffc6a3';}
+ });
  return {render,resize,dispose,canvas:renderer.domElement,getViewState:()=>viewState};
 }
