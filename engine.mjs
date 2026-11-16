@@ -110,16 +110,26 @@ export function runRace(horses, options = {}) {
       const paceEarly=scenario==='high'?.41:scenario==='low'?-.43:0;
       const paceLate=scenario==='high'?-.36:scenario==='low'?.22:0;
       const energyCost=scenario==='high'?.13:scenario==='low'?-.07:0;
-      const fatigue=late*(Math.max(0,70-Number(h.stamina))*.004+
+      // All three editor ratings have separate, observable effects on every
+      // race. Speed acts throughout, stamina sustains late pace, and kick
+      // increases acceleration predominantly in the final third.
+      // Coefficients are game-balancing values, not fitted to JRA results.
+      const speedAbility=Number(h.speed)-70;
+      const staminaAbility=Number(h.stamina)-70;
+      const kickAbility=Number(h.kick)-70;
+      const staminaPhase=clamp((p-.30)/.70,0,1);
+      const finishPhase=clamp((p-.67)/.33,0,1);
+      const finishBurst=finishPhase*finishPhase*(3-2*finishPhase);
+      const staminaSupport=staminaAbility*.016*staminaPhase;
+      const kickBurst=kickAbility*.030*finishBurst;
+      const fatigue=late*(Math.max(0,72-Number(h.stamina))*.007+
         energyCost*(.35+Math.max(0,styleEarly)));
-      const exertion=late*((Number(h.stamina)-70)*.008+(Number(h.kick)-70)*.015);
-      const dynamic=.105*Math.sin(t/8+h.sway)+.055*Math.sin(t/3.7+h.sway*1.8);
-      // Speed is a synthetic parameter, not a real-world stride-to-velocity model.
-      // At Kyoto this switches between the inner and outer home-straight lengths.
+      const dynamic=.083*Math.sin(t/8+h.sway)+.042*Math.sin(t/3.7+h.sway*1.8);
+      // At Kyoto this switches between inner and outer home-straight lengths.
       const onHomeStretch=distance-h.x<=profile.straight;
-      let desiredSpeed=16.52+(Number(h.speed)-70)*.009+h.form+
+      let desiredSpeed=16.52+speedAbility*.021+h.form+
         styleEarly*early+styleLate*late+paceEarly*early+paceLate*late+
-        exertion-fatigue+dynamic;
+        staminaSupport+kickBurst-fatigue+dynamic;
 
       // Re-evaluate the racing line every ~1 second, or sooner when trapped.
       const current=corridor(snapshot,h,h.lane);
@@ -142,15 +152,17 @@ export function runRace(horses, options = {}) {
           // Before the last straight, minimize traveled distance along the inner rail.
           // Allow an outer pass only if the traffic benefit outweighs a strong cost.
           const onFinalStraight=onHomeStretch;
-          const inside=target*(onFinalStraight?.13:2.0)
-            +Math.max(0,target-3)*(onFinalStraight?0:1.0);
-          const ahead=space.forward<9?(9-space.forward)*.30:0;
-          const close=space.forward<3.6?1.15:0;
+          // A blocked fast horse must be able to seek clear running
+          // instead of being held behind slower rivals by a rail bias.
+          const inside=target*(onFinalStraight?.10:.70)
+            +Math.max(0,target-3)*(onFinalStraight?0:.16);
+          const ahead=space.forward<12?(12-space.forward)*.58:0;
+          const close=space.forward<3.6?1.9:0;
           const unsafe=alongside?8:0;
           const rear=space.rear<1.8?.7:0;
           const change=Math.abs(target-h.lane)*.14;
           const hold=Math.abs(target-h.targetLane)*.05;
-          const outerDetour=target>base&&!onFinalStraight?3.0:0;
+          const outerDetour=target>base&&!onFinalStraight?.75:0;
           const cost=inside+ahead+close+unsafe+rear+change+hold+outerDetour;
           if(cost<bestCost-1e-6 || (Math.abs(cost-bestCost)<1e-6&&target<best)){
             best=target;bestCost=cost;
@@ -180,16 +192,16 @@ export function runRace(horses, options = {}) {
       }
       // An outside path is slightly longer, particularly around bends.
       // The wide route costs more until the final straight, where horses can spread.
-      desiredSpeed-=Math.min(10,h.lane)*(onHomeStretch?.006:.070);
+      desiredSpeed-=Math.min(10,h.lane)*(onHomeStretch?.004:.025);
       // Schematic gradient effect, NOT fitted to historic finishing times:
       // Tokyo rises in the home straight; Kyoto climbs before turn 3 and
       // descends toward turn 4. The coefficient is illustrative, not official.
       desiredSpeed-=raceCourseSlope(distance-h.x,distance,venue,layout,course)*6.0;
       // Outer starters briefly tuck behind an inside runner before cutting over.
       const breakIn=clamp(1-Math.max(0,h.x)/120,0,1);
-      desiredSpeed-=h.lane*.22*breakIn;
+      desiredSpeed-=h.lane*.035*breakIn;
       // An even break keeps the field side-by-side for the opening moments.
-      if(t<3)desiredSpeed=16.4+(Number(h.speed)-70)*.002;
+      if(t<3)desiredSpeed=16.4+speedAbility*.017;
       desiredSpeed=clamp(desiredSpeed,12.1,19.6);
       const accel=clamp(desiredSpeed-h.speedNow,-.37,.37);
       const velocity=h.speedNow>10?clamp(h.speedNow+accel,12.1,19.6):desiredSpeed;
