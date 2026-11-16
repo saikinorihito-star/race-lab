@@ -409,11 +409,23 @@ function renderStats(stats){
 // div/canvas elements, so the fixed-position immersive player is the reliable
 // fallback. A supported browser additionally enters native fullscreen.
 let videoFullscreen=false;
+let fitEntireVideo=false;
+function updateVideoFitMode(){
+ const player=$('race-player'),button=$('video-fit-toggle');
+ player.classList.toggle('fit-entire',fitEntireVideo);
+ button.hidden=!videoFullscreen;
+ button.textContent=fitEntireVideo?'大きく表示':'全体を見る';
+ button.setAttribute('aria-pressed',String(fitEntireVideo));
+ button.setAttribute('aria-label',fitEntireVideo?
+   '映像を画面いっぱいに拡大する':'映像全体が見える表示に切り替える');
+}
 function openVideoFullscreen(){
  if(videoFullscreen)return;
  videoFullscreen=true;
+ fitEntireVideo=false; // Enter in enlarged/cropped mode by default.
  const player=$('race-player');
  player.classList.add('is-fullscreen');
+ updateVideoFitMode();
  document.body.classList.add('race-fullscreen-open');
  $('exit-fullscreen').hidden=false;
  updateVideoTouchControl();
@@ -427,7 +439,9 @@ function openVideoFullscreen(){
 function closeVideoFullscreen(){
  if(!videoFullscreen)return;
  videoFullscreen=false;
+ fitEntireVideo=false;
  $('race-player').classList.remove('is-fullscreen');
+ updateVideoFitMode();
  document.body.classList.remove('race-fullscreen-open');
  $('exit-fullscreen').hidden=true;
  updateVideoTouchControl();
@@ -660,6 +674,12 @@ $('race-touch-control').addEventListener('click',()=>{
 $('exit-fullscreen').addEventListener('click',e=>{
  e.stopPropagation();
  closeVideoFullscreen();
+});
+$('video-fit-toggle').addEventListener('click',e=>{
+ e.stopPropagation();
+ if(!videoFullscreen)return;
+ fitEntireVideo=!fitEntireVideo;
+ updateVideoFitMode();
 });
 document.addEventListener('fullscreenchange',()=>{
  if(videoFullscreen&&document.fullscreenEnabled&&
