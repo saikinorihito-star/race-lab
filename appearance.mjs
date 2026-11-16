@@ -48,7 +48,8 @@ export function getHorseAppearance(id,fieldSize=18){
   // This is not an official representation of an owner's registered racing silks.
   silk:helmet,
   silkAccent:helmet, // Jacket/sleeve stripes match the helmet exactly.
-  saddleBase:'#20314c',saddleBorder:helmet,
+  // Consistent royal-blue saddlecloth and white trim from selected style 1.
+  saddleBase:'#1749ad',saddleBorder:'#f8faff',
   numberColor:'#ffffff',outline:'#27201d',leather:'#29201d',
   helmetNumberColor:darkText(helmet)?'#172331':'#ffffff'
  });
