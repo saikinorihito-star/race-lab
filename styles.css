@@ -202,6 +202,7 @@
    Native requestFullscreen is used in capable browsers. */
 .race-player{width:100%;min-width:0}
 body.race-fullscreen-open{overflow:hidden;overscroll-behavior:none}
+body.race-fullscreen-open .visual-panel{overflow:visible}
 .race-player.is-fullscreen,
 .race-player:fullscreen{
   position:fixed;inset:0;
