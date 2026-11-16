@@ -361,12 +361,11 @@ export async function createThreeView(host){
    const bodyMat=material(appearance.coat);
    const muzzleMat=material(new THREE.Color(appearance.coat).multiplyScalar(1.14));
    const mane=maneMats[(id-1)%maneMats.length];
-   // The simulation intentionally paints jacket and cap with the same
-   // frame color, unaffected by different lighting models.
-   const silk=new THREE.MeshBasicMaterial({color:appearance.silk});
-   // Basic (unlit) material keeps frame-cap colors vivid even in dark
-   // shadow or under a low camera angle.
-   const helmetMat=new THREE.MeshBasicMaterial({color:appearance.helmet});
+   // The helmet, jacket and sleeves SHARE one material instance, so their
+   // rendered pixels are identically colored in every field-size configuration.
+   // Do not use different lighting or independent material color state.
+   const uniformMat=new THREE.MeshBasicMaterial({color:appearance.helmet});
+   const silk=uniformMat,helmetMat=uniformMat;
    const helmetTrimMat=new THREE.MeshBasicMaterial({color:appearance.helmetNumberColor});
    // Short, round body and a broad chest.
    outlinedBall(group,bodyMat,-.08,1.25,0,1.18,.65,.64);
@@ -466,24 +465,22 @@ export async function createThreeView(host){
      part(riderPivot,sphere,boots,boot[0]+.03,boot[1]-.015,boot[2],.21,.085,.125);
    }
    // Chest leans forwards naturally from the pelvis toward the horse's neck.
-   const chest=part(riderPivot,sphere,silk,.19,.27,0,.32,.41,.29);
+   // A larger, uninterrupted color panel prevents the white breeches
+   // and dark gloves from making the uniform look different from the cap.
+   const chest=part(riderPivot,sphere,uniformMat,.19,.31,0,.365,.435,.325);
    chest.rotation.z=-.62;
-   const uniformAccent=new THREE.MeshBasicMaterial({color:appearance.silkAccent});
-   // Narrow sleeve stripes are also the same frame color as the jacket.
+   const uniformAccent=uniformMat;
    for(const side of [-1,1]){
-     const flash=part(riderPivot,sphere,uniformAccent,.24,.33,side*.27,.19,.075,.04);
+     const flash=part(riderPivot,sphere,uniformMat,.24,.33,side*.292,.25,.115,.062);
      flash.rotation.z=-.62;
    }
    part(riderPivot,sphere,skin,.51,.73,0,.235,.25,.235);
-   // High-contrast outline behind the frame-color dome, both left and right.
-   // White caps get a dark border, black/red/blue caps get a white border.
-   part(riderPivot,sphere,helmetTrimMat,.52,.977,0,.362,.203,.359);
-   part(riderPivot,sphere,helmetMat,.52,1.002,0,.335,.177,.333);
-   // Bordered peak: visible even when the cap itself is black or white.
-   part(riderPivot,sphere,helmetTrimMat,.691,.878,-.05,.288,.073,.294);
-   part(riderPivot,sphere,helmetMat,.691,.892,-.05,.267,.056,.266);
-   // A narrow, contrasting center stripe makes the helmet silhouette crisp.
-   part(riderPivot,sphere,helmetTrimMat,.535,1.165,0,.032,.027,.305);
+   // The colored dome occupies almost the whole cap. Only a thin contrasting
+   // edge remains; the trim must never be mistaken for the helmet color.
+   part(riderPivot,sphere,helmetTrimMat,.52,.976,0,.352,.191,.348);
+   part(riderPivot,sphere,uniformMat,.52,1.004,0,.346,.183,.342);
+   part(riderPivot,sphere,helmetTrimMat,.688,.879,-.05,.276,.063,.279);
+   part(riderPivot,sphere,uniformMat,.688,.895,-.05,.268,.055,.273);
    // Slim riding goggles and a downward-looking face.
    part(riderPivot,sphere,hoofMat,.71,.78,-.16,.20,.057,.09);
    // Shoulders and elbows bend down towards both reins, with hands well forward.
@@ -500,7 +497,8 @@ export async function createThreeView(host){
    group.scale.set(.77,.88,.77);
    return {group,legs,neckPivot,headPivot,riderPivot,tailPivot,id,
      gaitPhase:0,gaitLastTimestamp:null,gaitRace:null,
-     numberTexture,numberMat,silkMat:silk,helmetMat,helmetTrimMat,accentMat:uniformAccent,appearanceCount:18};
+     numberTexture,numberMat,uniformMat,silkMat:silk,helmetMat,helmetTrimMat,
+     accentMat:uniformAccent,appearanceCount:18};
  }
  const models=Array.from({length:18},(_,i)=>horseModel(i+1));
  // Subtle floor shadows provide a clear takeoff/landing cue.
@@ -551,10 +549,10 @@ export async function createThreeView(host){
  function setFieldAppearance(model,count){
    if(model.appearanceCount===count)return;
    const colors=getHorseAppearance(model.id,count);
-   model.silkMat.color.set(colors.silk);
-   model.helmetMat.color.set(colors.helmet);
+   // One update colors the helmet, jacket AND sleeves because all share
+   // the same Three.js material object.
+   model.uniformMat.color.set(colors.helmet);
    model.helmetTrimMat.color.set(colors.helmetNumberColor);
-   model.accentMat.color.set(colors.silkAccent);
    const oldTex=model.numberTexture;
    const nextTex=raceNumberTexture(model.id,colors);
    model.numberMat.map=nextTex;model.numberMat.needsUpdate=true;
