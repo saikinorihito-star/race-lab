@@ -1,0 +1,44 @@
+name: Build Design 01 GLB asset
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/build_design01.py'
+      - '.github/workflows/build-design01.yml'
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install 3D model dependencies
+        run: pip install numpy trimesh pillow scipy
+      - name: Build animated GLB
+        run: python scripts/build_design01.py
+      - name: Verify GLB asset
+        run: |
+          python - <<'PY'
+          import json,struct,pathlib
+          p=pathlib.Path("assets/Design01_animated.glb")
+          b=p.read_bytes()
+          assert b[:4]==b"glTF" and len(b)>10000
+          n=struct.unpack_from("<I",b,12)[0]
+          meta=json.loads(b[20:20+n].decode("utf-8"))
+          assert len(meta.get("meshes",[]))>10
+          assert len(meta.get("animations",[]))>=1
+          print("GLB verified",len(b),"bytes",len(meta["meshes"]),"meshes")
+          PY
+      - name: Publish generated model
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/Design01_animated.glb
+          if ! git diff --cached --quiet; then
+            git commit -m "Build animated Design 01 GLB model"
+            git push
+          fi
