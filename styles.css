@@ -504,3 +504,10 @@ body.race-fullscreen-open .visual-panel{overflow:visible}
   .race-player.is-fullscreen .playback #seek,
   .race-player:fullscreen .playback #seek{height:32px!important}
 }
+
+/* v0.33: broadcaster-clean fullscreen. No playback state bubble sits on
+   top of the horses; the transport toggle contains play/pause controls. */
+.race-player.is-fullscreen .canvas-label,
+.race-player:fullscreen .canvas-label{
+  display:none!important
+}
