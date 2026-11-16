@@ -410,6 +410,22 @@ function renderStats(stats){
 // fallback. A supported browser additionally enters native fullscreen.
 let videoFullscreen=false;
 let fitEntireVideo=false;
+let transportOpen=false;
+function updateTransportPanel(){
+ const player=$('race-player'),toggle=$('transport-toggle');
+ player.classList.toggle('controls-open',videoFullscreen&&transportOpen);
+ toggle.hidden=!videoFullscreen;
+ toggle.setAttribute('aria-expanded',String(videoFullscreen&&transportOpen));
+ toggle.textContent=transportOpen?'× 操作を閉じる':'▶ 操作';
+}
+function refreshFullscreenVideo(){
+ // WebGL needs a new pixel buffer and projection after the host becomes tall
+ // or the phone rotates; CSS-only scaling stretched the previous 16:9 frame.
+ requestAnimationFrame(()=>{
+   threeView?.resize?.();
+   renderCanvas();
+ });
+}
 function updateVideoFitMode(){
  const player=$('race-player'),button=$('video-fit-toggle');
  player.classList.toggle('fit-entire',fitEntireVideo);
@@ -422,13 +438,16 @@ function updateVideoFitMode(){
 function openVideoFullscreen(){
  if(videoFullscreen)return;
  videoFullscreen=true;
- fitEntireVideo=false; // Enter in enlarged/cropped mode by default.
+ fitEntireVideo=false;
+ transportOpen=false; // Keep controls off the picture until explicitly requested.
+ updateTransportPanel();
  const player=$('race-player');
  player.classList.add('is-fullscreen');
  updateVideoFitMode();
  document.body.classList.add('race-fullscreen-open');
  $('exit-fullscreen').hidden=false;
  updateVideoTouchControl();
+ refreshFullscreenVideo();
  if(document.fullscreenEnabled&&typeof player.requestFullscreen==='function'){
    try{
      const promise=player.requestFullscreen();
@@ -440,11 +459,14 @@ function closeVideoFullscreen(){
  if(!videoFullscreen)return;
  videoFullscreen=false;
  fitEntireVideo=false;
+ transportOpen=false;
  $('race-player').classList.remove('is-fullscreen');
+ updateTransportPanel();
  updateVideoFitMode();
  document.body.classList.remove('race-fullscreen-open');
  $('exit-fullscreen').hidden=true;
  updateVideoTouchControl();
+ refreshFullscreenVideo();
  if(document.fullscreenElement===$('race-player')&&typeof document.exitFullscreen==='function'){
    try{const promise=document.exitFullscreen();promise?.catch?.(()=>{});}catch{}
  }
@@ -453,13 +475,13 @@ function updateVideoTouchControl(){
  const button=$('race-touch-control'),prompt=$('race-touch-prompt'),hint=$('race-touch-hint');
  button.disabled=false;
  button.classList.toggle('playing',state.playing||videoFullscreen);
- button.setAttribute('aria-label',videoFullscreen?'全画面表示を終了':'レース映像を全画面表示');
- prompt.textContent=videoFullscreen?'× 全画面を終了':'⛶ 全画面表示';
- hint.textContent=videoFullscreen?'映像をタップして戻る':'映像をタップして全画面表示';
+ button.setAttribute('aria-label',videoFullscreen?'再生操作の表示・非表示を切り替える':'レース映像を全画面表示');
+ prompt.textContent=videoFullscreen?'▶ 操作':'⛶ 全画面表示';
+ hint.textContent=videoFullscreen?'映像をタップして再生操作':'映像をタップして全画面表示';
 }
 function renderCanvas(){
  // WebGL is opt-in; preserve existing 2D views for low-power and offline use.
- if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT,{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance,replaySpeed:state.speed});
+ if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT,{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance,replaySpeed:state.speed,fullscreen:videoFullscreen,fitEntireVideo});
  else renderFrame(canvas,state.race,activeHorses(),state.currentT,'top',{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance});
  const end=state.race?.elapsed||0;
  const seek=$('seek');
@@ -668,8 +690,16 @@ $('toggle-play').addEventListener('click',()=>{
  setPlay(!state.playing);
 });
 $('race-touch-control').addEventListener('click',()=>{
- if(videoFullscreen)closeVideoFullscreen();
- else openVideoFullscreen();
+ if(videoFullscreen){
+   transportOpen=!transportOpen;
+   updateTransportPanel();
+ }else openVideoFullscreen();
+});
+$('transport-toggle').addEventListener('click',e=>{
+ e.stopPropagation();
+ if(!videoFullscreen)return;
+ transportOpen=!transportOpen;
+ updateTransportPanel();
 });
 $('exit-fullscreen').addEventListener('click',e=>{
  e.stopPropagation();
@@ -680,12 +710,20 @@ $('video-fit-toggle').addEventListener('click',e=>{
  if(!videoFullscreen)return;
  fitEntireVideo=!fitEntireVideo;
  updateVideoFitMode();
+ if(threeView)renderCanvas();
 });
 document.addEventListener('fullscreenchange',()=>{
  if(videoFullscreen&&document.fullscreenEnabled&&
     document.fullscreenElement!==$('race-player')){
    closeVideoFullscreen();
  }
+ refreshFullscreenVideo();
+});
+window.addEventListener('resize',()=>{
+ if(videoFullscreen)refreshFullscreenVideo();
+});
+window.addEventListener('orientationchange',()=>{
+ if(videoFullscreen)refreshFullscreenVideo();
 });
 document.addEventListener('keydown',e=>{
  if(e.key==='Escape'&&videoFullscreen)closeVideoFullscreen();
