@@ -425,8 +425,16 @@ function renderCanvas(){
  if(state.view==='three' && threeView)threeView.render(state.race,activeHorses(),state.currentT,{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance,replaySpeed:state.speed});
  else renderFrame(canvas,state.race,activeHorses(),state.currentT,'top',{venue:state.venue,layout:state.layout,course:state.course,distance:state.distance});
  const end=state.race?.elapsed||0;
- $('seek').value=end?String(Math.min(100,100*state.currentT/end)):'0';
+ const seek=$('seek');
+ const progress=end?Math.round(1000*Math.max(0,Math.min(1,state.currentT/end))):0;
+ seek.value=String(progress);
+ seek.style.setProperty('--seek-progress',(progress/10).toFixed(1)+'%');
+ const controlsLocked=!state.race||state.recording;
+ seek.disabled=controlsLocked;
+ $('jump-back').disabled=controlsLocked;
+ $('jump-forward').disabled=controlsLocked;
  const duration=(s)=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+ seek.setAttribute('aria-valuetext',duration(state.currentT)+' / '+duration(end));
  $('play-time').textContent=`${duration(state.currentT)} / ${duration(end)}`;
  $('canvas-label').textContent=state.race ? state.currentT>=end?'ゴール':state.playing?'再生中':'一時停止中':'スタート前';
  // The elevation marker moves every rendered frame, not only on the
@@ -627,7 +635,48 @@ $('race-touch-control').addEventListener('click',()=>{
  if(!state.race){startSimulation();return;}
  setPlay(!state.playing);
 });
-$('seek').addEventListener('input',e=>{if(!state.race||state.recording)return;state.currentT=state.race.elapsed*Number(e.target.value)/100;state.lastTick=null;renderCanvas()});
+// Pause while the user drags the timeline, then resume only if the
+// race had been playing beforehand. Input is also keyboard-accessible.
+let scrubbing=false,resumeAfterSeek=false;
+const seek=$('seek');
+seek.addEventListener('pointerdown',()=>{
+ if(!state.race||state.recording)return;
+ scrubbing=true;resumeAfterSeek=state.playing;
+ if(state.playing)setPlay(false);
+});
+seek.addEventListener('input',e=>{
+ if(!state.race||state.recording)return;
+ const newValue=Math.max(0,Math.min(1000,Number(e.target.value)||0));
+ if(!scrubbing){
+   scrubbing=true;resumeAfterSeek=state.playing;
+   if(state.playing)setPlay(false);
+ }
+ state.currentT=state.race.elapsed*newValue/1000;
+ state.lastTick=null;
+ renderCanvas();
+});
+seek.addEventListener('change',()=>{
+ if(!state.race||state.recording)return;
+ const shouldResume=resumeAfterSeek&&scrubbing&&state.currentT<state.race.elapsed;
+ scrubbing=false;resumeAfterSeek=false;
+ if(shouldResume)setPlay(true);
+ else renderCanvas();
+});
+seek.addEventListener('pointercancel',()=>{
+ if(!scrubbing)return;
+ const shouldResume=resumeAfterSeek&&state.race&&!state.recording;
+ scrubbing=false;resumeAfterSeek=false;
+ if(shouldResume)setPlay(true);
+});
+function jumpPlayback(seconds){
+ if(!state.race||state.recording)return;
+ state.currentT=Math.max(0,Math.min(state.race.elapsed,state.currentT+seconds));
+ state.lastTick=null;
+ if(state.playing&&state.currentT>=state.race.elapsed)setPlay(false);
+ else renderCanvas();
+}
+$('jump-back').addEventListener('click',()=>jumpPlayback(-10));
+$('jump-forward').addEventListener('click',()=>jumpPlayback(10));
 $('speed').addEventListener('change',e=>state.speed=Number(e.target.value));
 $('save-video').addEventListener('click',exportVideo);
 // Load 3D by default; use overhead course view as the offline fallback.
