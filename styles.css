@@ -280,3 +280,101 @@ body.race-fullscreen-open .visual-panel{overflow:visible}
   .race-player.is-fullscreen .playback,
   .race-player:fullscreen .playback{width:100%;padding:12px 13px 15px}
 }
+
+
+/* v0.31: fullscreen picture actually occupies the available screen.
+   Keep the fixed-size 16:9 drawing buffer and use object-fit:cover to enlarge
+   it without stretching horses. Portrait crops left/right by design; the
+   '全体を見る' control switches to letterboxed contain mode on demand. */
+.race-player.is-fullscreen,
+.race-player:fullscreen{
+  align-items:stretch;
+  justify-content:stretch;
+}
+.race-player.is-fullscreen .canvas-wrap,
+.race-player:fullscreen .canvas-wrap{
+  flex:1 1 auto;
+  min-height:0;
+  max-height:none;
+  width:100%;
+  height:auto;
+  aspect-ratio:auto;
+  margin:0;
+  background:#05080e;
+  overflow:hidden;
+}
+.race-player.is-fullscreen #race-canvas,
+.race-player:fullscreen #race-canvas,
+.race-player.is-fullscreen .three-canvas,
+.race-player:fullscreen .three-canvas{
+  display:block;
+  width:100%;
+  height:100%;
+  max-width:none;
+  max-height:none;
+  aspect-ratio:auto;
+  object-fit:cover;
+  object-position:center center;
+  background:#05080e;
+}
+.race-player.is-fullscreen .three-host,
+.race-player:fullscreen .three-host{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+}
+.race-player.is-fullscreen.fit-entire #race-canvas,
+.race-player:fullscreen.fit-entire #race-canvas,
+.race-player.is-fullscreen.fit-entire .three-canvas,
+.race-player:fullscreen.fit-entire .three-canvas{
+  object-fit:contain;
+}
+.race-player.is-fullscreen .playback,
+.race-player:fullscreen .playback{
+  flex:0 0 auto;
+  width:100%;
+  max-width:none;
+  margin:0;
+  border-radius:0;
+}
+.video-fit-toggle{
+  display:none;
+  position:fixed;
+  z-index:10030;
+  top:calc(env(safe-area-inset-top) + 10px);
+  left:calc(env(safe-area-inset-left) + 12px);
+  min-width:89px;
+  min-height:44px;
+  border:1px solid rgba(255,255,255,.76);
+  border-radius:10px;
+  padding:9px 12px;
+  background:rgba(6,24,33,.92);
+  color:#fff;
+  font-size:12px;
+  font-weight:800;
+  box-shadow:0 5px 15px rgba(0,0,0,.5);
+  touch-action:manipulation;
+  cursor:pointer
+}
+.race-player.is-fullscreen .video-fit-toggle:not([hidden]),
+.race-player:fullscreen .video-fit-toggle:not([hidden]){display:block}
+.video-fit-toggle[hidden]{display:none!important}
+@media(orientation:landscape){
+  .race-player.is-fullscreen .canvas-wrap,
+  .race-player:fullscreen .canvas-wrap{
+    flex:1 1 auto;
+    width:100%;
+    height:100%;
+    min-height:0;
+    max-height:none;
+    aspect-ratio:auto;
+  }
+  .race-player.is-fullscreen .playback,
+  .race-player:fullscreen .playback{
+    width:min(96%,850px);
+    max-width:96%;
+    flex:0 0 auto;
+  }
+}
