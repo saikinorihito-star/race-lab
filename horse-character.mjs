@@ -8,7 +8,7 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
  const earShape=new THREE.ConeGeometry(1,1,10);
  const maneShape=new THREE.ConeGeometry(1,1,7);
  const eyeWhite=new THREE.MeshPhongMaterial({color:0xfff9ee,shininess:90,specular:0x888888});
- const iris=new THREE.MeshPhongMaterial({color:0x152b38,shininess:105,specular:0x999999});
+ const iris=new THREE.MeshPhongMaterial({color:0x58351e,shininess:105,specular:0xaaa3a0});
  const pupil=new THREE.MeshPhongMaterial({color:0x090f14,shininess:95,specular:0x666666});
  const glint=new THREE.MeshBasicMaterial({color:0xffffff});
  const eyelid=new THREE.MeshPhongMaterial({color:0x241913,shininess:12});
@@ -16,6 +16,8 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
  const hoofMat=new THREE.MeshPhongMaterial({color:0x2e2726,shininess:42,specular:0x444444});
  const saddleLeather=new THREE.MeshPhongMaterial({color:0x3a2521,shininess:22});
  const saddleWhite=new THREE.MeshPhongMaterial({color:0xf1ebe0,shininess:35});
+ const whiteSock=new THREE.MeshPhongMaterial({color:0xf7f5ee,shininess:38,specular:0x525252});
+ const blazeMat=new THREE.MeshPhongMaterial({color:0xfff5e7,side:THREE.DoubleSide,shininess:42,specular:0x666666});
  const steel=new THREE.MeshPhongMaterial({color:0xdde9e8,shininess:100,specular:0xffffff});
  const skin=new THREE.MeshPhongMaterial({color:0xefc09c,shininess:28});
  const bootMat=new THREE.MeshPhongMaterial({color:0x20252b,shininess:45});
@@ -23,7 +25,7 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
  const outlineMat=new THREE.MeshBasicMaterial({color:0x281e1e,side:THREE.BackSide});
  const reinsMat=new THREE.MeshPhongMaterial({color:0x31211d,shininess:12});
  const maneColors=[0x251d19,0x2c2321,0x3e2721,0x332722].map(c=>new THREE.MeshPhongMaterial({color:c,shininess:36}));
- const clothPlane=new THREE.PlaneGeometry(.79,.70);
+ const clothPlane=new THREE.PlaneGeometry(.98,.82);
 
  function shape(parent,geo,mat,pos,scale,rotZ=0){
    const mesh=new THREE.Mesh(geo,mat);
@@ -99,6 +101,28 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
    [.85,-.25,.39,.45],[1.17,-.31,.40,.45],
    [1.40,-.32,.25,.35],[1.47,-.32,.05,.07]
  ],24,true);
+ // A curved white facial blaze follows the forehead/bridge rather
+ // than floating as a decal; it remains readable from the lower TV camera.
+ const blazeGeo=new THREE.BufferGeometry();
+ {
+   const path=[
+     [-.34,.60,.040],[-.17,.76,.105],[.04,.86,.125],[.22,.79,.122],
+     [.40,.63,.095],[.58,.43,.090],[.79,.19,.070],
+     [1.02,.105,.072],[1.22,.05,.075]
+   ];
+   const verts=[],normals=[],uv=[],indices=[];
+   for(let k=0;k<path.length;k++){
+     const [x,y,w]=path[k];
+     for(let side=-1;side<=1;side++){
+       verts.push(x,y-Math.abs(w)*.095,side*w);
+       normals.push(0,1,0);uv.push(k/(path.length-1),(side+1)/2);
+     }
+     if(k<path.length-1){let j=k*2;indices.push(j,j+1,j+2,j+1,j+3,j+2);}
+   }
+   blazeGeo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+   blazeGeo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+   blazeGeo.setIndex(indices);blazeGeo.computeVertexNormals();
+ }
  const neckGeo=organicSurface([
    [-.42,-.12,.06,.06],[-.28,-.07,.50,.53],
    [0,.02,.59,.56],[.24,.18,.56,.52],
@@ -109,10 +133,13 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
  function makeNumberTexture(id,appearance){
    const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
    const c=canvas.getContext('2d');
-   c.fillStyle=appearance.helmet;c.fillRect(0,0,128,128);
-   c.strokeStyle=appearance.helmetNumberColor;c.lineWidth=7;c.strokeRect(5,5,118,118);
-   c.fillStyle=appearance.helmetNumberColor;c.font='900 79px Arial';
-   c.textAlign='center';c.textBaseline='middle';c.fillText(String(id),64,70);
+   // All runners have the same royal-blue saddlecloth as design 1.
+   // Their number, coat, cap and bridle still distinguish each entrant.
+   c.fillStyle=appearance.saddleBase||'#1749ad';c.fillRect(0,0,128,128);
+   c.strokeStyle='#ffffff';c.lineWidth=8;c.strokeRect(6,6,116,116);
+   c.textAlign='center';c.textBaseline='middle';c.fillStyle='#ffffff';
+   c.font='900 81px Arial';c.fillText(String(id),64,65);
+   c.font='bold 11px Arial';c.fillText('RACE LAB',64,110);
    const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
    tex.anisotropy=2;return tex;
  }
@@ -122,20 +149,12 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
    const base=a.helmet,contrast=a.helmetNumberColor;
    c.fillStyle=base;c.fillRect(0,0,128,128);
    c.fillStyle=contrast;
-   const style=id%3;
-   if(style===1){
-     // Distinctive diamond-check pattern like the blue-and-white jockey.
-     for(let y=-32;y<170;y+=42)for(let x=-32;x<170;x+=42){
-       c.beginPath();c.moveTo(x,y-17);c.lineTo(x+17,y);c.lineTo(x,y+17);
-       c.lineTo(x-17,y);c.closePath();c.fill();
-     }
-   }else if(style===2){
-     // Bold diagonal sash.
-     c.save();c.translate(64,64);c.rotate(-Math.PI/4);
-     c.fillRect(-16,-110,29,220);c.restore();
-   }else{
-     // Repeating racing stripes.
-     for(let x=0;x<128;x+=43)c.fillRect(x+16,0,15,128);
+   // Every jockey uses design 1's shared white-on-color diamond-check
+   // motif, scaled identically; only the frame color changes.
+   for(let row=-1;row<5;row++)for(let column=-1;column<5;column++){
+     const x=column*42+(row%2)*21, y=row*42;
+     c.beginPath();c.moveTo(x,y-17);c.lineTo(x+17,y);
+     c.lineTo(x,y+17);c.lineTo(x-17,y);c.closePath();c.fill();
    }
    const texture=new THREE.CanvasTexture(canvas);
    texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=2;
@@ -222,8 +241,10 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
    shape(group,sphere,coat,[.84,1.36,0],[.45,.58,.52]);
    const neckPivot=new THREE.Group();neckPivot.position.set(.68,1.39,0);group.add(neckPivot);
    shape(neckPivot,neckGeo,coatSculpt,[0,0,0],null);
-   const headPivot=new THREE.Group();headPivot.position.set(.37,.61,0);neckPivot.add(headPivot);
+   const headPivot=new THREE.Group();headPivot.position.set(.37,.61,0);
+   headPivot.scale.set(.91,1.10,1.07);neckPivot.add(headPivot);
    shape(headPivot,headGeo,coatSculpt,[0,0,0],null);
+   shape(headPivot,blazeGeo,blazeMat,[0,.012,0],null);
    const headContour=shape(headPivot,headGeo,outlineMat,[0,-.012,0],[1.037,1.042,1.047]);
    headContour.renderOrder=0;
 
@@ -239,11 +260,11 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
      shape(headPivot,sphere,pupil,[.27,.224,side*.856],[.091,.122,.027]);
      shape(headPivot,sphere,glint,[.27,.31,side*.888],[.065,.07,.022]);
      shape(headPivot,sphere,glint,[.17,.17,side*.881],[.027,.034,.012]);
-     // Flexible rabbit-like pony ears, with hollow-looking pink inners.
-     const ear=shape(headPivot,earShape,coat,[-.22,.86,side*.43],[.20,.46,.19],-.18);
-     const inner=shape(headPivot,earShape,
+     // Short, soft horse ears instead of the previous rabbit silhouette.
+     shape(headPivot,earShape,coat,[-.22,.80,side*.43],[.205,.37,.20],-.18);
+     shape(headPivot,earShape,
        new THREE.MeshPhongMaterial({color:0xb46f70,shininess:15}),
-       [-.186,.87,side*.478],[.108,.29,.08],-.18);
+       [-.186,.82,side*.478],[.106,.235,.079],-.18);
      // Bright bridle curves are above the eye instead of cutting through it.
      line(headPivot,[[-.38,.55,side*.36],[-.10,.55,side*.62],[.24,.45,side*.67]],
        bridleMat,.050);
@@ -255,21 +276,26 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
    }
    // Mouth detail at the muzzle front.
    shape(headPivot,sphere,nostril,[1.39,-.51,0],[.055,.028,.22]);
+   // Smooth windswept forelock and layered mane, not sharp spikes.
    for(let i=0;i<5;i++){
-     const fore=shape(headPivot,maneShape,mane,
-       [-.32+i*.132,.69-i*.056,(i%2?1:-1)*.09],
-       [.19,.31,.20],-.42);
+     const x=-.34+i*.15;
+     shape(headPivot,sphere,mane,[x,.66-i*.077,(i%2?1:-1)*.075],
+       [.18,.22,.22-i*.014],-.32);
    }
    for(let i=0;i<6;i++){
-     shape(neckPivot,maneShape,mane,
-       [-.36+i*.135,.69-i*.02,(i%2?1:-1)*.09],
-       [.25,.29,.26],-.49);
+     shape(neckPivot,sphere,mane,
+       [-.36+i*.14,.70-i*.033,(i%2?1:-1)*.07],
+       [.20,.245,.23],-.39);
    }
    // Animated tufted tail.
    const tailPivot=new THREE.Group();tailPivot.position.set(-1.34,1.52,0);group.add(tailPivot);
-   shape(tailPivot,sphere,mane,[-.18,0,0],[.39,.22,.25],.24);
-   shape(tailPivot,sphere,mane,[-.44,-.16,0],[.38,.27,.26],-.33);
-   shape(tailPivot,maneShape,mane,[-.67,-.26,0],[.20,.42,.22],.7);
+   shape(tailPivot,sphere,mane,[-.17,-.02,0],[.39,.22,.24],.22);
+   for(const side of [-1,0,1]){
+     shape(tailPivot,sphere,mane,[-.48,-.12,side*.105],
+       [.38,.17,.15],-.40);
+     shape(tailPivot,maneShape,mane,[-.76,-.20,side*.155],
+       [.16,.33,.14],.70);
+   }
 
    // Four thick but articulated legs. The familiar gallopCycle drives the
    // hip and knee; this module changes only their shape, not their movement.
@@ -279,6 +305,10 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
      shape(hip,sphere,coat,[0,-.18,0],[.30,.39,.285],x>0?-.12:.10);
      const knee=new THREE.Group();knee.position.set(.025,-.48,0);hip.add(knee);
      shape(knee,sphere,coat,[.02,-.18,0],[.238,.29,.22]);
+     // Consistent white socks on the near foreleg and off hindleg.
+     if((x>0 && z>0)||(x<0 && z<0)){
+       shape(knee,sphere,whiteSock,[.04,-.31,0],[.222,.165,.219]);
+     }
      shape(knee,roundedHoof,hoofMat,[.115,-.43,.01],[.31,.15,.265]);
      shape(knee,sphere,steel,[.28,-.433,.01],[.025,.07,.15]);
      legs.push({hip,knee,front:x>0,side:z>0});
@@ -290,7 +320,7 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
    const numberTexture=makeNumberTexture(id,a);
    const numberMat=new THREE.MeshBasicMaterial({map:numberTexture,side:THREE.DoubleSide});
    for(const side of [-1,1]){
-     const cloth=shape(group,clothPlane,numberMat,[-.28,1.47,side*.718],null);
+     const cloth=shape(group,clothPlane,numberMat,[-.28,1.49,side*.724],null);
      if(side<0)cloth.rotation.y=Math.PI;
      line(group,[[-.21,1.89,side*.55],[-.23,1.47,side*.69],[-.22,1.04,side*.51]],
        reinsMat,.045);
@@ -306,10 +336,10 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
    // produce distinguishable riders rather than single-color stick figures.
    const riderPivot=new THREE.Group();riderPivot.position.set(-.35,1.97,0);
    riderPivot.scale.set(1.03,1.03,1.03);group.add(riderPivot);
-   shape(riderPivot,sphere,uniformMat,[-.04,-.02,0],[.31,.20,.37]);
+   shape(riderPivot,sphere,saddleWhite,[-.04,-.02,0],[.31,.20,.37]);
    for(const side of [-1,1]){
-     limb(riderPivot,[-.04,-.09,side*.30],[.21,-.38,side*.60],uniformMat,.17,.14);
-     shape(riderPivot,sphere,uniformMat,[.21,-.38,side*.60],[.16,.14,.15]);
+     limb(riderPivot,[-.04,-.09,side*.30],[.21,-.38,side*.60],saddleWhite,.17,.14);
+     shape(riderPivot,sphere,saddleWhite,[.21,-.38,side*.60],[.16,.14,.15]);
      limb(riderPivot,[.21,-.38,side*.60],[-.25,-.63,side*.72],bootMat,.11,.10);
      shape(riderPivot,sphere,bootMat,[-.22,-.64,side*.72],[.23,.10,.13]);
    }
@@ -341,7 +371,7 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
      limb(riderPivot,shoulder,elbow,uniformMat,.145,.13);
      shape(riderPivot,sphere,uniformMat,elbow,[.133,.125,.127]);
      limb(riderPivot,elbow,hand,uniformMat,.12,.105);
-     shape(riderPivot,sphere,bootMat,hand,[.114,.095,.103]);
+     shape(riderPivot,sphere,uniformMat,hand,[.114,.095,.103]);
    }
    group.scale.set(.77,.88,.77);
    batchStaticPieces(group);
