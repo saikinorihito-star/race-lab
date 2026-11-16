@@ -25,11 +25,13 @@ for name,hx in colors.items():
     metal=.6 if name=='silver' else .015
     materials[name]=PBRMaterial(name=name,baseColorFactor=[*col,255],roughnessFactor=rough,metallicFactor=metal,doubleSided=True)
 n=0
+meshBuckets={}
 def part(mesh,color,group='HorseRoot',name='detail'):
     global n
     mesh.remove_unreferenced_vertices()
     mesh.visual=TextureVisuals(uv=np.zeros((len(mesh.vertices),2)),material=materials[color])
-    n+=1;sc.add_geometry(mesh,geom_name='geo-'+str(n),node_name=name+'_'+str(n),parent_node_name=group)
+    # Merge non-moving parts within the same animation joint and material.
+    meshBuckets.setdefault((group,color),[]).append(mesh)
 def group(name,parent='HorseRoot',at=(0,0,0)):
     m=np.eye(4);m[:3,3]=at
     sc.graph.update(frame_from=parent,frame_to=name,matrix=m)
@@ -194,6 +196,15 @@ for s in (-1,1):
     strand([[.30,.56,s*.24],[.53,.38,s*.33],[.84,.28,s*.27]],
            [.15,.137,.106],'blue','RiderPivot','arms')
     ell([.84,.28,s*.27],[.112,.105,.104],'deepblue','RiderPivot','glove')
+# Reduce GPU draw calls by fusing geometry of the same material/joint.
+# Separate animation joints remain intact (hips, knees, neck, head, tail, rider).
+for (parent,color),items in meshBuckets.items():
+    combined=trimesh.util.concatenate(items)
+    combined.remove_unreferenced_vertices()
+    combined.visual=TextureVisuals(uv=np.zeros((len(combined.vertices),2)),material=materials[color])
+    n+=1
+    sc.add_geometry(combined,geom_name='merged-'+str(n),node_name='merged_'+parent+'_'+color+'_'+str(n),parent_node_name=parent)
+print('Optimized number of pieces',n)
 # Encode a 1.6s looping full-body gallop as glTF animation.
 b=trimesh.exchange.gltf.export_glb(sc);idx=12;chunks={}
 while idx<len(b):
