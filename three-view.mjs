@@ -727,22 +727,23 @@ export async function createThreeView(host){
      const shadowSize=1-lift*.20;
      model.shadow.scale.set(1.42*shadowSize*horseScale,.60*shadowSize*horseScale,1);
    }
-   // Default: an elevated camera fits EVERY runner, including the rearmost
-   // horse. A brief first-corner insert shows the leaders and then the
-   // trailing runners before returning to the wide view automatically.
-   // Camera distance is computed from the actual 3D horse positions and
-   // the current portrait/landscape frustum, not an assumed field width.
+   // Broadcast-style tracking camera: normally frame a readable 2/3 of the
+   // pack, and scan smoothly from leaders to rear runners at the first bend.
+   // The dedicated 'fit entire video' mode really includes every runner.
+   // Distance is fitted to 3D positions and the actual screen aspect ratio.
    const smooth01=v=>{
      const t=Math.max(0,Math.min(1,Number(v)||0));
      return t*t*(3-2*t);
    };
    const runners=[...frame.horses].sort((a,b)=>b.x-a.x);
-   // Normal: cover most of the runners. When the viewer selects a horse,
-   // hold a smaller, stable subgroup containing that specific horse.
+   // In the normal shot keep horses big enough to identify their position.
+   // Follow mode centers a smaller subgroup; the full-view toggle overrides
+   // both and fits the entire field, including the last horse.
    const followedIndex=focusHorse>0?runners.findIndex(h=>h.id===focusHorse):-1;
-   const coverageCount=followedIndex>=0?
+   const fit=!!options.fitEntireVideo;
+   const coverageCount=fit?entrants:followedIndex>=0?
      Math.min(entrants,Math.max(2,Math.ceil(entrants*.48))):
-     Math.max(2,Math.min(entrants,Math.ceil(entrants*.80)));
+     Math.max(2,Math.min(entrants,Math.ceil(entrants*.68)));
    const firstIncluded=followedIndex>=0?
      Math.max(0,Math.min(entrants-coverageCount,
        followedIndex-Math.floor((coverageCount-1)/2))):0;
@@ -764,18 +765,19 @@ export async function createThreeView(host){
      return new THREE.Vector3((minX+maxX)*.5,
        (minY+maxY)*.5,(minZ+maxZ)*.5);
    };
-   // The previous 11s simulated sweep lasted under 3 real seconds at
-   // default 4x playback. Now take 36 simulated seconds (~9 real seconds),
-   // holding the front and rear groups long enough to identify each runner.
-   // User-selected horse tracking disables this sweep entirely.
-   const firstBend=followedIndex>=0?null:
+   // Hold the first-bend camera insert for 48 simulated seconds (12 seconds
+   // at 4x). Panning from the leaders to the rear takes about 5 seconds at
+   // 4x, so horse identities remain easy to follow. Never interrupt an
+   // explicitly selected horse or the full-field view with a cinematic cut.
+   const firstBend=followedIndex>=0||fit?null:
      firstTurnCueTime(race,raceDistance,course,venue,layout);
-   const shotU=firstBend===null?-1:(frame.t-(firstBend-1.5))/36;
+   const shotU=firstBend===null?-1:(frame.t-(firstBend-1.5))/48;
    const inTurnShot=shotU>0&&shotU<1;
    const insertLevel=inTurnShot
-     ?smooth01(shotU/.12)*(1-smooth01((shotU-.82)/.18)):0;
-   const rearSweep=inTurnShot?smooth01((shotU-.38)/.27):0;
-   const closeCount=Math.min(4,Math.max(2,Math.ceil(entrants*.22)));
+     ?smooth01(shotU/.12)*(1-smooth01((shotU-.84)/.16)):0;
+   const rearSweep=inTurnShot?smooth01((shotU-.30)/.44):0;
+   // A medium shot, not the old close-up of only four horses.
+   const closeCount=Math.min(entrants,Math.max(3,Math.ceil(entrants*.53)));
    const frontGroup=runners.slice(0,closeCount);
    const backGroup=runners.slice(-closeCount);
    const frontIndex=Math.max(0,Math.min(closeCount-1,Math.floor(closeCount*.48)));
@@ -792,12 +794,11 @@ export async function createThreeView(host){
    const anchorRunner=followedIndex>=0?runners[followedIndex]:runners[0];
    const leaderS=lengthAtMetres(anchorRunner.x,raceDistance);
    const leadDirection=raceCoursePoint(leaderS,0,raceDistance,course,venue,layout);
-   const aheadRoom=options.fitEntireVideo?6.0:8.2; // 3D scene units
+   const aheadRoom=fit?5.6:4.7; // Leave track visible ahead without shrinking the runners
    fullAim.x+=leadDirection.dx*aheadRoom;
    fullAim.z+=leadDirection.dz*aheadRoom;
    const frontAim=midpoint(frontPoints.length?frontPoints:fullPoints);
    const backAim=midpoint(backPoints.length?backPoints:fullPoints);
-   const fit=!!options.fitEntireVideo;
    const isPortrait=camera.aspect<.90;
    // Keep a practical field of view with a lower, trackside perspective.
    const fov=(isPortrait?54:43)+(fit?6:0);
@@ -810,12 +811,12 @@ export async function createThreeView(host){
      const dir=raceCoursePoint(s,0,raceDistance,course,venue,layout);
      const sign=venue==='kyoto'?-1:1;
      const sideX=sign*dir.dz,sideZ=-sign*dir.dx;
-     // Lower the virtual camera toward the rail compared with the previous
-     // high overhead view. Some forward angle preserves a view of the course.
-     // Lower rail-side camera (~15-18 degrees vs the former ~22-27).
-     let ox=sideX+dir.dx*(close?.25:.18);
-     let oy=close?.27:.34;
-     let oz=sideZ+dir.dz*(close?.25:.18);
+     // Low three-quarter-front angle: the horse bodies, jockey silks and turf
+     // are readable together. Moderate forward offset reveals their faces,
+     // while the reduced elevation avoids the previous aerial impression.
+     let ox=sideX+dir.dx*(close?.43:.36);
+     let oy=close?.21:.26;
+     let oz=sideZ+dir.dz*(close?.43:.36);
      const norm=Math.hypot(ox,oy,oz)||1;
      ox/=norm;oy/=norm;oz/=norm;
      // Orthonormal camera axes. Positive camera-out vector points from
@@ -827,8 +828,8 @@ export async function createThreeView(host){
      const upz=-oy*oz/rightNorm;
      const tanY=Math.tan(camera.fov*Math.PI/360);
      const tanX=tanY*Math.max(.38,camera.aspect);
-     let distance=close?13.5:21;
-     const padding=close?2.5:4.6;
+     let distance=close?14.5:17;
+     const padding=close?2.4:3.0;
      for(const p of points){
        const x=p.x-aim.x,y=p.y-aim.y,z=p.z-aim.z;
        const forwardOffset=x*ox+y*oy+z*oz;
@@ -843,8 +844,8 @@ export async function createThreeView(host){
        aim
      };
    };
-   // Normal coverage is ~80% of runners; the first-corner insert still
-   // shows the leaders and then the rear before returning to this shot.
+   // Normal coverage is ~68% of runners, with a slower first-bend pan to the
+   // rear before returning to this medium-wide shot. Full view shows 100%.
    const included=runners.slice(firstIncluded,firstIncluded+coverageCount);
    const fullMidX=(included[0].x+included[included.length-1].x)*.5;
    const wide=poseFor(fullAim,fullPoints,fullMidX,false);
@@ -894,7 +895,7 @@ export async function createThreeView(host){
      turnShot:insertLevel>.05,
      scanProgress:rearSweep,
      frameMode:followedIndex>=0?'注目馬を追跡':
-       insertLevel>.05?(rearSweep<.5?'先頭アップ':'後方アップ'):'馬群・前方',
+       insertLevel>.05?(rearSweep<.5?'先頭寄り':'後方寄り'):(fit?'全頭表示':'馬群・前方'),
      focusHorse:followedIndex>=0?focusHorse:0,
      coverageCount,
      aheadRoom
