@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1625">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Race Lab｜1頭だけの3Dモデル試作</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",Meiryo,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:#0a1421;color:#f2f7ff}
+body{min-height:100dvh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{padding:13px 17px;display:flex;align-items:center;gap:14px;justify-content:space-between}
+header strong{font-size:14px;letter-spacing:.04em}
+a{color:#99e1cf;text-decoration:none}
+header a{font-size:12px}
+main{width:min(960px,100%);margin:0 auto;padding:4px 12px 28px}
+h1{font-size:clamp(20px,4.5vw,29px);margin:9px 4px 8px}
+.subtitle{color:#a9bacb;font-size:13px;margin:0 4px 15px;line-height:1.7}
+#model-stage{position:relative;width:100%;height:min(62dvh,520px);min-height:320px;background:#a8d9f5;border-radius:14px;overflow:hidden;touch-action:none}
+#model-stage canvas{display:block;width:100%;height:100%}
+.viz-badge{position:absolute;left:12px;top:12px;z-index:1;background:rgba(8,20,30,.78);border:1px solid rgba(255,255,255,.25);border-radius:7px;color:white;font-size:11px;padding:9px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.controls button{min-height:46px;flex:1 1 100px;border-radius:9px;border:1px solid #516277;background:#1e3145;color:#f4f8ff;font-weight:700;font-size:13px}
+.controls button[aria-pressed="true"]{background:#235e65;border-color:#75e4be;color:#effff9}
+.controls button:disabled{opacity:.5}
+#model-status{font-size:12px;color:#a1dcca;min-height:2.4em;line-height:1.7;margin:14px 4px}
+.details{background:#12253b;border:1px solid #34465a;border-radius:12px;padding:16px;margin-top:12px}
+.details p{margin:5px 0 10px;color:#c3d1dd;font-size:13px;line-height:1.8}
+.details h2{margin:0 0 7px;font-size:14px}
+.details small{font-size:11px;color:#9baec0;line-height:1.6;display:block}
+footer{text-align:center;font-size:11px;color:#8397a9;margin:24px auto}
+</style>
+<script type="importmap">
+{"imports":{
+ "three":"https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js",
+ "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.185.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<header>
+ <strong>RACE LAB <span style="color:#7ce4c2">/ 3D MODEL LAB</span></strong>
+ <a href="./">レース画面に戻る</a>
+</header>
+<main>
+ <h1>① 参考画像再現型｜1頭試作</h1>
+ <p class="subtitle">18頭への導入前に、まず馬と騎手1組の造形・走行動作を確認するページです。画面をドラッグして視点を回し、2本指で拡大・縮小できます。</p>
+ <div id="model-stage">
+  <div class="viz-badge">独立試作 / 既存レースはそのまま</div>
+ </div>
+ <div class="controls">
+  <button data-camera="three" aria-pressed="true">斜め</button>
+  <button data-camera="side" aria-pressed="false">横</button>
+  <button data-camera="front" aria-pressed="false">正面</button>
+ </div>
+ <div class="controls">
+  <button id="motion" aria-pressed="true">一時停止</button>
+  <button id="reset">視点リセット</button>
+  <button id="export">静止3Dモデル保存</button>
+ </div>
+ <p id="model-status" role="status">3Dモデルを読み込んでいます…</p>
+ <section class="details">
+  <h2>今回の試作で確認すること</h2>
+  <p>大きな丸い顔と瞳、短い鼻先、滑らかな胴体、青い頭絡・ゼッケン、前傾姿勢の騎手を立体的に再現しています。歩幅と脚の動きを確認できます。</p>
+  <small>※ これは参考画像から直接生成した精密モデルではなく、形状を新たに設計した最初の3D試作です。細部と走り方は調整予定です。保存するGLBにはアニメーションを収録していません。実際のレース計算・18頭表示・保存済み設定には影響しません。</small>
+ </section>
+</main>
+<footer>Race Lab | Design 01 — one-horse prototype</footer>
+<script type="module" src="./model-preview.mjs"></script>
+</body>
+</html>
