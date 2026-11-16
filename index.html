@@ -21,7 +21,7 @@
 </header>
 <main class="content">
   <section class="intro">
-    <div><p class="eyebrow">RACE SIMULATION / PROTOTYPE</p><h1>レースを、<span>展開で読む。</span></h1><p class="subtext">出走頭数と各馬の脚質・能力を設定して、仮想レースを再生。条件を変えたときの隊列の違いを確認できます。</p></div>
+    <div><p class="eyebrow">RACE SIMULATION / PROTOTYPE</p><h1>レースを、<span>展開で読む。</span></h1><p class="subtext">出走頭数と各馬の脚質・能力を設定して、仮想レースを再生。スピード・スタミナ・末脚がそれぞれレースの異なる段階に影響します。映像下の「注目馬」から特定の馬を追えます。</p></div>
     <div class="warning"><span class="warning-icon">!</span><p><b>予想精度の検証前です。</b> すべての能力値・確率は架空モデルによるデモです。実際の競馬結果や的中率を予測・保証するものではありません。</p></div>
   </section>
   <section class="workspace">
@@ -72,6 +72,10 @@
             <span id="play-time" class="time">0:00 / 0:00</span>
           </div>
           <div class="playback-options"><label>再生速度 <select id="speed"><option value="1">1倍</option><option value="2">2倍</option><option value="4" selected>4倍</option><option value="8">8倍</option><option value="12">12倍</option></select></label><button class="btn secondary-btn" id="save-video">動画保存</button></div>
+          <div class="focus-controls">
+            <label for="focus-horse">注目馬 <select id="focus-horse" aria-label="映像で追跡する馬"><option value="0">全体カメラ</option></select></label>
+            <span id="focus-info" class="focus-info" aria-live="off">馬を選ぶと馬名と能力、現在の速度を確認できます。</span>
+          </div>
         </div>
         </div>
         <section class="race-standings" aria-label="出走馬の馬名と現在の順位">
