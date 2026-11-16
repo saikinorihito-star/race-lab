@@ -640,7 +640,7 @@ export async function createThreeView(host){
      }
    }
    const leadS=lengthAtMetres(lead,raceDistance);
-   const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,2);
+   const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,1);
    const displayed=raceDisplayPositions(race,frame,raceDistance,course,venue,layout);
    // Playback speed affects screen motion. Faster legs remain visually readable
    // instead of matching an unrealistic 12x hoof-strike rate.
@@ -723,68 +723,98 @@ export async function createThreeView(host){
      const shadowSize=1-lift*.20;
      model.shadow.scale.set(1.42*shadowSize*horseScale,.60*shadowSize*horseScale,1);
    }
-   // Broadcast director: follow the field more closely and, at the
-   // first genuine bend, scan from the leading horses towards the back.
-   // All geometry is still positioned by the same shared race course data.
+   // Race-broadcast framing. Prefer a stable side / three-quarter view
+   // that keeps jockeys legible. Most of the frame should contain horses,
+   // rather than empty sky and turf. The exact JRA camera rigs aren't
+   // reproduced: this is a cinematic framing inspired by broadcast stills.
+   const smooth01=value=>{
+     const t=Math.max(0,Math.min(1,value));
+     return t*t*(3-2*t);
+   };
+   const runners=[...frame.horses].sort((a,b)=>b.x-a.x);
+   const leader=runners[0];
+   const last=runners[runners.length-1];
+   const remaining=Math.max(0,raceDistance-leader.x);
+   const finalRun=smooth01((650-remaining)/470);
+   const intro=smooth01((frame.t-3)/11);
+   // Always favour the race-relevant pack, not an empty point several
+   // horse-lengths ahead of the leader.
+   const groupSize=Math.min(entrants,Math.max(2,Math.round(entrants*.54)));
+   const topGroup=runners.slice(0,groupSize);
+   const frontMiddle=topGroup[Math.floor((topGroup.length-1)*.48)];
+   const raceMiddle=runners[Math.floor((runners.length-1)*.46)];
+   const packTarget=frontMiddle.x*.77+raceMiddle.x*.23;
+   const topTarget=runners[Math.min(2,runners.length-1)].x;
+   const targetLead=packTarget*(1-finalRun*.84)+topTarget*finalRun*.84;
+   // Short first-turn coverage: gently move from the leaders to the
+   // middle / rear of the field and return. Avoid the previous 23s sweep.
    const firstBend=firstTurnCueTime(race,raceDistance,course,venue,layout);
-   const shotU=firstBend===null?-1:(frame.t-(firstBend-3))/23;
+   const shotU=firstBend===null?-1:(frame.t-(firstBend-1.6))/12;
    const inTurnShot=shotU>0&&shotU<1;
-   const ease01=v=>{const u=Math.max(0,Math.min(1,v));return u*u*(3-2*u);};
-   // From the front to the rearmost horse, then back to the leader.
    const rearSweep=inTurnShot
-      ?(shotU<.73?ease01(shotU/.73):1-ease01((shotU-.73)/.27)):0;
-   const turnZoom=inTurnShot?Math.sin(Math.PI*shotU)**2:0;
-   const tailX=Math.min(...frame.horses.map(h=>h.x));
-   const gap=Math.min(100,Math.max(0,lead-tailX));
-   const focusX=Math.max(0,lead-gap*rearSweep);
+      ?(shotU<.5?smooth01(shotU*2):1-smooth01((shotU-.5)*2)):0;
+   const bendTarget=runners[Math.floor((runners.length-1)*.70)].x;
+   const focusX=Math.max(0,targetLead*(1-rearSweep*.68)+bendTarget*rearSweep*.68);
    const focusS=lengthAtMetres(focusX,raceDistance);
-   const nearest=frame.horses.reduce((a,b)=>
-      Math.abs(b.x-focusX)<Math.abs(a.x-focusX)?b:a,frame.horses[0]);
-   const visible=frame.horses.filter(h=>Math.abs(focusX-h.x)<65);
-   const meanLane=visible.length
-      ?visible.reduce((sum,h)=>sum+h.lane,0)/visible.length:(entrants-1)/2;
-   const focusLane=meanLane*(1-rearSweep*.65)+nearest.lane*rearSweep*.65;
+   const nearRunners=runners.filter(h=>Math.abs(h.x-focusX)<32);
+   const meanLane=nearRunners.length
+     ?nearRunners.reduce((sum,h)=>sum+h.lane,0)/nearRunners.length
+     :(entrants-1)/2;
    const direction=raceCoursePoint(focusS,0,raceDistance,course,venue,layout);
    const insideSign=venue==='kyoto'?-1:1;
    const insideX=insideSign*direction.dz,insideZ=-insideSign*direction.dx;
-   const startCenter=raceCoursePoint(focusS,INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5,raceDistance,course,venue,layout);
-   const trackCenter=raceCoursePoint(focusS,INSIDE_MARGIN+focusLane*LANE_WIDTH,raceDistance,course,venue,layout);
+   const trackCenter=raceCoursePoint(focusS,
+      INSIDE_MARGIN+meanLane*LANE_WIDTH,raceDistance,course,venue,layout);
+   const gateCenter=raceCoursePoint(focusS,
+      INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5,raceDistance,course,venue,layout);
    const focusHeight=raceCourseHeightMetres(-focusS,raceDistance,venue,layout,course);
-   const inFullscreen=!!options.fullscreen;
-   const pullBack=options.fitEntireVideo?1.42:1;
-   // A narrower camera angle is deliberately used when scanning the bend,
-   // without stretching horses on portrait screens.
-   const targetFov=(inFullscreen?(camera.aspect<.8?55:41):44)
-      +(options.fitEntireVideo?11:0)-turnZoom*6;
-   if(Math.abs(camera.fov-targetFov)>.07){
-     camera.fov=targetFov;camera.updateProjectionMatrix();
+   const fit=!!options.fitEntireVideo;
+   const isPortrait=camera.aspect<.90;
+   // Medium-telephoto broadcast lens. On tall phones a deliberately
+   // narrower horizontal view focuses on the current pack.
+   const fov=(isPortrait?45:36)+(fit?11:0)+
+     (1-intro)*6-finalRun*2;
+   if(Math.abs(camera.fov-fov)>.05){
+     camera.fov=fov;
+     camera.updateProjectionMatrix();
    }
-   const introScale=(inFullscreen?.79:1)*pullBack;
-   const followScale=(inFullscreen?.82:1)*pullBack*(1-.24*turnZoom);
-   const startCamera=new THREE.Vector3(
-     startCenter.x+direction.dx*(23+entrants*.92)*introScale+
-       insideX*(9+entrants*.40)*introScale,
-     focusHeight+(6.3+entrants*.21)*introScale,
-     startCenter.z+direction.dz*(23+entrants*.92)*introScale+
-       insideZ*(9+entrants*.40)*introScale
-   );
-   const followCamera=new THREE.Vector3(
-     trackCenter.x+direction.dx*15*followScale+insideX*15*followScale,
-     focusHeight+6.3*followScale,
-     trackCenter.z+direction.dz*15*followScale+insideZ*15*followScale
-   );
-   const startAim=new THREE.Vector3(
-     startCenter.x-direction.dx*1.8,focusHeight+1.80,
-     startCenter.z-direction.dz*1.8
+   // In world units: 3/4 front, mainly side-on through the back straight,
+   // elevated slightly for bends to make lanes and passing visible.
+   const bendBefore=raceCoursePoint(focusS-35,0,raceDistance,course,venue,layout);
+   const bendAfter=raceCoursePoint(focusS+35,0,raceDistance,course,venue,layout);
+   const turnCos=Math.max(-1,Math.min(1,
+     bendBefore.dx*bendAfter.dx+bendBefore.dz*bendAfter.dz));
+   const onBend=smooth01((Math.acos(turnCos)-.11)/.35);
+   const packSpan=Math.max(0,leader.x-topGroup[topGroup.length-1].x);
+   const spreadScale=Math.max(0,Math.min(1,packSpan/50));
+   const backOff=fit?1.42:1;
+   // These tight distances make riders and caps visibly larger while
+   // preserving a few horses side-by-side on phone screens.
+   const side=backOff*(11.4+spreadScale*2.5+onBend*.7);
+   const ahead=backOff*(4.7+finalRun*5+onBend*1.5);
+   const rise=backOff*(5.0+onBend*1.9);
+   const followPos=new THREE.Vector3(
+     trackCenter.x+direction.dx*ahead+insideX*side,
+     focusHeight+rise,
+     trackCenter.z+direction.dz*ahead+insideZ*side
    );
    const followAim=new THREE.Vector3(
-     trackCenter.x+direction.dx*1.2,focusHeight+1.75,
-     trackCenter.z+direction.dz*1.2
+     trackCenter.x+direction.dx*.6,focusHeight+1.56,
+     trackCenter.z+direction.dz*.6
    );
-   const transition=Math.max(0,Math.min(1,(frame.t-7)/14));
-   const ease=ease01(transition);
-   const wanted=startCamera.lerp(followCamera,ease);
-   const wantedAim=startAim.lerp(followAim,ease);
+   // A broader starting-gate shot, then a gradual lens move into the
+   // moving pack. No arbitrary camera snap after the first corner.
+   const gateScale=backOff*(1+entrants*.022);
+   const gatePos=new THREE.Vector3(
+     gateCenter.x+direction.dx*18*gateScale+insideX*16.5*gateScale,
+     focusHeight+7.7*gateScale,
+     gateCenter.z+direction.dz*18*gateScale+insideZ*16.5*gateScale
+   );
+   const gateAim=new THREE.Vector3(
+     gateCenter.x,focusHeight+1.52,gateCenter.z
+   );
+   const wanted=gatePos.lerp(followPos,intro);
+   const wantedAim=gateAim.lerp(followAim,intro);
    // Gentle smoothing prevents abrupt camera shifts during lane changes.
    // Smooth continuous tracking throughout the race. Snap only when loading
    // a new race or explicitly seeking the video (not during normal playback).
@@ -817,7 +847,8 @@ export async function createThreeView(host){
      target:{x:cameraAim.x,z:cameraAim.z},
      visibleIds,
      turnShot:inTurnShot,
-     scanProgress:rearSweep
+     scanProgress:rearSweep,
+     frameMode:intro<.99?'スタート':finalRun>.6?'直線':'馬群追跡'
    };
    renderer.render(scene,camera);
  }
