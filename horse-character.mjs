@@ -74,8 +74,8 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
    for(let k=0;k<samples.length-1;k++)for(let j=0;j<segments;j++){
      const a=k*segments+j,b=(k+1)*segments+j,
            c=k*segments+(j+1)%segments,d=(k+1)*segments+(j+1)%segments;
-     if(axis==='x')indices.push(a,b,c,b,d,c);
-     else indices.push(a,c,b,b,c,d);
+     // In both X and Y ring constructions, the axis-first winding points outward.
+     indices.push(a,b,c,b,d,c);
    }
    const geo=new THREE.BufferGeometry();
    geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
@@ -106,7 +106,7 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
    [.87,.36,.07,.08]
  ],20,false,'y');
 
- function numberTexture(id,appearance){
+ function makeNumberTexture(id,appearance){
    const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
    const c=canvas.getContext('2d');
    c.fillStyle=appearance.helmet;c.fillRect(0,0,128,128);
@@ -233,7 +233,7 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
    // A genuine colored saddlecloth with a framed racing number on either side.
    shape(group,sphere,saddleWhite,[-.24,1.88,0],[.65,.16,.59]);
    shape(group,sphere,saddleLeather,[-.32,1.94,0],[.49,.17,.51],-.12);
-   const numberTexture=numberTextureFor(a);
+   const numberTexture=makeNumberTexture(id,a);
    const numberMat=new THREE.MeshBasicMaterial({map:numberTexture,side:THREE.DoubleSide});
    for(const side of [-1,1]){
      const cloth=shape(group,clothPlane,numberMat,[-.28,1.47,side*.718],null);
@@ -294,17 +294,14 @@ export function makeHorseCharacterBuilder(THREE,scene,getHorseAppearance){
      gaitPhase:0,gaitLastTimestamp:null,gaitRace:null,numberTexture,numberMat,
      uniformMat,silkMat:uniformMat,helmetMat:uniformMat,helmetTrimMat,
      bridleMat,jerseyMat,silkTexture,appearanceCount:18};
-   function numberTextureFor(appearance){return numberTextureInternal(id,appearance);}
  }
- // Avoid a closure ambiguity between a number texture and the factory above.
- function numberTextureInternal(id,a){return numberTexture(id,a);}
  function updateAppearance(model,count){
    if(model.appearanceCount===count)return;
    const a=getHorseAppearance(model.id,count);
    model.uniformMat.color.set(a.helmet);
    model.helmetTrimMat.color.set(a.helmetNumberColor);
    model.bridleMat.color.set(a.helmet);
-   const nextNumber=numberTexture(model.id,a);
+   const nextNumber=makeNumberTexture(model.id,a);
    const oldNumber=model.numberTexture;
    model.numberMat.map=nextNumber;model.numberMat.needsUpdate=true;
    model.numberTexture=nextNumber;oldNumber.dispose();
