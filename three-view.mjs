@@ -361,7 +361,9 @@ export async function createThreeView(host){
    const bodyMat=material(appearance.coat);
    const muzzleMat=material(new THREE.Color(appearance.coat).multiplyScalar(1.14));
    const mane=maneMats[(id-1)%maneMats.length];
-   const silk=material(appearance.silk);
+   // The simulation intentionally paints jacket and cap with the same
+   // frame color, unaffected by different lighting models.
+   const silk=new THREE.MeshBasicMaterial({color:appearance.silk});
    // Basic (unlit) material keeps frame-cap colors vivid even in dark
    // shadow or under a low camera angle.
    const helmetMat=new THREE.MeshBasicMaterial({color:appearance.helmet});
@@ -466,8 +468,8 @@ export async function createThreeView(host){
    // Chest leans forwards naturally from the pelvis toward the horse's neck.
    const chest=part(riderPivot,sphere,silk,.19,.27,0,.32,.41,.29);
    chest.rotation.z=-.62;
-   const uniformAccent=material(appearance.silkAccent);
-   // Contrasting narrow stripe lets black/white/yellow jackets remain readable.
+   const uniformAccent=new THREE.MeshBasicMaterial({color:appearance.silkAccent});
+   // Narrow sleeve stripes are also the same frame color as the jacket.
    for(const side of [-1,1]){
      const flash=part(riderPivot,sphere,uniformAccent,.24,.33,side*.27,.19,.075,.04);
      flash.rotation.z=-.62;
