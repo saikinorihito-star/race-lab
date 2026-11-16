@@ -17,11 +17,11 @@
 <div class="app-shell">
 <header class="topbar">
   <div class="brand"><span class="brand-mark">R<span class="dot">.</span></span><div><strong>RACE LAB</strong><small>競馬レース展開シミュレーター</small></div></div>
-  <span class="beta">DEMO v0.41</span>
+  <span class="beta">DEMO v0.42</span>
 </header>
 <main class="content">
 <div style="padding:12px 16px;margin:0 0 16px;border:1px solid #496a7e;border-radius:11px;background:#172c3c;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-  <div><strong style="font-size:13px">馬と騎手の3Dモデル新作・1頭試作</strong><div style="font-size:11px;color:#a9bacb;margin-top:4px">先に造形と走り方を確認。18頭の既存レースは変更していません。</div></div>
+  <div><strong style="font-size:13px">馬と騎手の3Dモデル新作・1頭試作</strong><div style="font-size:11px;color:#a9bacb;margin-top:4px">Design 01モデルを全馬のレース映像に採用。こちらで1頭の造形も確認できます。</div></div>
   <a href="./model-preview.html" style="color:#08212c;text-decoration:none;font-size:13px;font-weight:800;border-radius:9px;padding:12px 15px;background:#8be5d3">3D試作を見る</a>
 </div>
   <section class="intro">
@@ -86,7 +86,7 @@
           <div class="race-standings-head"><strong id="standings-heading">出走馬一覧</strong><span>数字は馬番・色は枠色</span></div>
           <div id="race-standings-list" class="race-standings-columns"></div>
         </section>
-        <p class="helptext">東京芝は左回り、京都芝は右回りです。京都は内回り・外回りを選択できます。 全体図の下にレース距離全体の高低差を表示します（縦方向の高さを強調した模式図）。映像をタップすると全画面表示に切り替わります。全画面では映像を画面いっぱいに広げ、カメラも画面の形に合わせます。操作ボタンは普段は収納し、下の「操作」を押すと再生バーを表示できます。「全体を見る」では全出走馬が映る広角に切り替わります。3Dビューは低い斜め前方のカメラで通常は馬群のおよそ7割を見やすい大きさで映し、最初のコーナーでは約48秒のレース時間（4倍再生で約12秒）を使って先頭から後方へゆっくり移り、再び通常画角へ戻ります。馬と騎手の3Dモデルを選択済みの「① 参考画像再現型」に統一しました。全頭共通の丸い顔・大きな茶色い瞳・短めの鼻・白い額の模様・滑らかなたてがみを採用し、騎手は統一した菱形模様の勝負服と白いズボン、青いゼッケンを使用します。毛色・枠色・馬番で見分けられます。既存のレース計算・脚のアニメーションは維持しています。映像下で「注目馬」を選ぶと、その馬を含む集団を安定して追い、馬名・能力・現在速度を表示します。見失う場合は再生速度0.5倍・1倍も利用できます。スピードは全体の巡航力、スタミナは中盤以降の持続力、末脚は最後の3分の1の伸びに主に反映し、枠位置による不利を従来より抑えました。再生・一時停止は映像下の再生ボタンで操作します。映像直下のバーで時間を前後に移動し、10秒送り・戻しもできます。 コース上に残り600・400・200mの紅白ハロン棒を配置し、速度に応じた首振り・前後脚の蹴り出しを再現しています。JRA公式の距離・1周距離・最後の直線・高低差を採用しています。3Dでは芝の坂、ゴール判定設備、直線側スタンドと残り距離が変わる大型モニターを表示します。京都の内回り・外回りは3コーナーで分岐して4コーナーで合流し、東京・京都の専用発走路も示します。ただし分岐の曲線、スタートポケットの位置、幅員の変化、坂の各地点の標高、スタンドの配置は実測図ではなく模式的な近似です。坂による速度補正も実レース結果で校正していません。馬の能力値と勝率は実レース成績で校正していない架空モデルです。<a href="https://www.jra.go.jp/facilities/race/tokyo/course/" target="_blank" rel="noopener noreferrer">JRA 東京芝</a> / <a href="https://www.jra.go.jp/facilities/race/kyoto/course/" target="_blank" rel="noopener noreferrer">JRA 京都芝</a></p>
+        <p class="helptext">東京芝は左回り、京都芝は右回りです。京都は内回り・外回りを選択できます。 全体図の下にレース距離全体の高低差を表示します（縦方向の高さを強調した模式図）。映像をタップすると全画面表示に切り替わります。全画面では映像を画面いっぱいに広げ、カメラも画面の形に合わせます。操作ボタンは普段は収納し、下の「操作」を押すと再生バーを表示できます。「全体を見る」では全出走馬が映る広角に切り替わります。3Dビューは低い斜め前方のカメラで通常は馬群のおよそ7割を見やすい大きさで映し、最初のコーナーでは約48秒のレース時間（4倍再生で約12秒）を使って先頭から後方へゆっくり移り、再び通常画角へ戻ります。選択済みの「Design 01」専用3D試作モデルを全出走馬のレース映像にも採用しました。大きな丸い顔・茶色い瞳・白い額の模様、曲面の胴体、青いゼッケン、菱形模様の勝負服を基本形として統一しています。毛色・枠色・馬番で見分けられます。参考画像と完全に同じ3Dアセットではなく、プログラムで造形した近似モデルです。既存のレース計算・脚のアニメーションは維持しています。映像下で「注目馬」を選ぶと、その馬を含む集団を安定して追い、馬名・能力・現在速度を表示します。見失う場合は再生速度0.5倍・1倍も利用できます。スピードは全体の巡航力、スタミナは中盤以降の持続力、末脚は最後の3分の1の伸びに主に反映し、枠位置による不利を従来より抑えました。再生・一時停止は映像下の再生ボタンで操作します。映像直下のバーで時間を前後に移動し、10秒送り・戻しもできます。 コース上に残り600・400・200mの紅白ハロン棒を配置し、速度に応じた首振り・前後脚の蹴り出しを再現しています。JRA公式の距離・1周距離・最後の直線・高低差を採用しています。3Dでは芝の坂、ゴール判定設備、直線側スタンドと残り距離が変わる大型モニターを表示します。京都の内回り・外回りは3コーナーで分岐して4コーナーで合流し、東京・京都の専用発走路も示します。ただし分岐の曲線、スタートポケットの位置、幅員の変化、坂の各地点の標高、スタンドの配置は実測図ではなく模式的な近似です。坂による速度補正も実レース結果で校正していません。馬の能力値と勝率は実レース成績で校正していない架空モデルです。<a href="https://www.jra.go.jp/facilities/race/tokyo/course/" target="_blank" rel="noopener noreferrer">JRA 東京芝</a> / <a href="https://www.jra.go.jp/facilities/race/kyoto/course/" target="_blank" rel="noopener noreferrer">JRA 京都芝</a></p>
       </article>
       <article class="panel results-panel">
         <div class="panel-head"><h2><span class="step">03</span> 予想結果</h2><span class="minor">1,000回の仮想試行</span></div>
