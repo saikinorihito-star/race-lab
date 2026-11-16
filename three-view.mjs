@@ -771,12 +771,11 @@ export async function createThreeView(host){
    const backTarget=backGroup[rearIndex]?.x??runners[runners.length-1].x;
    const focusX=frontTarget*(1-rearSweep)+backTarget*rearSweep;
    const focusS=lengthAtMetres(focusX,raceDistance);
-   const closeGroup=(rearSweep<.5?frontGroup:backGroup);
-   const closePoints=closeGroup.map(runnerPoint).filter(Boolean);
-   // A short overlap between front/back inserts softens camera tracking
-   // without switching back to permanent close-up coverage.
-   const closeAim=midpoint(closePoints.length?closePoints:fullPoints);
+   const frontPoints=frontGroup.map(runnerPoint).filter(Boolean);
+   const backPoints=backGroup.map(runnerPoint).filter(Boolean);
    const fullAim=midpoint(fullPoints);
+   const frontAim=midpoint(frontPoints.length?frontPoints:fullPoints);
+   const backAim=midpoint(backPoints.length?backPoints:fullPoints);
    const fit=!!options.fitEntireVideo;
    const isPortrait=camera.aspect<.90;
    // Wide shot uses a sufficiently broad lens; phone portrait does not
@@ -827,9 +826,14 @@ export async function createThreeView(host){
    // including stragglers. During the insert only, fit the selected subgroup.
    const fullMidX=(runners[0].x+runners[runners.length-1].x)*.5;
    const wide=poseFor(fullAim,fullPoints,fullMidX,false);
-   const close=poseFor(closeAim,closePoints.length?closePoints:fullPoints,focusX,true);
-   const wanted=wide.pos.lerp(close.pos,insertLevel);
-   const wantedAim=wide.aim.clone().lerp(close.aim,insertLevel);
+   const closeFront=poseFor(frontAim,frontPoints.length?frontPoints:fullPoints,frontTarget,true);
+   const closeRear=poseFor(backAim,backPoints.length?backPoints:fullPoints,backTarget,true);
+   // Move the close-up continuously from leaders to the rear group, with
+   // no instant jump between two different camera positions.
+   const closePos=closeFront.pos.lerp(closeRear.pos,rearSweep);
+   const closeAim=closeFront.aim.clone().lerp(closeRear.aim,rearSweep);
+   const wanted=wide.pos.lerp(closePos,insertLevel);
+   const wantedAim=wide.aim.clone().lerp(closeAim,insertLevel);
    // Gentle smoothing prevents abrupt camera shifts during lane changes.
    // Smooth continuous tracking throughout the race. Snap only when loading
    // a new race or explicitly seeking the video (not during normal playback).
