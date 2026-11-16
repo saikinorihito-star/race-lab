@@ -362,7 +362,10 @@ export async function createThreeView(host){
    const muzzleMat=material(new THREE.Color(appearance.coat).multiplyScalar(1.14));
    const mane=maneMats[(id-1)%maneMats.length];
    const silk=material(appearance.silk);
-   const helmetMat=material(appearance.helmet);
+   // Basic (unlit) material keeps frame-cap colors vivid even in dark
+   // shadow or under a low camera angle.
+   const helmetMat=new THREE.MeshBasicMaterial({color:appearance.helmet});
+   const helmetTrimMat=new THREE.MeshBasicMaterial({color:appearance.helmetNumberColor});
    // Short, round body and a broad chest.
    outlinedBall(group,bodyMat,-.08,1.25,0,1.18,.65,.64);
    part(group,sphere,bodyMat,-.92,1.28,0,.57,.58,.59);
@@ -445,6 +448,7 @@ export async function createThreeView(host){
    // saddle, each thigh wraps the horse's flank and each boot rests in a stirrup.
    const riderPivot=new THREE.Group();
    riderPivot.position.set(-.30,1.94,0);
+   riderPivot.scale.set(1.12,1.12,1.12); // Rider only; keep the horse unchanged.
    group.add(riderPivot);
    const breeches=material(0xf4f5f0),boots=material(0x262a30);
    const gloves=material(0x302d2c);
@@ -469,9 +473,15 @@ export async function createThreeView(host){
      flash.rotation.z=-.62;
    }
    part(riderPivot,sphere,skin,.51,.73,0,.235,.25,.235);
-   part(riderPivot,sphere,helmetMat,.52,.97,0,.32,.16,.31);
-   part(riderPivot,sphere,steel,.53,.875,0,.29,.028,.288);
-   part(riderPivot,sphere,helmetMat,.67,.865,-.05,.25,.055,.255);
+   // High-contrast outline behind the frame-color dome, both left and right.
+   // White caps get a dark border, black/red/blue caps get a white border.
+   part(riderPivot,sphere,helmetTrimMat,.52,.977,0,.362,.203,.359);
+   part(riderPivot,sphere,helmetMat,.52,1.002,0,.335,.177,.333);
+   // Bordered peak: visible even when the cap itself is black or white.
+   part(riderPivot,sphere,helmetTrimMat,.691,.878,-.05,.288,.073,.294);
+   part(riderPivot,sphere,helmetMat,.691,.892,-.05,.267,.056,.266);
+   // A narrow, contrasting center stripe makes the helmet silhouette crisp.
+   part(riderPivot,sphere,helmetTrimMat,.535,1.165,0,.032,.027,.305);
    // Slim riding goggles and a downward-looking face.
    part(riderPivot,sphere,hoofMat,.71,.78,-.16,.20,.057,.09);
    // Shoulders and elbows bend down towards both reins, with hands well forward.
@@ -488,7 +498,7 @@ export async function createThreeView(host){
    group.scale.set(.77,.88,.77);
    return {group,legs,neckPivot,headPivot,riderPivot,tailPivot,id,
      gaitPhase:0,gaitLastTimestamp:null,gaitRace:null,
-     numberTexture,numberMat,silkMat:silk,helmetMat,accentMat:uniformAccent,appearanceCount:18};
+     numberTexture,numberMat,silkMat:silk,helmetMat,helmetTrimMat,accentMat:uniformAccent,appearanceCount:18};
  }
  const models=Array.from({length:18},(_,i)=>horseModel(i+1));
  // Subtle floor shadows provide a clear takeoff/landing cue.
@@ -541,6 +551,7 @@ export async function createThreeView(host){
    const colors=getHorseAppearance(model.id,count);
    model.silkMat.color.set(colors.silk);
    model.helmetMat.color.set(colors.helmet);
+   model.helmetTrimMat.color.set(colors.helmetNumberColor);
    model.accentMat.color.set(colors.silkAccent);
    const oldTex=model.numberTexture;
    const nextTex=raceNumberTexture(model.id,colors);
