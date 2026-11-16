@@ -378,3 +378,129 @@ body.race-fullscreen-open .visual-panel{overflow:visible}
     flex:0 0 auto;
   }
 }
+
+
+/* v0.32 – fullscreen is a true edge-to-edge video surface.
+   Safari toolbars are browser chrome and cannot be removed by CSS.
+   Drawing surface occupies all remaining app viewport, not a centered
+   intrinsic 16:9 box; WebGL resizes its projection to the surface. */
+.race-player.is-fullscreen,
+.race-player:fullscreen{
+  position:fixed!important;inset:0!important;z-index:10020!important;
+  display:block!important;
+  margin:0!important;padding:0!important;
+  width:100vw!important;height:100vh!important;height:100dvh!important;
+  max-height:none!important;max-width:none!important;
+  overflow:hidden!important;background:#05080e;
+}
+.race-player.is-fullscreen .canvas-wrap,
+.race-player:fullscreen .canvas-wrap{
+  position:absolute!important;inset:0!important;
+  display:block!important;width:100%!important;height:100%!important;
+  min-height:0!important;max-height:none!important;max-width:none!important;
+  padding:0!important;margin:0!important;flex:none!important;
+  aspect-ratio:auto!important;overflow:hidden!important
+}
+.race-player.is-fullscreen .three-host,
+.race-player:fullscreen .three-host{
+  position:absolute!important;inset:0!important;
+  width:100%!important;height:100%!important;
+  overflow:hidden!important
+}
+/* The renderer updates WebGL buffer size and camera projection per viewport,
+   avoiding the stretched horses seen when a fixed 16:9 canvas fills portrait. */
+.race-player.is-fullscreen .three-canvas,
+.race-player:fullscreen .three-canvas{
+  position:absolute!important;inset:0!important;
+  width:100%!important;height:100%!important;
+  max-width:none!important;max-height:none!important;
+  aspect-ratio:auto!important;object-fit:fill!important
+}
+.race-player.is-fullscreen #race-canvas,
+.race-player:fullscreen #race-canvas{
+  position:absolute!important;inset:0!important;
+  width:100%!important;height:100%!important;
+  aspect-ratio:auto!important;object-fit:cover!important
+}
+.race-player.is-fullscreen.fit-entire #race-canvas,
+.race-player:fullscreen.fit-entire #race-canvas{
+  object-fit:contain!important
+}
+.race-player.is-fullscreen .playback,
+.race-player:fullscreen .playback{
+  display:none!important;
+  position:absolute!important;
+  left:calc(env(safe-area-inset-left) + 10px)!important;
+  right:calc(env(safe-area-inset-right) + 10px)!important;
+  bottom:calc(env(safe-area-inset-bottom) + 64px)!important;
+  top:auto!important;transform:none!important;
+  z-index:10028!important;
+  width:auto!important;max-width:none!important;
+  margin:0!important;padding:9px 11px 11px!important;
+  border:1px solid rgba(192,239,231,.52)!important;border-radius:14px!important;
+  background:rgba(5,18,29,.91)!important;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 9px 32px rgba(0,0,0,.48)
+}
+.race-player.is-fullscreen.controls-open .playback,
+.race-player:fullscreen.controls-open .playback{display:block!important}
+.race-player.is-fullscreen .playback-heading,
+.race-player:fullscreen .playback-heading{display:none!important}
+.race-player.is-fullscreen .playback .seek-line,
+.race-player:fullscreen .playback .seek-line{min-height:40px!important}
+.race-player.is-fullscreen .playback #seek,
+.race-player:fullscreen .playback #seek{height:40px!important}
+.race-player.is-fullscreen .canvas-label,
+.race-player:fullscreen .canvas-label{
+  bottom:calc(env(safe-area-inset-bottom) + 13px)!important;
+  right:calc(env(safe-area-inset-right) + 16px)!important;
+  z-index:10022;
+}
+.transport-toggle{
+  display:none;position:absolute;
+  z-index:10030;
+  bottom:calc(env(safe-area-inset-bottom) + 10px);
+  left:calc(env(safe-area-inset-left) + 12px);
+  min-width:82px;min-height:44px;
+  background:rgba(8,31,41,.88);color:#effff9;
+  border:1px solid rgba(230,255,247,.70);border-radius:12px;
+  font-weight:800;font-size:13px;padding:10px 13px;
+  box-shadow:0 2px 16px rgba(0,0,0,.52);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  touch-action:manipulation
+}
+.race-player.is-fullscreen .transport-toggle:not([hidden]),
+.race-player:fullscreen .transport-toggle:not([hidden]){display:block}
+.transport-toggle[hidden]{display:none!important}
+.race-player.is-fullscreen.controls-open .transport-toggle,
+.race-player:fullscreen.controls-open .transport-toggle{
+  background:#0b534e;border-color:#89f3d8
+}
+.race-player.is-fullscreen .video-fit-toggle,
+.race-player:fullscreen .video-fit-toggle{
+  top:calc(env(safe-area-inset-top) + 7px);
+  left:calc(env(safe-area-inset-left) + 8px);
+  min-width:78px;font-size:11px
+}
+.race-player.is-fullscreen .exit-fullscreen,
+.race-player:fullscreen .exit-fullscreen{
+  top:calc(env(safe-area-inset-top) + 7px);
+  right:calc(env(safe-area-inset-right) + 8px)
+}
+@media(orientation:landscape){
+  .race-player.is-fullscreen .playback,
+  .race-player:fullscreen .playback{
+    left:calc(env(safe-area-inset-left) + 60px)!important;
+    right:calc(env(safe-area-inset-right) + 60px)!important;
+    bottom:calc(env(safe-area-inset-bottom) + 9px)!important;
+    padding:5px 10px 8px!important
+  }
+  .race-player.is-fullscreen .playback-options,
+  .race-player:fullscreen .playback-options{
+    padding-top:4px!important
+  }
+  .race-player.is-fullscreen .playback .seek-line,
+  .race-player:fullscreen .playback .seek-line{min-height:32px!important}
+  .race-player.is-fullscreen .playback #seek,
+  .race-player:fullscreen .playback #seek{height:32px!important}
+}
