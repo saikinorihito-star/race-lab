@@ -723,98 +723,113 @@ export async function createThreeView(host){
      const shadowSize=1-lift*.20;
      model.shadow.scale.set(1.42*shadowSize*horseScale,.60*shadowSize*horseScale,1);
    }
-   // Race-broadcast framing. Prefer a stable side / three-quarter view
-   // that keeps jockeys legible. Most of the frame should contain horses,
-   // rather than empty sky and turf. The exact JRA camera rigs aren't
-   // reproduced: this is a cinematic framing inspired by broadcast stills.
-   const smooth01=value=>{
-     const t=Math.max(0,Math.min(1,value));
+   // Default: an elevated camera fits EVERY runner, including the rearmost
+   // horse. A brief first-corner insert shows the leaders and then the
+   // trailing runners before returning to the wide view automatically.
+   // Camera distance is computed from the actual 3D horse positions and
+   // the current portrait/landscape frustum, not an assumed field width.
+   const smooth01=v=>{
+     const t=Math.max(0,Math.min(1,Number(v)||0));
      return t*t*(3-2*t);
    };
    const runners=[...frame.horses].sort((a,b)=>b.x-a.x);
-   const leader=runners[0];
-   const last=runners[runners.length-1];
-   const remaining=Math.max(0,raceDistance-leader.x);
-   const finalRun=smooth01((650-remaining)/470);
-   const intro=smooth01((frame.t-3)/11);
-   // Always favour the race-relevant pack, not an empty point several
-   // horse-lengths ahead of the leader.
-   const groupSize=Math.min(entrants,Math.max(2,Math.round(entrants*.54)));
-   const topGroup=runners.slice(0,groupSize);
-   const frontMiddle=topGroup[Math.floor((topGroup.length-1)*.48)];
-   const raceMiddle=runners[Math.floor((runners.length-1)*.46)];
-   const packTarget=frontMiddle.x*.77+raceMiddle.x*.23;
-   const topTarget=runners[Math.min(2,runners.length-1)].x;
-   const targetLead=packTarget*(1-finalRun*.84)+topTarget*finalRun*.84;
-   // Short first-turn coverage: gently move from the leaders to the
-   // middle / rear of the field and return. Avoid the previous 23s sweep.
+   const liveModels=models.filter(m=>m.group.visible);
+   const runnerPoint=h=>{
+     const m=models.find(model=>model.id===h.id);
+     const p=m?.group.position;
+     return p?new THREE.Vector3(p.x,p.y+1.55,p.z):null;
+   };
+   const fullPoints=liveModels.map(m=>{
+     const p=m.group.position;
+     return new THREE.Vector3(p.x,p.y+1.55,p.z);
+   });
+   const midpoint=points=>{
+     let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,
+       minZ=Infinity,maxZ=-Infinity;
+     for(const p of points){
+       minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);
+       minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);
+       minZ=Math.min(minZ,p.z);maxZ=Math.max(maxZ,p.z);
+     }
+     return new THREE.Vector3((minX+maxX)*.5,
+       (minY+maxY)*.5,(minZ+maxZ)*.5);
+   };
    const firstBend=firstTurnCueTime(race,raceDistance,course,venue,layout);
-   const shotU=firstBend===null?-1:(frame.t-(firstBend-1.6))/12;
+   const shotU=firstBend===null?-1:(frame.t-(firstBend-1.5))/11;
    const inTurnShot=shotU>0&&shotU<1;
-   const rearSweep=inTurnShot
-      ?(shotU<.5?smooth01(shotU*2):1-smooth01((shotU-.5)*2)):0;
-   const bendTarget=runners[Math.floor((runners.length-1)*.70)].x;
-   const focusX=Math.max(0,targetLead*(1-rearSweep*.68)+bendTarget*rearSweep*.68);
+   // Zoom up to the leaders for ~3s, sweep to the rear, then return to
+   // the main wide shot over the last ~2.5s of this 11-second insert.
+   const insertLevel=inTurnShot
+     ?smooth01(shotU/.20)*(1-smooth01((shotU-.76)/.24)):0;
+   const rearSweep=inTurnShot?smooth01((shotU-.27)/.43):0;
+   const closeCount=Math.min(4,Math.max(2,Math.ceil(entrants*.22)));
+   const frontGroup=runners.slice(0,closeCount);
+   const backGroup=runners.slice(-closeCount);
+   const frontIndex=Math.max(0,Math.min(closeCount-1,Math.floor(closeCount*.48)));
+   const rearIndex=Math.max(0,Math.min(closeCount-1,Math.floor(closeCount*.48)));
+   const frontTarget=frontGroup[frontIndex]?.x??runners[0].x;
+   const backTarget=backGroup[rearIndex]?.x??runners[runners.length-1].x;
+   const focusX=frontTarget*(1-rearSweep)+backTarget*rearSweep;
    const focusS=lengthAtMetres(focusX,raceDistance);
-   const nearRunners=runners.filter(h=>Math.abs(h.x-focusX)<32);
-   const meanLane=nearRunners.length
-     ?nearRunners.reduce((sum,h)=>sum+h.lane,0)/nearRunners.length
-     :(entrants-1)/2;
-   const direction=raceCoursePoint(focusS,0,raceDistance,course,venue,layout);
-   const insideSign=venue==='kyoto'?-1:1;
-   const insideX=insideSign*direction.dz,insideZ=-insideSign*direction.dx;
-   const trackCenter=raceCoursePoint(focusS,
-      INSIDE_MARGIN+meanLane*LANE_WIDTH,raceDistance,course,venue,layout);
-   const gateCenter=raceCoursePoint(focusS,
-      INSIDE_MARGIN+(entrants-1)*LANE_WIDTH*.5,raceDistance,course,venue,layout);
-   const focusHeight=raceCourseHeightMetres(-focusS,raceDistance,venue,layout,course);
+   const closeGroup=(rearSweep<.5?frontGroup:backGroup);
+   const closePoints=closeGroup.map(runnerPoint).filter(Boolean);
+   // A short overlap between front/back inserts softens camera tracking
+   // without switching back to permanent close-up coverage.
+   const closeAim=midpoint(closePoints.length?closePoints:fullPoints);
+   const fullAim=midpoint(fullPoints);
    const fit=!!options.fitEntireVideo;
    const isPortrait=camera.aspect<.90;
-   // Medium-telephoto broadcast lens. On tall phones a deliberately
-   // narrower horizontal view focuses on the current pack.
-   const fov=(isPortrait?45:36)+(fit?11:0)+
-     (1-intro)*6-finalRun*2;
+   // Wide shot uses a sufficiently broad lens; phone portrait does not
+   // sacrifice the trailing horses in order to magnify the leader.
+   const fov=(isPortrait?56:43)+(fit?6:0);
    if(Math.abs(camera.fov-fov)>.05){
      camera.fov=fov;
      camera.updateProjectionMatrix();
    }
-   // In world units: 3/4 front, mainly side-on through the back straight,
-   // elevated slightly for bends to make lanes and passing visible.
-   const bendBefore=raceCoursePoint(focusS-35,0,raceDistance,course,venue,layout);
-   const bendAfter=raceCoursePoint(focusS+35,0,raceDistance,course,venue,layout);
-   const turnCos=Math.max(-1,Math.min(1,
-     bendBefore.dx*bendAfter.dx+bendBefore.dz*bendAfter.dz));
-   const onBend=smooth01((Math.acos(turnCos)-.11)/.35);
-   const packSpan=Math.max(0,leader.x-topGroup[topGroup.length-1].x);
-   const spreadScale=Math.max(0,Math.min(1,packSpan/50));
-   const backOff=fit?1.42:1;
-   // These tight distances make riders and caps visibly larger while
-   // preserving a few horses side-by-side on phone screens.
-   const side=backOff*(11.4+spreadScale*2.5+onBend*.7);
-   const ahead=backOff*(4.7+finalRun*5+onBend*1.5);
-   const rise=backOff*(5.0+onBend*1.9);
-   const followPos=new THREE.Vector3(
-     trackCenter.x+direction.dx*ahead+insideX*side,
-     focusHeight+rise,
-     trackCenter.z+direction.dz*ahead+insideZ*side
-   );
-   const followAim=new THREE.Vector3(
-     trackCenter.x+direction.dx*.6,focusHeight+1.56,
-     trackCenter.z+direction.dz*.6
-   );
-   // A broader starting-gate shot, then a gradual lens move into the
-   // moving pack. No arbitrary camera snap after the first corner.
-   const gateScale=backOff*(1+entrants*.022);
-   const gatePos=new THREE.Vector3(
-     gateCenter.x+direction.dx*18*gateScale+insideX*16.5*gateScale,
-     focusHeight+7.7*gateScale,
-     gateCenter.z+direction.dz*18*gateScale+insideZ*16.5*gateScale
-   );
-   const gateAim=new THREE.Vector3(
-     gateCenter.x,focusHeight+1.52,gateCenter.z
-   );
-   const wanted=gatePos.lerp(followPos,intro);
-   const wantedAim=gateAim.lerp(followAim,intro);
+   const poseFor=(aim,points,progress,close=false)=>{
+     const s=lengthAtMetres(progress,raceDistance);
+     const dir=raceCoursePoint(s,0,raceDistance,course,venue,layout);
+     const sign=venue==='kyoto'?-1:1;
+     const sideX=sign*dir.dz,sideZ=-sign*dir.dx;
+     // Side-on with a little forward angle makes order and overtaking clear;
+     // high camera elevation exposes inside/outside lanes on the bends.
+     let ox=sideX+dir.dx*(close?.34:.24);
+     let oy=close?.64:.92;
+     let oz=sideZ+dir.dz*(close?.34:.24);
+     const norm=Math.hypot(ox,oy,oz)||1;
+     ox/=norm;oy/=norm;oz/=norm;
+     // Orthonormal camera axes. Positive camera-out vector points from
+     // aim towards camera, so depth is distance - dot(delta,cameraOut).
+     const rightNorm=Math.hypot(oz,ox)||1;
+     const rx=oz/rightNorm,rz=-ox/rightNorm;
+     const upx=-oy*ox/rightNorm;
+     const upy=(ox*ox+oz*oz)/rightNorm;
+     const upz=-oy*oz/rightNorm;
+     const tanY=Math.tan(camera.fov*Math.PI/360);
+     const tanX=tanY*Math.max(.38,camera.aspect);
+     let distance=close?13.5:21;
+     const padding=close?2.5:4.6;
+     for(const p of points){
+       const x=p.x-aim.x,y=p.y-aim.y,z=p.z-aim.z;
+       const forwardOffset=x*ox+y*oy+z*oz;
+       const horizontal=Math.abs(x*rx+z*rz)+padding;
+       const vertical=Math.abs(x*upx+y*upy+z*upz)+padding*.82;
+       const needed=forwardOffset+Math.max(horizontal/(tanX*.86),vertical/(tanY*.82));
+       distance=Math.max(distance,needed);
+     }
+     if(fit)distance*=1.17;
+     return {
+       pos:new THREE.Vector3(aim.x+ox*distance,aim.y+oy*distance,aim.z+oz*distance),
+       aim
+     };
+   };
+   // Regular wide coverage is computed using all 2-18 horses at once,
+   // including stragglers. During the insert only, fit the selected subgroup.
+   const fullMidX=(runners[0].x+runners[runners.length-1].x)*.5;
+   const wide=poseFor(fullAim,fullPoints,fullMidX,false);
+   const close=poseFor(closeAim,closePoints.length?closePoints:fullPoints,focusX,true);
+   const wanted=wide.pos.lerp(close.pos,insertLevel);
+   const wantedAim=wide.aim.clone().lerp(close.aim,insertLevel);
    // Gentle smoothing prevents abrupt camera shifts during lane changes.
    // Smooth continuous tracking throughout the race. Snap only when loading
    // a new race or explicitly seeking the video (not during normal playback).
@@ -824,7 +839,9 @@ export async function createThreeView(host){
    if(!cameraReady||race!==lastCameraRace||venue+':'+layout+':'+course!==lastCameraCourse||manuallySeeked){
      camera.position.copy(wanted);cameraAim.copy(wantedAim);cameraReady=true;
    }else{
-     const follow=Math.min(.36,1-Math.exp(-Math.max(0,delta)*1.2));
+     // Track at the default 4x replay rate without letting the camera lag
+     // behind and lose horses at the front or back of the pack.
+     const follow=Math.min(.64,1-Math.exp(-Math.max(0,delta)*4.5));
      camera.position.lerp(wanted,follow);cameraAim.lerp(wantedAim,follow);
    }
    lastLeadS=focusS;lastCameraRace=race;lastCameraTime=raceTime;lastCameraCourse=venue+':'+layout+':'+course;
@@ -846,9 +863,9 @@ export async function createThreeView(host){
      camera:{x:camera.position.x,z:camera.position.z},
      target:{x:cameraAim.x,z:cameraAim.z},
      visibleIds,
-     turnShot:inTurnShot,
+     turnShot:insertLevel>.05,
      scanProgress:rearSweep,
-     frameMode:intro<.99?'スタート':finalRun>.6?'直線':'馬群追跡'
+     frameMode:insertLevel>.05?(rearSweep<.5?'先頭アップ':'後方アップ'):'全体像'
    };
    renderer.render(scene,camera);
  }
