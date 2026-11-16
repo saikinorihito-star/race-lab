@@ -2,6 +2,7 @@
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 import {gallopCycle,gallopLegPose,gallopDynamics} from './gait.mjs';
+import {makeHorseCharacterBuilder} from './horse-character.mjs';
 import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,getTurfProfile,furlongMarkerPositions,courseHeightMetres,courseSlope,raceCoursePoint,startPocket,raceCourseHeightMetres,raceCourseSlope} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
@@ -313,232 +314,10 @@ export async function createThreeView(host){
    const tree=new THREE.Mesh(new THREE.SphereGeometry(1,7,5),trees);
    tree.position.set(x,2.4,z);tree.scale.set(2.0,2.1,2.0);scene.add(tree);
  }
- const sphere=new THREE.SphereGeometry(1,18,12);
- const capsule=new THREE.CylinderGeometry(.23,.26,1,8);
- const limbCylinder=new THREE.CylinderGeometry(1,1,1,8);
- function jointBetween(parent,start,end,mat,radius){
-   const a=new THREE.Vector3(...start),b=new THREE.Vector3(...end);
-   const obj=new THREE.Mesh(limbCylinder,mat);
-   obj.position.copy(a).add(b).multiplyScalar(.5);
-   obj.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());
-   obj.scale.set(radius,a.distanceTo(b),radius);
-   parent.add(obj);return obj;
- }
- function part(parent,geo,mat,x,y,z,sx=1,sy=1,sz=1){
-   const obj=new THREE.Mesh(geo,mat);
-   obj.position.set(x,y,z);obj.scale.set(sx,sy,sz);
-   parent.add(obj);return obj;
- }
-
- // Rounded chibi racehorses: deliberately oversized heads, short sturdy legs and brightly dressed jockeys.
- // Everything is procedural geometry, keeping mobile downloads and rendering inexpensive.
- // Rounded, glossy chibi details. Shared assets keep rendering modest on iPhone.
- const eyeWhite=new THREE.MeshPhongMaterial({color:0xfffaf3,shininess:95,specular:0x888888});
- const pupil=new THREE.MeshPhongMaterial({color:0x172232,shininess:85,specular:0x777777});
- const glint=new THREE.MeshBasicMaterial({color:0xffffff});
- const hoofMat=material(0x30251f), skin=material(0xf1c9a6);
- const maneMats=[0x29211e,0x35261f,0x453126,0x251c19]
-   .map(c=>new THREE.MeshPhongMaterial({color:c,shininess:36,specular:0x303030}));
- const earInner=material(0xbd7d78), saddleMat=material(0xfaf5e9);
- const clothGeom=new THREE.PlaneGeometry(.72,.60);
- const strokeMat=new THREE.MeshBasicMaterial({color:0x30251e,side:THREE.BackSide});
- const hoofGeom=new THREE.CylinderGeometry(.25,.29,.27,10);
- const cone=new THREE.ConeGeometry(1,1,8);
- function raceNumberTexture(id,appearance){
-   const canvas=document.createElement('canvas');canvas.width=96;canvas.height=96;
-   const context=canvas.getContext('2d');
-   context.fillStyle=appearance.saddleBase;context.fillRect(0,0,96,96);
-   context.strokeStyle=appearance.saddleBorder;context.lineWidth=10;
-   context.strokeRect(6,6,84,84);
-   context.font='900 60px Arial';context.textAlign='center';
-   context.textBaseline='middle';context.fillStyle=appearance.numberColor;
-   context.fillText(String(id),48,51);
-   const texture=new THREE.CanvasTexture(canvas);
-   texture.colorSpace=THREE.SRGBColorSpace;
-   return texture;
- }
- function outlinedBall(parent,innerMat,x,y,z,sx,sy,sz){
-   const outline=part(parent,sphere,strokeMat,x,y,z,sx*1.065,sy*1.065,sz*1.065);
-   outline.renderOrder=0;
-   const face=part(parent,sphere,innerMat,x,y,z,sx,sy,sz);
-   face.renderOrder=1;
-   return face;
- }
-
- // Lightweight tack curves, parented to the moving head or horse body.
- const leather=material(0x241c1b), saddleLeather=material(0x3c3029), steel=material(0xcbd7d8);
- const trim=material(0xe6d9bc);
- const tackCurve=(parent,points,mat=leather,thickness=.032)=>{
-   const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p)));
-   const tube=new THREE.Mesh(new THREE.TubeGeometry(curve,10,thickness,5,false),mat);
-   parent.add(tube);return tube;
- };
- function horseModel(id){
-   const group=new THREE.Group();scene.add(group);
-   const appearance=getHorseAppearance(id);
-   const bodyMat=new THREE.MeshPhongMaterial({
-     color:appearance.coat,specular:0x343434,shininess:46
-   });
-   const muzzleMat=new THREE.MeshPhongMaterial({
-     color:new THREE.Color(appearance.coat).multiplyScalar(1.18),
-     specular:0x404040,shininess:55
-   });
-   const mane=maneMats[(id-1)%maneMats.length];
-   // Frame-colored bridle matches the jockey's helmet and updates with field size.
-   const bridleMat=new THREE.MeshPhongMaterial({
-     color:appearance.helmet,shininess:60,specular:0x494949
-   });
-   // The helmet, jacket and sleeves SHARE one material instance, so their
-   // rendered pixels are identically colored in every field-size configuration.
-   // Do not use different lighting or independent material color state.
-   const uniformMat=new THREE.MeshBasicMaterial({color:appearance.helmet});
-   const silk=uniformMat,helmetMat=uniformMat;
-   const helmetTrimMat=new THREE.MeshBasicMaterial({color:appearance.helmetNumberColor});
-   // Plump barrel, soft shoulders and rounded hindquarters.
-   outlinedBall(group,bodyMat,-.10,1.30,0,1.20,.70,.67);
-   part(group,sphere,bodyMat,-.92,1.28,0,.61,.61,.61);
-   // Head and chest have a common moving neck root, allowing visible
-   // extension, lift and dip with each stride.
-   const neckPivot=new THREE.Group();
-   neckPivot.position.set(.71,1.39,0);group.add(neckPivot);
-   part(neckPivot,sphere,bodyMat,0,.03,0,.60,.59,.61);
-   part(neckPivot,sphere,bodyMat,.30,.43,0,.48,.62,.49);
-   const headPivot=new THREE.Group();
-   headPivot.position.set(.37,.61,0);neckPivot.add(headPivot);
-   // The larger forehead, soft muzzle and prominent eyes are based on the
-   // previous race-scene concept image, while remaining actual moving 3D parts.
-   outlinedBall(headPivot,bodyMat,.20,.03,0,.83,.69,.67);
-   outlinedBall(headPivot,muzzleMat,.72,-.27,0,.67,.44,.54);
-   part(headPivot,sphere,hoofMat,1.24,-.48,0,.10,.035,.22);
-   for(const side of [-1,1]){
-     // Dark eyelid rim, warm ivory eyeball, shiny pupil and double eye catchlights.
-     part(headPivot,sphere,hoofMat,.35,.22,side*.66,.278,.318,.153);
-     part(headPivot,sphere,eyeWhite,.36,.22,side*.704,.250,.288,.145);
-     part(headPivot,sphere,pupil,.45,.19,side*.814,.164,.190,.081);
-     part(headPivot,sphere,glint,.49,.282,side*.885,.063,.070,.029);
-     part(headPivot,sphere,glint,.39,.142,side*.881,.025,.029,.018);
-     part(headPivot,sphere,hoofMat,1.09,-.24,side*.408,.080,.085,.039);
-     // Upright ears and smaller pink inner-ear details.
-     const ear=part(headPivot,cone,bodyMat,-.12,.72,side*.395,.208,.410,.184);
-     ear.rotation.z=-.14;
-     const inner=part(headPivot,cone,earInner,-.085,.76,side*.406,.103,.269,.080);
-     inner.rotation.z=-.14;
-     // Visible colored browband, cheek straps and padded noseband.
-     tackCurve(headPivot,[[-.13,.43,side*.47],[.06,.47,side*.66],[.28,.33,side*.68]],bridleMat,.050);
-     tackCurve(headPivot,[[.06,.45,side*.64],[.33,.05,side*.69],[.71,-.29,side*.49]],bridleMat,.048);
-     tackCurve(headPivot,[[.71,-.33,side*.49],[.96,-.30,side*.48],[1.17,-.23,side*.37]],bridleMat,.066);
-     part(headPivot,sphere,steel,.98,-.34,side*.47,.087,.075,.060);
-   }
-   // Layered, swept forelock and a dense neck mane read clearly in close shots.
-   for(let i=0;i<5;i++){
-     const tuft=part(headPivot,sphere,mane,-.27+i*.15,.60-i*.078,0,
-       .17,.22,.33-i*.031);
-     tuft.rotation.z=-.33;
-   }
-   for(let i=0;i<5;i++){
-     const tuft=part(neckPivot,sphere,mane,-.08-i*.19,.79-i*.078,0,
-       .225,.22,.29);
-     tuft.rotation.z=.42;
-   }
-   const tailPivot=new THREE.Group();tailPivot.position.set(-1.20,1.44,0);group.add(tailPivot);
-   part(tailPivot,sphere,mane,-.25,-.01,0,.42,.24,.25);
-   part(tailPivot,sphere,mane,-.52,-.13,0,.36,.29,.27);
-   // Four short, chunky articulated legs with recognizable hooves.
-   const legs=[];
-   for(const x of [-.83,.75])for(const z of [-.43,.43]){
-     const hip=new THREE.Group();hip.position.set(x,1.00,z);group.add(hip);
-     part(hip,sphere,bodyMat,0,-.22,0,.285,.43,.27);
-     const knee=new THREE.Group();knee.position.set(0,-.49,0);hip.add(knee);
-     part(knee,sphere,bodyMat,.035,-.18,0,.236,.32,.22);
-     part(knee,hoofGeom,hoofMat,.12,-.43,0,1,1,1);
-     legs.push({hip,knee,front:x>0,side:z>0});
-   }
-   // Racing saddle and colored saddlecloth, with girth and visible stirrups.
-   part(group,sphere,saddleMat,-.23,1.77,0,.55,.15,.56);
-   const seat=part(group,sphere,saddleLeather,-.29,1.86,0,.46,.18,.48);
-   seat.rotation.z=-.09;
-   for(const side of [-1,1]){
-     part(group,sphere,saddleLeather,-.35,1.56,side*.57,.38,.29,.095);
-     // Girth, under the belly behind the forelegs.
-     tackCurve(group,[[-.19,1.83,side*.49],[-.19,1.43,side*.62],[-.19,.98,side*.54]],leather,.057);
-     // Stirrup leather and a silver stirrup loop next to the jockey boot.
-     tackCurve(group,[[-.49,1.82,side*.52],[-.60,1.50,side*.71],[-.61,1.30,side*.75]],leather,.031);
-     tackCurve(group,[[-.76,1.34,side*.75],[-.76,1.22,side*.75],[-.45,1.22,side*.75],[-.45,1.34,side*.75]],steel,.030);
-     // Reins from the bit toward the jockey's hands.
-     tackCurve(group,[[2.02,1.66,side*.41],[1.48,1.86,side*.55],[.95,2.06,side*.49],[.48,2.12,side*.27]],leather,.030);
-     // Breastplate strap below neck.
-     tackCurve(group,[[.60,1.86,side*.53],[.47,1.25,side*.62],[.08,1.10,side*.52]],leather,.039);
-   }
-   const numberTexture=raceNumberTexture(id,appearance);
-   const numberMat=new THREE.MeshBasicMaterial({map:numberTexture,side:THREE.DoubleSide});
-   for(const side of [-1,1]){
-     const num=new THREE.Mesh(clothGeom,numberMat);
-     num.position.set(-.27,1.48,side*.724);
-     if(side<0)num.rotation.y=Math.PI;
-     group.add(num);
-   }
-   // Race jockey in a forward two-point crouch. Hips stay centered over the
-   // saddle, each thigh wraps the horse's flank and each boot rests in a stirrup.
-   const riderPivot=new THREE.Group();
-   riderPivot.position.set(-.30,1.94,0);
-   riderPivot.scale.set(1.03,1.03,1.03); // Compact toy-style jockey; horse geometry stays unchanged.
-   group.add(riderPivot);
-   // For this demo the whole riding outfit, including breeches, is one
-   // frame color; otherwise the visible white trousers can look like a
-   // different uniform when the jockey is small on an iPhone screen.
-   const breeches=uniformMat,boots=material(0x262a30);
-   const gloves=material(0x302d2c);
-   // Seat and pelvis make contact with the saddle, not floating above the horse.
-   part(riderPivot,sphere,breeches,-.04,-.02,0,.30,.20,.37);
-   for(const side of [-1,1]){
-     const hip=[-.04,-.08,side*.30];
-     const knee=[.21,-.37,side*.60];
-     const boot=[-.25,-.63,side*.74];
-     jointBetween(riderPivot,hip,knee,breeches,.155);
-     part(riderPivot,sphere,breeches,...knee,.145,.15,.14);
-     jointBetween(riderPivot,knee,boot,boots,.112);
-     part(riderPivot,sphere,boots,boot[0]+.03,boot[1]-.015,boot[2],.21,.085,.125);
-   }
-   // Chest leans forwards naturally from the pelvis toward the horse's neck.
-   // A larger, uninterrupted color panel prevents the white breeches
-   // and dark gloves from making the uniform look different from the cap.
-   const chest=part(riderPivot,sphere,uniformMat,.19,.31,0,.382,.430,.345);
-   chest.rotation.z=-.62;
-   const uniformAccent=uniformMat;
-   for(const side of [-1,1]){
-     const flash=part(riderPivot,sphere,helmetTrimMat,.24,.33,side*.309,.24,.092,.061);
-     flash.rotation.z=-.62;
-   }
-   // An oversized rounded helmet and compact face match the cute reference
-   // silhouette. Two proper goggles stay visible from either side.
-   part(riderPivot,sphere,skin,.52,.76,0,.272,.277,.266);
-   part(riderPivot,sphere,helmetTrimMat,.51,1.018,0,.419,.268,.405);
-   part(riderPivot,sphere,uniformMat,.51,1.054,0,.407,.262,.396);
-   part(riderPivot,sphere,helmetTrimMat,.75,.908,0,.285,.070,.300);
-   part(riderPivot,sphere,uniformMat,.76,.933,0,.286,.056,.294);
-   for(const side of [-1,1]){
-     part(riderPivot,sphere,helmetTrimMat,.728,.785,side*.150,.166,.087,.118);
-     part(riderPivot,sphere,hoofMat,.767,.787,side*.150,.142,.067,.102);
-     part(riderPivot,sphere,glint,.872,.814,side*.173,.031,.026,.022);
-   }
-   // Shoulders and elbows bend down towards both reins, with hands well forward.
-   for(const side of [-1,1]){
-     const shoulder=[.31,.47,side*.25];
-     const elbow=[.51,.27,side*.35];
-     const hand=[.77,.17,side*.27];
-     jointBetween(riderPivot,shoulder,elbow,silk,.13);
-     part(riderPivot,sphere,silk,...elbow,.125,.12,.12);
-     jointBetween(riderPivot,elbow,hand,silk,.105);
-     part(riderPivot,sphere,gloves,...hand,.112,.095,.10);
-   }
-   // Reduce mesh footprint relative to collision-safe lane spacing.
-   group.scale.set(.77,.88,.77);
-   return {group,legs,neckPivot,headPivot,riderPivot,tailPivot,id,
-     gaitPhase:0,gaitLastTimestamp:null,gaitRace:null,
-     numberTexture,numberMat,uniformMat,silkMat:silk,helmetMat,helmetTrimMat,bridleMat,
-     accentMat:uniformAccent,appearanceCount:18};
- }
- const models=Array.from({length:18},(_,i)=>horseModel(i+1));
+ // Sculpted character models are kept separate from camera, track geometry
+ // and racing physics. Geometry/jersey textures are generated on the device.
+ const horseBuilder=makeHorseCharacterBuilder(THREE,scene,getHorseAppearance);
+ const models=Array.from({length:18},(_,i)=>horseBuilder.build(i+1));
  // Subtle floor shadows provide a clear takeoff/landing cue.
  const shadowGeometry=new THREE.CircleGeometry(1,20);
  const shadowMaterial=new THREE.MeshBasicMaterial({color:0x25412c,transparent:true,opacity:.16,depthWrite:false});
@@ -585,20 +364,9 @@ export async function createThreeView(host){
  // Refresh only the appearance-specific materials when the field size changes.
  // Unused models stay hidden rather than remaining at their previous position.
  function setFieldAppearance(model,count){
-   if(model.appearanceCount===count)return;
-   const colors=getHorseAppearance(model.id,count);
-   // One update colors the helmet, jacket AND sleeves because all share
-   // the same Three.js material object.
-   model.uniformMat.color.set(colors.helmet);
-   model.helmetTrimMat.color.set(colors.helmetNumberColor);
-   model.bridleMat.color.set(colors.helmet);
-   const oldTex=model.numberTexture;
-   const nextTex=raceNumberTexture(model.id,colors);
-   model.numberMat.map=nextTex;model.numberMat.needsUpdate=true;
-   model.numberTexture=nextTex;oldTex.dispose();
-   model.appearanceCount=count;
+   horseBuilder.updateAppearance(model,count);
  }
- const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i}));
+  const neutral=Array.from({length:18},(_,i)=>({id:i+1,x:0,lane:i}));
  let disposed=false;
  let cameraReady=false,lastLeadS=0,lastCameraRace=null,lastCameraTime=null,lastCameraCourse='A';
  let turnCueRace=null,turnCueKey='',turnCueTime=null;
@@ -934,6 +702,7 @@ export async function createThreeView(host){
    });
    for(const m of models){
      m.numberTexture.dispose();
+     m.silkTexture?.dispose();
      m.nameLabel.sprite.material.dispose();
      m.nameLabel.tex.dispose();
    }
