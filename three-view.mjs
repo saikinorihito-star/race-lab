@@ -641,6 +641,7 @@ export async function createThreeView(host){
    }
    const leadS=lengthAtMetres(lead,raceDistance);
    const leaders=[...frame.horses].sort((a,b)=>b.x-a.x).slice(0,1);
+   const focusHorse=Number(options.focusHorse)||0;
    const displayed=raceDisplayPositions(race,frame,raceDistance,course,venue,layout);
    // Playback speed affects screen motion. Faster legs remain visually readable
    // instead of matching an unrealistic 12x hoof-strike rate.
@@ -665,7 +666,10 @@ export async function createThreeView(host){
      model.group.visible=true;
      model.group.scale.set(horseScale,horseScale,horseScale);
      model.shadow.visible=model.group.visible;
-     const shouldLabel=!!race && leaders.some(v=>v.id===model.id);
+     // Pin one requested horse's name to its actual moving 3D model.
+     // Avoid constantly switching the labelled horse with every lead change.
+     const shouldLabel=!!race && (focusHorse>0?
+       model.id===focusHorse:leaders.some(v=>v.id===model.id));
      model.nameLabel.sprite.visible=shouldLabel;
      if(shouldLabel){
        const name=horses?.find(v=>v.id===model.id)?.name || 'サンプル'+model.id;
@@ -733,15 +737,22 @@ export async function createThreeView(host){
      return t*t*(3-2*t);
    };
    const runners=[...frame.horses].sort((a,b)=>b.x-a.x);
-   // Follow most of the moving field without forcing the very last
-   // stragglers into every shot. Keep a stable 80% of the field in view.
-   const coverageCount=Math.max(2,Math.min(entrants,Math.ceil(entrants*.80)));
+   // Normal: cover most of the runners. When the viewer selects a horse,
+   // hold a smaller, stable subgroup containing that specific horse.
+   const followedIndex=focusHorse>0?runners.findIndex(h=>h.id===focusHorse):-1;
+   const coverageCount=followedIndex>=0?
+     Math.min(entrants,Math.max(2,Math.ceil(entrants*.48))):
+     Math.max(2,Math.min(entrants,Math.ceil(entrants*.80)));
+   const firstIncluded=followedIndex>=0?
+     Math.max(0,Math.min(entrants-coverageCount,
+       followedIndex-Math.floor((coverageCount-1)/2))):0;
    const runnerPoint=h=>{
      const m=models.find(model=>model.id===h.id);
      const p=m?.group.position;
      return p?new THREE.Vector3(p.x,p.y+1.55,p.z):null;
    };
-   const fullPoints=runners.slice(0,coverageCount).map(runnerPoint).filter(Boolean);
+   const fullPoints=runners.slice(firstIncluded,firstIncluded+coverageCount)
+      .map(runnerPoint).filter(Boolean);
    const midpoint=points=>{
      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,
        minZ=Infinity,maxZ=-Infinity;
@@ -753,14 +764,17 @@ export async function createThreeView(host){
      return new THREE.Vector3((minX+maxX)*.5,
        (minY+maxY)*.5,(minZ+maxZ)*.5);
    };
-   const firstBend=firstTurnCueTime(race,raceDistance,course,venue,layout);
-   const shotU=firstBend===null?-1:(frame.t-(firstBend-1.5))/11;
+   // The previous 11s simulated sweep lasted under 3 real seconds at
+   // default 4x playback. Now take 36 simulated seconds (~9 real seconds),
+   // holding the front and rear groups long enough to identify each runner.
+   // User-selected horse tracking disables this sweep entirely.
+   const firstBend=followedIndex>=0?null:
+     firstTurnCueTime(race,raceDistance,course,venue,layout);
+   const shotU=firstBend===null?-1:(frame.t-(firstBend-1.5))/36;
    const inTurnShot=shotU>0&&shotU<1;
-   // Zoom up to the leaders for ~3s, sweep to the rear, then return to
-   // the main wide shot over the last ~2.5s of this 11-second insert.
    const insertLevel=inTurnShot
-     ?smooth01(shotU/.20)*(1-smooth01((shotU-.76)/.24)):0;
-   const rearSweep=inTurnShot?smooth01((shotU-.27)/.43):0;
+     ?smooth01(shotU/.12)*(1-smooth01((shotU-.82)/.18)):0;
+   const rearSweep=inTurnShot?smooth01((shotU-.38)/.27):0;
    const closeCount=Math.min(4,Math.max(2,Math.ceil(entrants*.22)));
    const frontGroup=runners.slice(0,closeCount);
    const backGroup=runners.slice(-closeCount);
@@ -775,7 +789,8 @@ export async function createThreeView(host){
    const fullAim=midpoint(fullPoints);
    // Leave visible track ahead of the front runner. Offset the viewing
    // target in the direction of travel instead of centering the horses.
-   const leaderS=lengthAtMetres(runners[0].x,raceDistance);
+   const anchorRunner=followedIndex>=0?runners[followedIndex]:runners[0];
+   const leaderS=lengthAtMetres(anchorRunner.x,raceDistance);
    const leadDirection=raceCoursePoint(leaderS,0,raceDistance,course,venue,layout);
    const aheadRoom=options.fitEntireVideo?6.0:8.2; // 3D scene units
    fullAim.x+=leadDirection.dx*aheadRoom;
@@ -797,9 +812,10 @@ export async function createThreeView(host){
      const sideX=sign*dir.dz,sideZ=-sign*dir.dx;
      // Lower the virtual camera toward the rail compared with the previous
      // high overhead view. Some forward angle preserves a view of the course.
-     let ox=sideX+dir.dx*(close?.26:.18);
-     let oy=close?.40:.54;
-     let oz=sideZ+dir.dz*(close?.26:.18);
+     // Lower rail-side camera (~15-18 degrees vs the former ~22-27).
+     let ox=sideX+dir.dx*(close?.25:.18);
+     let oy=close?.27:.34;
+     let oz=sideZ+dir.dz*(close?.25:.18);
      const norm=Math.hypot(ox,oy,oz)||1;
      ox/=norm;oy/=norm;oz/=norm;
      // Orthonormal camera axes. Positive camera-out vector points from
@@ -829,7 +845,8 @@ export async function createThreeView(host){
    };
    // Normal coverage is ~80% of runners; the first-corner insert still
    // shows the leaders and then the rear before returning to this shot.
-   const fullMidX=(runners[0].x+runners[runners.length-1].x)*.5;
+   const included=runners.slice(firstIncluded,firstIncluded+coverageCount);
+   const fullMidX=(included[0].x+included[included.length-1].x)*.5;
    const wide=poseFor(fullAim,fullPoints,fullMidX,false);
    const closeFront=poseFor(frontAim,frontPoints.length?frontPoints:fullPoints,frontTarget,true);
    const closeRear=poseFor(backAim,backPoints.length?backPoints:fullPoints,backTarget,true);
@@ -850,7 +867,9 @@ export async function createThreeView(host){
    }else{
      // Track at the default 4x replay rate without letting the camera lag
      // behind and lose horses at the front or back of the pack.
-     const follow=Math.min(.64,1-Math.exp(-Math.max(0,delta)*4.5));
+     // Smooth lens and target transitions without slowing the actual
+     // running horses. Keep sufficient response for default 4x playback.
+     const follow=Math.min(.44,1-Math.exp(-Math.max(0,delta)*2.8));
      camera.position.lerp(wanted,follow);cameraAim.lerp(wantedAim,follow);
    }
    lastLeadS=focusS;lastCameraRace=race;lastCameraTime=raceTime;lastCameraCourse=venue+':'+layout+':'+course;
@@ -874,7 +893,9 @@ export async function createThreeView(host){
      visibleIds,
      turnShot:insertLevel>.05,
      scanProgress:rearSweep,
-     frameMode:insertLevel>.05?(rearSweep<.5?'先頭アップ':'後方アップ'):'馬群・前方',
+     frameMode:followedIndex>=0?'注目馬を追跡':
+       insertLevel>.05?(rearSweep<.5?'先頭アップ':'後方アップ'):'馬群・前方',
+     focusHorse:followedIndex>=0?focusHorse:0,
      coverageCount,
      aheadRoom
    };
