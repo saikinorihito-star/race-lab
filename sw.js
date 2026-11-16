@@ -1,5 +1,5 @@
-const CACHE='race-lab-v42';
-const ASSETS=['./','./index.html','./styles.css','./app.mjs','./engine.mjs','./visual.mjs','./gait.mjs','./course.mjs','./appearance.mjs','./horse-character.mjs','./three-view.mjs','./model-preview.html','./model-preview.mjs','./worker.mjs','./manifest.webmanifest','./icon.svg','./apple-touch-icon.png'];
+const CACHE='race-lab-v43';
+const ASSETS=['./','./index.html','./styles.css','./app.mjs','./engine.mjs','./visual.mjs','./gait.mjs','./course.mjs','./appearance.mjs','./horse-character.mjs','./design01-race.mjs','./three-view.mjs','./model-preview.html','./model-preview.mjs','./worker.mjs','./manifest.webmanifest','./icon.svg','./apple-touch-icon.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
