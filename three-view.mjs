@@ -1,8 +1,8 @@
-// Optional low-poly 3D race display. Uses the same synthetic race data as 2D.
+// Design 01 sculpted race display. Uses the same synthetic race data as 2D.
 import {interpolateRaceFrame} from './visual.mjs';
 import {getHorseAppearance} from './appearance.mjs';
 import {gallopCycle,gallopLegPose,gallopDynamics} from './gait.mjs';
-import {makeHorseCharacterBuilder} from './horse-character.mjs';
+import {makeDesign01Builder} from './design01-race.mjs';
 import {coursePoint,lengthAtMetres,TRACK_OUTER_OFFSET,INSIDE_MARGIN,LANE_WIDTH,raceDisplayPositions,getTurfProfile,furlongMarkerPositions,courseHeightMetres,courseSlope,raceCoursePoint,startPocket,raceCourseHeightMetres,raceCourseSlope} from './course.mjs';
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
 export async function createThreeView(host){
@@ -12,6 +12,8 @@ export async function createThreeView(host){
  renderer.setSize(1000,560,false);
  renderer.setClearColor(0x93cbea);
  renderer.outputColorSpace=THREE.SRGBColorSpace;
+ renderer.toneMapping=THREE.ACESFilmicToneMapping;
+ renderer.toneMappingExposure=1.15;
  renderer.domElement.className='three-canvas';
  renderer.domElement.setAttribute('aria-label','立体的に馬群を表示する3Dレースビュー');
  host.appendChild(renderer.domElement);
@@ -316,7 +318,7 @@ export async function createThreeView(host){
  }
  // Sculpted character models are kept separate from camera, track geometry
  // and racing physics. Geometry/jersey textures are generated on the device.
- const horseBuilder=makeHorseCharacterBuilder(THREE,scene,getHorseAppearance);
+ const horseBuilder=makeDesign01Builder(THREE,scene,getHorseAppearance);
  const models=Array.from({length:18},(_,i)=>horseBuilder.build(i+1));
  // Subtle floor shadows provide a clear takeoff/landing cue.
  const shadowGeometry=new THREE.CircleGeometry(1,20);
@@ -505,12 +507,12 @@ export async function createThreeView(host){
      // Distinct neck pump: extends/lifts during front-leg recovery and
      // dips during ground contact. Head follows the moving neck naturally.
      model.neckPivot.rotation.z=.025+Math.sin(theta+.90)*dynamics.neck;
-     model.neckPivot.position.x=.71+Math.cos(theta+.40)*.082;
-     model.neckPivot.position.y=1.39-Math.sin(theta+.90)*.073;
+     model.neckPivot.position.x=(model.neckRestX??.71)+Math.cos(theta+.40)*.082;
+     model.neckPivot.position.y=(model.neckRestY??1.39)-Math.sin(theta+.90)*.073;
      model.headPivot.rotation.z=-.035+Math.sin(theta+1.55)*.105;
      model.tailPivot.rotation.y=Math.sin(theta+.34)*.135;
      model.riderPivot.rotation.z=-.018-Math.sin(theta+.56)*.030;
-     model.riderPivot.position.y=1.94-Math.max(0,Math.sin(theta+.85))*.026;
+     model.riderPivot.position.y=(model.riderRestY??1.94)-Math.max(0,Math.sin(theta+.85))*.026;
      model.shadow.position.x=model.group.position.x;
      model.shadow.position.z=model.group.position.z;
      model.shadow.position.y=trackHeight+.023;
