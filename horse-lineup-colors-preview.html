@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Race Lab｜自動枠色・5毛色テスト</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#101720;color:#eef4fb}header{padding:13px 16px 9px;background:#172333;border-bottom:1px solid #354456}h1{font-size:19px;margin:0 0 3px}p{margin:0}.sub{color:#a9bed4;font-size:12px}
+main{max-width:1140px;margin:auto}.toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;background:#162230;align-items:center}
+button,.upload{border:1px solid #546983;background:#293e55;color:#fff;border-radius:10px;padding:10px 13px;font-size:14px;font-weight:600}
+button.selected,.upload{background:#287b71;border-color:#5dc9b6}
+input[type=file]{width:100%;font-size:14px;padding:8px;color:#ccd9eb}
+select{border:1px solid #546983;border-radius:10px;padding:9px 8px;background:#263a4d;color:white;font-size:14px}
+#stage{position:relative;background:linear-gradient(#425468,#283544);height:51svh;min-height:330px;overflow:hidden;touch-action:none}
+#stage canvas{display:block}.center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:25px;text-align:center;pointer-events:none;color:#eafaff;font-size:14px}
+#msg{background:#233142;border-top:1px solid #394f65;color:#d4e6f9;padding:10px 14px;font-size:13px;line-height:1.5}
+.controls{padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#roster{padding:0 12px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:6px}
+.horse{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:8px 7px;border:1px solid #435365;border-radius:9px;font-size:12px;background:#202e3e}.horsehead{display:flex;align-items:center;gap:5px;min-height:18px}.horse select{font-size:13px;max-width:100%;padding:6px 3px}.hairlabel{font-size:11px;color:#acbdd1}
+
+.dot{width:13px;height:13px;border-radius:50%;border:1px solid #8a96a9;flex-shrink:0}
+small{font-size:11px;color:#aab9cb}#fine{padding:3px 12px 24px;font-size:11px;line-height:1.7;color:#bbc9d9}strong{color:#fff}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script>
+</head><body>
+<header><h1>Race Lab｜馬番・枠色・5毛色テスト</h1><p class="sub">馬番と枠色は出走頭数から自動設定。毛色は5種類から選択できます。Race Lab本体には影響しません。</p></header>
+<main>
+<div class="toolbar">
+<label style="flex:1;min-width:210px"><span class="sub">① iPhoneに保存したUVfixed.glbを選択</span><input type="file" id="upload" accept=".glb,model/gltf-binary"></label>
+<label><span class="sub">② 出走頭数</span><select id="count"><option value="3">3頭</option><option value="6" selected>6頭</option><option value="9">9頭</option><option value="12">12頭</option><option value="16">16頭</option><option value="18">18頭</option></select></label>
+</div>
+<div id="stage"><div class="center" id="placeholder">3Dモデルの読み込み待ち<br>上の「ファイルを選択」からGLBを指定してください。</div></div>
+<div class="controls">
+<button id="play" disabled>一時停止</button>
+<button id="cam0">全体</button><button id="cam1">横</button><button id="cam2">正面</button>
+<label><small>速さ</small><select id="speed"><option value="0.5">0.5倍</option><option value="1" selected>通常</option></select></label>
+</div>
+<div id="msg">モデルを選択すると、<strong>3D本体の帽子・ゼッケン・毛色</strong>を出走頭数に合わせて変更します。毛色は各馬の選択欄で5種類から切り替えられます。</div>
+<div id="roster"></div>
+<div id="fine">※ 左右ドラッグで回転・2本指で拡大縮小できます。帽子・馬番・ゼッケンの色は元テクスチャを部分的に着色した試験版です。毛色は鹿毛・黒鹿毛・栗毛・青鹿毛・芦毛の5種類。勝負服は現段階では全頭共通です。枠色はJRA方式で割り当てますが実際の出走表とは未連動です。18頭ではiPhoneの性能次第で重くなる場合があります。</div>
+</main>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {clone as cloneSkinned} from 'three/addons/utils/SkeletonUtils.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+const stage=document.getElementById('stage'),placeholder=document.getElementById('placeholder'),status=document.getElementById('msg'),roster=document.getElementById('roster');
+const sel=document.getElementById('count'),btn=document.getElementById('play'),speed=document.getElementById('speed');
+const COLORS=['#ffffff','#222222','#e83e42','#226be5','#ffdd26','#32a65c','#f28c20','#f28cb9'];
+const NAMES=['白','黒','赤','青','黄','緑','橙','桃'];
+const FRAME_RGB=[[240,240,238],[30,30,37],[219,53,60],[31,100,219],[248,213,40],[44,159,78],[236,139,38],[241,148,184]];
+const COATS=[
+{label:'鹿毛',rgb:[108,68,60]},
+{label:'黒鹿毛',rgb:[61,47,44]},
+{label:'栗毛',rgb:[159,86,55]},
+{label:'青鹿毛',rgb:[45,44,49]},
+{label:'芦毛',rgb:[162,154,149]}
+];
+const coatPrefs=Array.from({length:18},(_,i)=>i%5);
+let originalMap=null,textureMasks=null;
+let gltf=null,horseHeight=1.6,horseLong=1.6,active=[],mixers=[],playing=true,view=0,loaded=false,cameraRadius=10;
+const scene=new THREE.Scene();scene.background=new THREE.Color('#344252');
+const camera=new THREE.PerspectiveCamera(38,1,.03,150);
+const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.4));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.25;
+renderer.setSize(stage.clientWidth,stage.clientHeight);
+stage.appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.08;controls.maxPolarAngle=Math.PI*.90;controls.target.set(0,.6,0);
+scene.add(new THREE.HemisphereLight(0xe6efff,0x56534c,2.4));
+const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(-5,12,6);scene.add(sun);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(300,300),new THREE.MeshBasicMaterial({color:0x334b51}));ground.rotation.x=-Math.PI/2;ground.position.y=-.045;scene.add(ground);
+const lineMat=new THREE.MeshBasicMaterial({color:0x648a91,transparent:true,opacity:.33});
+for(let i=-12;i<=12;i++){const l=new THREE.Mesh(new THREE.PlaneGeometry(30,.015),lineMat);l.rotation.x=-Math.PI/2;l.position.set(0,-.035,i*1.7);scene.add(l)}
+function frameNumbers(n){const counts=Array(8).fill(0);if(n<=8){for(let i=0;i<n;i++)counts[i]=1}else{counts.fill(1);let rest=n-8;while(rest>0){for(let i=7;i>=0&&rest>0;i--){counts[i]++;rest--}}}const frames=[];for(let i=0;i<8;i++)for(let k=0;k<counts[i];k++)frames.push(i);return frames}
+function labelTexture(number,frame){const cvs=document.createElement('canvas');cvs.width=256;cvs.height=256;const c=cvs.getContext('2d');
+c.fillStyle=COLORS[frame];c.beginPath();c.roundRect(13,13,230,230,42);c.fill();
+c.strokeStyle='#ffffff';c.lineWidth=7;c.stroke();
+c.font='bold 120px -apple-system,Arial';c.textAlign='center';c.textBaseline='middle';c.fillStyle=frame===0||frame===4?'#18232a':'#ffffff';c.fillText(String(number),128,136);
+const t=new THREE.CanvasTexture(cvs);t.colorSpace=THREE.SRGBColorSpace;return t}
+function updateRoster(n,frames){roster.replaceChildren();for(let i=0;i<n;i++){
+const el=document.createElement('div');el.className='horse';
+const head=document.createElement('div');head.className='horsehead';
+const dot=document.createElement('span');dot.className='dot';dot.style.background=COLORS[frames[i]];
+const txt=document.createElement('span');txt.textContent=String(i+1)+'番・'+String(frames[i]+1)+'枠';head.append(dot,txt);
+const name=document.createElement('span');name.className='hairlabel';name.textContent='毛色';
+const choice=document.createElement('select');choice.setAttribute('aria-label',(i+1)+'番馬の毛色');
+COATS.forEach((c,k)=>{const o=document.createElement('option');o.value=String(k);o.textContent=c.label;choice.append(o)});
+choice.value=String(coatPrefs[i]);
+choice.addEventListener('change',()=>{coatPrefs[i]=Number(choice.value);repaintHorse(i,frames[i])});
+el.append(head,name,choice);roster.append(el)
+}}
+
+function maskFromGeometry(geometry,w,h,part){
+ const c=document.createElement('canvas');c.width=w;c.height=h;
+ const ctx=c.getContext('2d',{willReadFrequently:true});
+ ctx.fillStyle='#fff';
+ const pos=geometry.getAttribute('position'),uv=geometry.getAttribute('uv'),idx=geometry.index;
+ if(!pos||!uv)return new Uint8ClampedArray(w*h*4);
+ const faces=idx?idx.count/3:pos.count/3;
+ for(let f=0;f<faces;f++){
+ const a=idx?idx.getX(3*f):3*f,b=idx?idx.getX(3*f+1):3*f+1,d=idx?idx.getX(3*f+2):3*f+2;
+ const y=(pos.getY(a)+pos.getY(b)+pos.getY(d))/3;
+ const z=(pos.getZ(a)+pos.getZ(b)+pos.getZ(d))/3;
+ if(part==='helmet' ? !(y>.475&&z>-.08&&z<.56) : !(y<.405))continue;
+ const ua=uv.getX(a),ub=uv.getX(b),ud=uv.getX(d);
+ const va=uv.getY(a),vb=uv.getY(b),vd=uv.getY(d);
+ if(Math.max(ua,ub,ud)-Math.min(ua,ub,ud)>.22||Math.max(va,vb,vd)-Math.min(va,vb,vd)>.22)continue;
+ ctx.beginPath();ctx.moveTo(ua*w,(1-va)*h);ctx.lineTo(ub*w,(1-vb)*h);ctx.lineTo(ud*w,(1-vd)*h);ctx.closePath();ctx.fill();
+ }
+ return ctx.getImageData(0,0,w,h).data;
+}
+function setupColorMasks(){
+ let mesh;gltf.scene.traverse(o=>{if(!mesh&&o.isMesh&&o.material?.map)mesh=o});
+ if(!mesh)throw new Error('テクスチャ付きメッシュがありません');
+ originalMap=mesh.material.map;
+ const im=originalMap.image;
+ if(!im||!im.width||!im.height)throw new Error('テクスチャ画像が読み込まれていません');
+ const w=im.width,h=im.height;
+ textureMasks={w,h,helmet:maskFromGeometry(mesh.geometry,w,h,'helmet'),coat:maskFromGeometry(mesh.geometry,w,h,'coat')};
+}
+function customizedTexture(number,frame,coat){
+ const img=originalMap.image,w=textureMasks.w,h=textureMasks.h;
+ const cv=document.createElement('canvas');cv.width=w;cv.height=h;const cx=cv.getContext('2d',{willReadFrequently:true});
+ cx.drawImage(img,0,0,w,h);
+ const pic=cx.getImageData(0,0,w,h),px=pic.data;
+ const hel=textureMasks.helmet,hair=textureMasks.coat,target=COATS[coat].rgb,fc=FRAME_RGB[frame];
+ const W=w/600,H=h/600;
+ const inBox=(x,y,x0,y0,x1,y1)=>x>=x0*W&&x<x1*W&&y>=y0*H&&y<y1*H;
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+ const p=(y*w+x)*4;let r=px[p],g=px[p+1],b=px[p+2];
+ // 3D空間の馬体領域だけを再着色。青い馬具、勝負服、白斑、目は保護する。
+ const brown=r>g*1.12&&g>b*1.045&&r>38&&g>17&&b<160&&(r-b)>13;
+ if(coat!==0&&hair[p+3]>0&&brown){
+ const brightness=Math.max(.22,Math.min(1.8,(r*.38+g*.45+b*.17)/82));
+ px[p]=Math.max(0,Math.min(255,Math.round(target[0]*brightness*.93+r*.07)));
+ px[p+1]=Math.max(0,Math.min(255,Math.round(target[1]*brightness*.93+g*.07)));
+ px[p+2]=Math.max(0,Math.min(255,Math.round(target[2]*brightness*.93+b*.07)));
+ }else{
+ // ヘルメットの元の青部分を枠色へ（白の縦ラインは残す）
+ const blue=b>r*1.18&&b>g*1.10&&b>86;
+ if(hel[p+3]>0&&blue){
+ const k=Math.max(.32,Math.min(1.20,(r*.16+g*.34+b*.50)/151));
+ px[p]=Math.min(255,Math.round(fc[0]*k));
+ px[p+1]=Math.min(255,Math.round(fc[1]*k));
+ px[p+2]=Math.min(255,Math.round(fc[2]*k));
+ }
+ }
+ // ゼッケン布の青部分のみ枠色に変更
+ if(inBox(x,y,139,198,215,281)||inBox(x,y,3,429,88,502)){
+ if(b>r*1.20&&b>g*1.12&&b>85){
+ const k=Math.max(.45,Math.min(1.23,(r*.16+g*.34+b*.5)/151));
+ px[p]=Math.min(255,Math.round(fc[0]*k));
+ px[p+1]=Math.min(255,Math.round(fc[1]*k));
+ px[p+2]=Math.min(255,Math.round(fc[2]*k));
+ }
+ }
+ // テクスチャに焼き付いた「4」の白い画素を消去
+ const inNum=inBox(x,y,169,225,205,267)||inBox(x,y,44,450,77,487);
+ if(inNum&&r>120&&g>125&&b>120&&Math.max(r,g,b)-Math.min(r,g,b)<75){
+ px[p]=fc[0];px[p+1]=fc[1];px[p+2]=fc[2];
+ }
+ }
+ cx.putImageData(pic,0,0);
+ // 裏面・表面の両方に新しい馬番をスタンプする
+ const numberColor=(fc[0]*.299+fc[1]*.587+fc[2]*.114)>166?'#15212c':'#ffffff';
+ const stamp=(x,y,rot,maxWidth)=>{
+ cx.save();cx.translate(x*W,y*H);cx.rotate(rot);
+ cx.fillStyle=numberColor;cx.textAlign='center';cx.textBaseline='middle';
+ cx.font='900 '+Math.round((number>9?29:43)*H)+'px Arial,sans-serif';
+ cx.fillText(String(number),0,0,maxWidth*W);cx.restore();
+ };
+ stamp(184,246,Math.PI,40);stamp(59,467,0,34);
+ const tex=new THREE.CanvasTexture(cv);
+ tex.colorSpace=originalMap.colorSpace;
+ tex.flipY=originalMap.flipY;
+ tex.wrapS=originalMap.wrapS;tex.wrapT=originalMap.wrapT;
+ tex.minFilter=originalMap.minFilter;tex.magFilter=originalMap.magFilter;
+ tex.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ tex.needsUpdate=true;return tex;
+}
+function repaintHorse(i,frame){
+ const root=active[i];if(!root||!originalMap)return;
+ root.traverse(obj=>{
+ if(!obj.isMesh||!obj.userData.baseMaterial)return;
+ if(obj.userData.variantTexture)obj.userData.variantTexture.dispose();
+ if(obj.material!==obj.userData.baseMaterial)obj.material.dispose();
+ const mat=obj.userData.baseMaterial.clone();
+ const tex=customizedTexture(i+1,frame,coatPrefs[i]);
+ mat.map=tex;mat.needsUpdate=true;obj.material=mat;obj.userData.variantTexture=tex;
+ });
+}
+
+function resetHorses(){for(const h of active){scene.remove(h);h.traverse(o=>{if(o.isSprite){o.material.map.dispose();o.material.dispose()}else if(o.isMesh&&o.userData.variantTexture){o.userData.variantTexture.dispose();o.material.dispose()}})}active=[];for(const m of mixers)m.stopAllAction();mixers=[]}
+function updateCamera(){const n=Number(sel.value),cols=Math.min(6,n),rows=Math.ceil(n/cols);const gap=Math.max(1.6,horseLong*1.28);
+cameraRadius=Math.max(5.5,cols*gap*1.6,rows*gap*2.4);
+const h=horseHeight*.6;
+controls.target.set(0,h,0);
+if(view===1)camera.position.set(cameraRadius*.02,cameraRadius*.35,cameraRadius*.85);
+else if(view===2)camera.position.set(cameraRadius*.9,cameraRadius*.32,0);
+else camera.position.set(cameraRadius*.55,cameraRadius*.46,cameraRadius*.7);
+camera.lookAt(controls.target);controls.update()}
+function buildHorses(){const n=Number(sel.value),frames=frameNumbers(n);updateRoster(n,frames);resetHorses();if(!gltf)return;
+const box=new THREE.Box3().setFromObject(gltf.scene),size=new THREE.Vector3();box.getSize(size);const center=new THREE.Vector3();box.getCenter(center);
+horseHeight=Math.max(.9,size.y);horseLong=Math.max(size.x,size.z,1);
+const cols=Math.min(6,n),rows=Math.ceil(n/cols),gap=Math.max(1.6,horseLong*1.3);
+for(let i=0;i<n;i++){
+const root=new THREE.Group();const model=cloneSkinned(gltf.scene);model.position.sub(center);model.position.y+=horseHeight*.50;root.add(model);
+model.traverse(o=>{if(o.isMesh&&o.material?.map)o.userData.baseMaterial=o.material});
+const col=i%cols,row=Math.floor(i/cols);
+root.position.set((col-(cols-1)/2)*gap,0,(row-(rows-1)/2)*gap*1.65);
+const label=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture(i+1,frames[i]),depthTest:false,transparent:true}));
+label.position.set(0,horseHeight+0.55,0);label.scale.set(.52,.52,1);root.add(label);
+scene.add(root);active.push(root);repaintHorse(i,frames[i]);
+if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);const action=mixer.clipAction(gltf.animations[0]);action.setLoop(THREE.LoopRepeat,Infinity);action.play();mixer.setTime((i%6)*.07);mixers.push(mixer)}
+}
+updateCamera();status.innerHTML='表示中：<strong>'+n+'頭</strong> / ギャロップV2 '+(gltf.animations.length?'再生可能':'アニメーションなし')+'。<strong>3D本体の馬番・帽子色・ゼッケン色を自動設定</strong>。毛色は下で個別変更できます。';btn.disabled=false}
+document.getElementById('upload').addEventListener('change',async e=>{
+const file=e.target.files&&e.target.files[0];if(!file)return;
+placeholder.textContent='3Dモデルを読み込み中…';status.textContent='読み込み中：'+file.name;btn.disabled=true;
+try{const buffer=await file.arrayBuffer();const loader=new GLTFLoader();gltf=await new Promise((ok,ng)=>loader.parse(buffer,'',ok,ng));setupColorMasks();placeholder.style.display='none';loaded=true;buildHorses()}
+catch(err){console.error(err);status.textContent='読み込みに失敗しました。UVfixed.glbが選択されているか確認してください。';placeholder.textContent='読み込みエラー';}
+});
+sel.addEventListener('change',buildHorses);
+btn.addEventListener('click',()=>{playing=!playing;btn.textContent=playing?'一時停止':'再生'});
+document.getElementById('cam0').onclick=()=>{view=0;updateCamera()};
+document.getElementById('cam1').onclick=()=>{view=1;updateCamera()};
+document.getElementById('cam2').onclick=()=>{view=2;updateCamera()};
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false)}
+window.addEventListener('resize',resize);resize();updateRoster(Number(sel.value),frameNumbers(Number(sel.value)));updateCamera();
+const clock=new THREE.Clock();
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.06);if(playing&&loaded)for(const m of mixers)m.update(dt*Number(speed.value));controls.update();renderer.render(scene,camera)}animate();
+</script></body></html>
