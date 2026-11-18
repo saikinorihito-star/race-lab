@@ -21,7 +21,7 @@ small{font-size:11px;color:#aab9cb}#fine{padding:3px 12px 24px;font-size:11px;li
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script>
 </head><body>
-<header><h1>Race Lab｜馬番・枠色・5毛色テスト</h1><p class="sub">馬番と枠色は出走頭数から自動設定。毛色は5種類から選択できます。Race Lab本体には影響しません。</p></header>
+<header><h1>Race Lab｜馬番・枠色・5毛色テスト（毛色修正版）</h1><p class="sub">馬番と枠色は出走頭数から自動設定。毛色は5種類から選択できます。Race Lab本体には影響しません。</p></header>
 <main>
 <div class="toolbar">
 <label style="flex:1;min-width:210px"><span class="sub">① iPhoneに保存したUVfixed.glbを選択</span><input type="file" id="upload" accept=".glb,model/gltf-binary"></label>
@@ -35,7 +35,7 @@ small{font-size:11px;color:#aab9cb}#fine{padding:3px 12px 24px;font-size:11px;li
 </div>
 <div id="msg">モデルを選択すると、<strong>3D本体の帽子・ゼッケン・毛色</strong>を出走頭数に合わせて変更します。毛色は各馬の選択欄で5種類から切り替えられます。</div>
 <div id="roster"></div>
-<div id="fine">※ 左右ドラッグで回転・2本指で拡大縮小できます。帽子・馬番・ゼッケンの色は元テクスチャを部分的に着色した試験版です。毛色は鹿毛・黒鹿毛・栗毛・青鹿毛・芦毛の5種類。勝負服は現段階では全頭共通です。枠色はJRA方式で割り当てますが実際の出走表とは未連動です。18頭ではiPhoneの性能次第で重くなる場合があります。</div>
+<div id="fine">※ 左右ドラッグで回転・2本指で拡大縮小できます。帽子・馬番・ゼッケンの色は元テクスチャを部分的に着色した試験版です。毛色は鹿毛・黒鹿毛・栗毛・青鹿毛・芦毛の5種類。馬体をまだらにしない連続着色方式を採用。勝負服は現段階では全頭共通です。枠色はJRA方式で割り当てますが実際の出走表とは未連動です。18頭ではiPhoneの性能次第で重くなる場合があります。</div>
 </main>
 <script type="module">
 import * as THREE from 'three';
@@ -102,13 +102,38 @@ function maskFromGeometry(geometry,w,h,part){
  const a=idx?idx.getX(3*f):3*f,b=idx?idx.getX(3*f+1):3*f+1,d=idx?idx.getX(3*f+2):3*f+2;
  const y=(pos.getY(a)+pos.getY(b)+pos.getY(d))/3;
  const z=(pos.getZ(a)+pos.getZ(b)+pos.getZ(d))/3;
- if(part==='helmet' ? !(y>.475&&z>-.08&&z<.56) : !(y<.405))continue;
+ if(part==='helmet' ? !(y>.47&&z>-.04&&z<.48) : !(y<.405))continue;
  const ua=uv.getX(a),ub=uv.getX(b),ud=uv.getX(d);
  const va=uv.getY(a),vb=uv.getY(b),vd=uv.getY(d);
  if(Math.max(ua,ub,ud)-Math.min(ua,ub,ud)>.22||Math.max(va,vb,vd)-Math.min(va,vb,vd)>.22)continue;
  ctx.beginPath();ctx.moveTo(ua*w,(1-va)*h);ctx.lineTo(ub*w,(1-vb)*h);ctx.lineTo(ud*w,(1-vd)*h);ctx.closePath();ctx.fill();
  }
  return ctx.getImageData(0,0,w,h).data;
+}
+// ヘルメットの一部のUV島だけが着色されるのを防ぐため、
+ // 幾何マスクに接する青色テクスチャ領域をUV島単位で補完。
+ function completeHelmetMask(image,w,h,rawMask){
+ const src=document.createElement('canvas');src.width=w;src.height=h;
+ const c=src.getContext('2d',{willReadFrequently:true});c.drawImage(image,0,0,w,h);
+ const rgba=c.getImageData(0,0,w,h).data,N=w*h,seen=new Uint8Array(N);
+ const result=new Uint8ClampedArray(rawMask.length);
+ const queue=new Uint32Array(N);
+ const isBlue=(j)=>{const p=j*4,r=rgba[p],g=rgba[p+1],b=rgba[p+2];return b>r*1.14&&b>g*1.08&&b>80};
+ for(let start=0;start<N;start++){
+ if(seen[start]||!isBlue(start)){seen[start]=1;continue}
+ let head=0,tail=1,seed=0;queue[0]=start;seen[start]=1;
+ while(head<tail){
+ const j=queue[head++],y=(j/w)|0,x=j-y*w;
+ if(rawMask[j*4+3]>0)seed++;
+ const neighbors=[x>0?j-1:-1,x+1<w?j+1:-1,y>0?j-w:-1,y+1<h?j+w:-1];
+ for(const k of neighbors){if(k>=0&&!seen[k]){seen[k]=1;if(isBlue(k))queue[tail++]=k}}
+ }
+ // 姿勢が同じUV島のみ採用。シャツ等へ色が広がる大型島を除く
+ if(tail>=100&&seed>=40&&seed/tail>.29){
+ for(let i=0;i<tail;i++)result[queue[i]*4+3]=255;
+ }
+ }
+ return result;
 }
 function setupColorMasks(){
  let mesh;gltf.scene.traverse(o=>{if(!mesh&&o.isMesh&&o.material?.map)mesh=o});
@@ -117,7 +142,8 @@ function setupColorMasks(){
  const im=originalMap.image;
  if(!im||!im.width||!im.height)throw new Error('テクスチャ画像が読み込まれていません');
  const w=im.width,h=im.height;
- textureMasks={w,h,helmet:maskFromGeometry(mesh.geometry,w,h,'helmet'),coat:maskFromGeometry(mesh.geometry,w,h,'coat')};
+ const rawHelmet=maskFromGeometry(mesh.geometry,w,h,'helmet');
+ textureMasks={w,h,helmet:completeHelmetMask(im,w,h,rawHelmet),coat:null};
 }
 function customizedTexture(number,frame,coat){
  const img=originalMap.image,w=textureMasks.w,h=textureMasks.h;
@@ -130,21 +156,26 @@ function customizedTexture(number,frame,coat){
  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
  const p=(y*w+x)*4;let r=px[p],g=px[p+1],b=px[p+2];
  // 3D空間の馬体領域だけを再着色。青い馬具、勝負服、白斑、目は保護する。
- const brown=r>g*1.12&&g>b*1.045&&r>38&&g>17&&b<160&&(r-b)>13;
- if(coat!==0&&hair[p+3]>0&&brown){
- const brightness=Math.max(.22,Math.min(1.8,(r*.38+g*.45+b*.17)/82));
- px[p]=Math.max(0,Math.min(255,Math.round(target[0]*brightness*.93+r*.07)));
- px[p+1]=Math.max(0,Math.min(255,Math.round(target[1]*brightness*.93+g*.07)));
- px[p+2]=Math.max(0,Math.min(255,Math.round(target[2]*brightness*.93+b*.07)));
- }else{
- // ヘルメットの元の青部分を枠色へ（白の縦ラインは残す）
- const blue=b>r*1.18&&b>g*1.10&&b>86;
+ // 毛色はUV島の部分判定ではなく、元画像の暖色成分を連続量として変換。
+ // 画像上の濃淡を残しつつ、暗い部分だけ元の茶色になる「まだら」を防止。
+ const warm1=Math.max(0,Math.min(1,(r-g-2.5)/8));
+ const warm2=Math.max(0,Math.min(1,(r-b-3)/7));
+ const skin=Math.max(0,Math.min(1,(r-132)/30))*Math.max(0,Math.min(1,(g-88)/30));
+ const strength=warm1*warm2*(1-skin);
+ if(coat!==0&&strength>0){
+ const brightness=Math.max(.2,Math.min(2.1,(r*.32+g*.50+b*.18)/77));
+ const inv=1-strength;
+ px[p]=Math.max(0,Math.min(255,Math.round(r*inv+target[0]*brightness*strength)));
+ px[p+1]=Math.max(0,Math.min(255,Math.round(g*inv+target[1]*brightness*strength)));
+ px[p+2]=Math.max(0,Math.min(255,Math.round(b*inv+target[2]*brightness*strength)));
+ }
+ // 帽子の青を枠色に置換。白い中心ラインは残す。
+ const blue=b>r*1.14&&b>g*1.08&&b>80;
  if(hel[p+3]>0&&blue){
  const k=Math.max(.32,Math.min(1.20,(r*.16+g*.34+b*.50)/151));
  px[p]=Math.min(255,Math.round(fc[0]*k));
  px[p+1]=Math.min(255,Math.round(fc[1]*k));
  px[p+2]=Math.min(255,Math.round(fc[2]*k));
- }
  }
  // ゼッケン布の青部分のみ枠色に変更
  if(inBox(x,y,139,198,215,281)||inBox(x,y,3,429,88,502)){
