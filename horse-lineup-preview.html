@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Race Lab｜複数頭3Dテスト</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#101720;color:#eef4fb}header{padding:13px 16px 9px;background:#172333;border-bottom:1px solid #354456}h1{font-size:19px;margin:0 0 3px}p{margin:0}.sub{color:#a9bed4;font-size:12px}
+main{max-width:1140px;margin:auto}.toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;background:#162230;align-items:center}
+button,.upload{border:1px solid #546983;background:#293e55;color:#fff;border-radius:10px;padding:10px 13px;font-size:14px;font-weight:600}
+button.selected,.upload{background:#287b71;border-color:#5dc9b6}
+input[type=file]{width:100%;font-size:14px;padding:8px;color:#ccd9eb}
+select{border:1px solid #546983;border-radius:10px;padding:9px 8px;background:#263a4d;color:white;font-size:14px}
+#stage{position:relative;background:linear-gradient(#425468,#283544);height:51svh;min-height:330px;overflow:hidden;touch-action:none}
+#stage canvas{display:block}.center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:25px;text-align:center;pointer-events:none;color:#eafaff;font-size:14px}
+#msg{background:#233142;border-top:1px solid #394f65;color:#d4e6f9;padding:10px 14px;font-size:13px;line-height:1.5}
+.controls{padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#roster{padding:0 12px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:6px}
+.horse{display:flex;align-items:center;gap:5px;padding:7px 6px;border:1px solid #435365;border-radius:9px;font-size:12px;background:#202e3e}
+.dot{width:13px;height:13px;border-radius:50%;border:1px solid #8a96a9;flex-shrink:0}
+small{font-size:11px;color:#aab9cb}#fine{padding:3px 12px 24px;font-size:11px;line-height:1.7;color:#bbc9d9}strong{color:#fff}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script>
+</head><body>
+<header><h1>Race Lab｜複数頭 3D走行テスト</h1><p class="sub">Design 01の1頭モデルを複製。Race Labの既存画面には影響しません。</p></header>
+<main>
+<div class="toolbar">
+<label style="flex:1;min-width:210px"><span class="sub">① iPhoneに保存したUVfixed.glbを選択</span><input type="file" id="upload" accept=".glb,model/gltf-binary"></label>
+<label><span class="sub">② 出走頭数</span><select id="count"><option value="3">3頭</option><option value="6" selected>6頭</option><option value="9">9頭</option><option value="12">12頭</option><option value="16">16頭</option><option value="18">18頭</option></select></label>
+</div>
+<div id="stage"><div class="center" id="placeholder">3Dモデルの読み込み待ち<br>上の「ファイルを選択」からGLBを指定してください。</div></div>
+<div class="controls">
+<button id="play" disabled>一時停止</button>
+<button id="cam0">全体</button><button id="cam1">横</button><button id="cam2">正面</button>
+<label><small>速さ</small><select id="speed"><option value="0.5">0.5倍</option><option value="1" selected>通常</option></select></label>
+</div>
+<div id="msg">現在の3Dデータは<strong>全頭「青帽・ゼッケン4」</strong>です。下の番号・枠色は正しい割り当ての確認用。帽子・ゼッケンを3D本体で個別に変える機能は次工程で実装します。</div>
+<div id="roster"></div>
+<div id="fine">※ 左右ドラッグで回転・2本指で拡大縮小できます。1つのGLBから骨格ごと複製し、各馬にギャロップV2を適用します。枠色の割当てはJRA方式のテストです。出走馬の実際の枠順データはまだ取り込んでいません。18頭表示時はiPhoneの性能によって動作が重くなる可能性があります。</div>
+</main>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {clone as cloneSkinned} from 'three/addons/utils/SkeletonUtils.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+const stage=document.getElementById('stage'),placeholder=document.getElementById('placeholder'),status=document.getElementById('msg'),roster=document.getElementById('roster');
+const sel=document.getElementById('count'),btn=document.getElementById('play'),speed=document.getElementById('speed');
+const COLORS=['#ffffff','#222222','#e83e42','#226be5','#ffdd26','#32a65c','#f28c20','#f28cb9'];
+const NAMES=['白','黒','赤','青','黄','緑','橙','桃'];
+let gltf=null,horseHeight=1.6,horseLong=1.6,active=[],mixers=[],playing=true,view=0,loaded=false,cameraRadius=10;
+const scene=new THREE.Scene();scene.background=new THREE.Color('#344252');
+const camera=new THREE.PerspectiveCamera(38,1,.03,150);
+const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.4));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.25;
+renderer.setSize(stage.clientWidth,stage.clientHeight);
+stage.appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.08;controls.maxPolarAngle=Math.PI*.90;controls.target.set(0,.6,0);
+scene.add(new THREE.HemisphereLight(0xe6efff,0x56534c,2.4));
+const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(-5,12,6);scene.add(sun);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(300,300),new THREE.MeshBasicMaterial({color:0x334b51}));ground.rotation.x=-Math.PI/2;ground.position.y=-.045;scene.add(ground);
+const lineMat=new THREE.MeshBasicMaterial({color:0x648a91,transparent:true,opacity:.33});
+for(let i=-12;i<=12;i++){const l=new THREE.Mesh(new THREE.PlaneGeometry(30,.015),lineMat);l.rotation.x=-Math.PI/2;l.position.set(0,-.035,i*1.7);scene.add(l)}
+function frameNumbers(n){const counts=Array(8).fill(0);if(n<=8){for(let i=0;i<n;i++)counts[i]=1}else{counts.fill(1);let rest=n-8;while(rest>0){for(let i=7;i>=0&&rest>0;i--){counts[i]++;rest--}}}const frames=[];for(let i=0;i<8;i++)for(let k=0;k<counts[i];k++)frames.push(i);return frames}
+function labelTexture(number,frame){const cvs=document.createElement('canvas');cvs.width=256;cvs.height=256;const c=cvs.getContext('2d');
+c.fillStyle=COLORS[frame];c.beginPath();c.roundRect(13,13,230,230,42);c.fill();
+c.strokeStyle='#ffffff';c.lineWidth=7;c.stroke();
+c.font='bold 120px -apple-system,Arial';c.textAlign='center';c.textBaseline='middle';c.fillStyle=frame===0||frame===4?'#18232a':'#ffffff';c.fillText(String(number),128,136);
+const t=new THREE.CanvasTexture(cvs);t.colorSpace=THREE.SRGBColorSpace;return t}
+function updateRoster(n,frames){roster.replaceChildren();for(let i=0;i<n;i++){const el=document.createElement('div');el.className='horse';const dot=document.createElement('span');dot.className='dot';dot.style.background=COLORS[frames[i]];const txt=document.createElement('span');txt.textContent=String(i+1)+'番 / '+String(frames[i]+1)+'枠 '+NAMES[frames[i]];el.append(dot,txt);roster.append(el)}}
+function resetHorses(){for(const h of active){scene.remove(h);h.traverse(o=>{if(o.isSprite){o.material.map.dispose();o.material.dispose()}})}active=[];for(const m of mixers)m.stopAllAction();mixers=[]}
+function updateCamera(){const n=Number(sel.value),cols=Math.min(6,n),rows=Math.ceil(n/cols);const gap=Math.max(1.6,horseLong*1.28);
+cameraRadius=Math.max(5.5,cols*gap*1.6,rows*gap*2.4);
+const h=horseHeight*.6;
+controls.target.set(0,h,0);
+if(view===1)camera.position.set(cameraRadius*.02,cameraRadius*.35,cameraRadius*.85);
+else if(view===2)camera.position.set(cameraRadius*.9,cameraRadius*.32,0);
+else camera.position.set(cameraRadius*.55,cameraRadius*.46,cameraRadius*.7);
+camera.lookAt(controls.target);controls.update()}
+function buildHorses(){const n=Number(sel.value),frames=frameNumbers(n);updateRoster(n,frames);resetHorses();if(!gltf)return;
+const box=new THREE.Box3().setFromObject(gltf.scene),size=new THREE.Vector3();box.getSize(size);const center=new THREE.Vector3();box.getCenter(center);
+horseHeight=Math.max(.9,size.y);horseLong=Math.max(size.x,size.z,1);
+const cols=Math.min(6,n),rows=Math.ceil(n/cols),gap=Math.max(1.6,horseLong*1.3);
+for(let i=0;i<n;i++){
+const root=new THREE.Group();const model=cloneSkinned(gltf.scene);model.position.sub(center);model.position.y+=horseHeight*.50;root.add(model);
+const col=i%cols,row=Math.floor(i/cols);
+root.position.set((col-(cols-1)/2)*gap,0,(row-(rows-1)/2)*gap*1.65);
+const label=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture(i+1,frames[i]),depthTest:false,transparent:true}));
+label.position.set(0,horseHeight+0.55,0);label.scale.set(.52,.52,1);root.add(label);
+scene.add(root);active.push(root);
+if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);const action=mixer.clipAction(gltf.animations[0]);action.setLoop(THREE.LoopRepeat,Infinity);action.play();mixer.setTime((i%6)*.07);mixers.push(mixer)}
+}
+updateCamera();status.innerHTML='表示中：<strong>'+n+'頭</strong> / ギャロップV2 '+(gltf.animations.length?'再生可能':'アニメーションなし')+'。3D本体の帽子とゼッケンはまだ共通です。';btn.disabled=false}
+document.getElementById('upload').addEventListener('change',async e=>{
+const file=e.target.files&&e.target.files[0];if(!file)return;
+placeholder.textContent='3Dモデルを読み込み中…';status.textContent='読み込み中：'+file.name;btn.disabled=true;
+try{const buffer=await file.arrayBuffer();const loader=new GLTFLoader();gltf=await new Promise((ok,ng)=>loader.parse(buffer,'',ok,ng));placeholder.style.display='none';loaded=true;buildHorses()}
+catch(err){console.error(err);status.textContent='読み込みに失敗しました。UVfixed.glbが選択されているか確認してください。';placeholder.textContent='読み込みエラー';}
+});
+sel.addEventListener('change',buildHorses);
+btn.addEventListener('click',()=>{playing=!playing;btn.textContent=playing?'一時停止':'再生'});
+document.getElementById('cam0').onclick=()=>{view=0;updateCamera()};
+document.getElementById('cam1').onclick=()=>{view=1;updateCamera()};
+document.getElementById('cam2').onclick=()=>{view=2;updateCamera()};
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false)}
+window.addEventListener('resize',resize);resize();updateRoster(Number(sel.value),frameNumbers(Number(sel.value)));updateCamera();
+const clock=new THREE.Clock();
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.06);if(playing&&loaded)for(const m of mixers)m.update(dt*Number(speed.value));controls.update();renderer.render(scene,camera)}animate();
+</script></body></html>
