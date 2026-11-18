@@ -1169,7 +1169,14 @@ function stepRace(tick){
  for(let i=0;i<raceHorses.length;i++){
   const state=raceHorses[i],result=next[i];if(state.finished)continue;
   state.distance=Math.max(0,Math.min(activePlan.distance,result.distance));
-  state.lane=result.lane;state.speed=result.speed;
+  // 幅が変化するカーブ上でも移動後の幅で柵から最低90cmの余裕を確保。
+  const widthAfter=fieldCenterAt(activePlan,state.distance).width;
+  const safeLimit=widthAfter/2-.90;
+  state.lane=Math.max(-safeLimit,Math.min(safeLimit,result.lane));
+  if(Math.abs(state.targetLane)>safeLimit){
+   state.targetLane=Math.max(-safeLimit,Math.min(safeLimit,state.targetLane));
+  }
+  state.speed=result.speed;
   if(state.distance>=activePlan.distance){
    state.finished=true;state.finishTime=raceElapsed;state.postDistance=0;raceFinished.push(state.number);
   }
