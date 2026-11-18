@@ -1042,7 +1042,13 @@ function fieldCenterAt(plan,distance){
    width:plan.distance===1800?24:28};
  }
  const s=plan.startStation+d-(plan.pocket?plan.pocket.length:0);
- return {p:offsetAt(s,MEASURE_OFFSET-widthAt(s)/2,.15),t:positionAt(s).t,width:widthAt(s)};
+ const fullWidth=widthAt(s);
+ // ポケットから本線へ合流した直後に18頭の横幅が瞬間的に広がらないよう60mかけて展開。
+ const mergeDistance=Math.max(0,d-(plan.pocket?plan.pocket.length:0));
+ const blend=plan.pocket?smooth(Math.min(1,mergeDistance/60)):1;
+ const pocketWidth=plan.distance===1800?24:28;
+ const racingWidth=plan.pocket?lerp(pocketWidth,fullWidth,blend):fullWidth;
+ return {p:offsetAt(s,MEASURE_OFFSET-fullWidth/2,.15),t:positionAt(s).t,width:racingWidth};
 }
 function fieldStallWidth(width){return (width-2*FIELD_MARGIN)/FIELD_COUNT}
 function fieldHorseAt(plan,distance,i){
