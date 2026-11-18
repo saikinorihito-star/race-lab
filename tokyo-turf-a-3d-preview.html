@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="theme-color" content="#101f26"/>
-<title>Race Lab｜東京競馬場 芝Aコース 3D全景</title>
+<title>Race Lab｜東京競馬場 芝Aコース 3D全景【左回り修正】</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color-scheme:dark}
 *{box-sizing:border-box}
@@ -40,11 +40,11 @@ a{color:#95e8df}
 </head>
 <body>
 <header>
-<h1>東京競馬場・芝Aコース｜3D全景</h1>
-<div class="subtitle">Race Lab コース制作 第1段階／左回り・1周の試作モデル。JRA公表数値を採用し、未公開の平面座標や建物寸法は近似しています。</div>
+<h1>東京競馬場・芝Aコース｜左回り3D全景</h1>
+<div class="subtitle">Race Lab コース制作 第1段階／左回り（反時計回り）に修正済みの1周試作モデル。JRA公表数値を採用し、未公開の平面座標や建物寸法は近似しています。</div>
 </header>
 <main>
-<div class="pillrow"><span class="pill">芝A｜1周 2,083.1m</span><span class="pill">直線 525.9m</span><span class="pill">高低差 2.7m</span><span class="pill">幅員 31～41m</span><span class="pill">左回り</span></div>
+<div class="pillrow"><span class="pill">芝A｜1周 2,083.1m</span><span class="pill">直線 525.9m</span><span class="pill">高低差 2.7m</span><span class="pill">幅員 31～41m</span><span class="pill">左回り（反時計回り）</span></div>
 <div id="stage">
  <div id="telemetry">3Dコースを準備中…</div>
  <div id="help">1本指ドラッグ：回転　2本指：拡大縮小・移動　Mac：ドラッグ／ホイール</div>
@@ -130,8 +130,12 @@ function positionAt(raw){
   x=-half+TURN_RADIUS*Math.cos(theta);z=TURN_RADIUS*Math.sin(theta);
   dx=-Math.sin(theta);dz=Math.cos(theta);
  }
+ // Three.jsの上空視点ではz正方向が画面下。ホームストレッチを手前側に反転し、
+ // 進行方向を上空から見て反時計回り（東京芝の左回り）にする。
+ z=-z;dz=-dz;
  const y=elevation(s),p=new THREE.Vector3(x,y,z),t=new THREE.Vector3(dx,0,dz);
- const inward=new THREE.Vector3(-dz,0,dx);
+ // 走行方向から見て左側（コースの内側）を向く横方向ベクトル。
+ const inward=new THREE.Vector3(dz,0,-dx);
  return {p,t,inward,s};
 }
 function offsetAt(s,n,y=0){
@@ -261,6 +265,24 @@ for(let remain=200;remain<=2000;remain+=200){
  label3D('残り '+remain+'m',place.x,13,place.z,remain<=600?13:10,remain===400?'#8d3036':'#2a5661');
 }
 label3D('芝 Aコース｜左回り',-5,50,0,27,'#1c665c');
+// 黄色の矢印は馬が走る方向。設置位置は仮コースの中心線に沿う。
+const arrowMaterial=new THREE.MeshBasicMaterial({color:0xffd96c,side:THREE.DoubleSide});
+function addCourseArrow(s){
+ const a=positionAt(s),t=a.t,inward=a.inward;
+ const forward=a.p.clone().add(new THREE.Vector3(0,.35,0));
+ const shape=[[-9,-2],[-2,-2],[-2,-4.5],[9,0],[-2,4.5],[-2,2],[-9,2]];
+ const verts=[],inds=[];
+ for(const [dist,width] of shape){
+  const p=forward.clone().addScaledVector(t,dist).addScaledVector(inward,width);
+  verts.push(p.x,p.y,p.z);
+ }
+ for(let i=1;i<shape.length-1;i++)inds.push(0,i,i+1);
+ const geo=new THREE.BufferGeometry();
+ geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+ geo.setIndex(inds);geo.computeVertexNormals();
+ scene.add(new THREE.Mesh(geo,arrowMaterial));
+}
+[285,850,1380,1840].forEach(addCourseArrow);
 
 // Infield turf vision structures: JRA's published dimensions describe screen only.
 function turfVision(x,z,caption){
@@ -282,6 +304,7 @@ turfVision(210,22,'東側ターフビジョン');
 function stadiumStand(name,x,len,backZ,height,color,accent){
  const group=new THREE.Group();scene.add(group);
  group.position.set(x,0,backZ);
+ group.rotation.y=Math.PI; // スタンド客席とガラス面は芝コース側へ向ける
  // main body near the spectators, outside home straight
  addBox(group,0,height*.55,0,len,height,55,color);
  addBox(group,0,height*.66,27.8,len*.96,height*.44,2.1,0x477887,.22);
@@ -310,14 +333,14 @@ function stadiumStand(name,x,len,backZ,height,color,accent){
  }
  label3D(name,x,height+28,backZ,18,'#244d62');
 }
-const standBack=-TURN_RADIUS-105;
+const standBack=TURN_RADIUS+105;
 stadiumStand('FUJI VIEW STAND｜フジビュー',35,440,standBack,42,0x879da6,0xb9c8c3);
 stadiumStand('MEMORIAL 60｜メモリアル60',-290,145,standBack+1,32,0x6f858e,0x94a9ae);
 // Public promenade and a symbolic paddock behind stands
-addBox(scene,-40,-.2,-TURN_RADIUS-187,900,.6,66,0xa8a99c);
+addBox(scene,-40,-.2,TURN_RADIUS+187,900,.6,66,0xa8a99c);
 const paddock=new THREE.Mesh(new THREE.TorusGeometry(36,2.1,7,58),new THREE.MeshStandardMaterial({color:0xabb5ab}));
-paddock.rotation.x=-Math.PI/2;paddock.position.set(-290,.9,-TURN_RADIUS-265);scene.add(paddock);
-label3D('パドック（近似）',-290,19,-TURN_RADIUS-267,12);
+paddock.rotation.x=-Math.PI/2;paddock.position.set(-290,.9,TURN_RADIUS+265);scene.add(paddock);
+label3D('パドック（近似）',-290,19,TURN_RADIUS+267,12);
 
 // A few surrounding service blocks, trees and infield buildings for immersion.
 for(const [x,z,w,d,h] of [[-300,23,82,25,11],[55,58,80,28,10],[160,-35,40,23,6],[-70,-36,50,24,7]]){
@@ -329,7 +352,7 @@ const treeMesh=new THREE.InstancedMesh(treeGeo,treeMat,88);scene.add(treeMesh);
 const tmp=new THREE.Object3D();
 for(let i=0;i<88;i++){
  const row=Math.floor(i/44),xx=-545+(i%44)*25;
- const zz=row===0?TURN_RADIUS+94:-TURN_RADIUS-310;
+ const zz=row===0?-TURN_RADIUS-94:TURN_RADIUS+310;
  tmp.position.set(xx,6,zz);tmp.rotation.y=(i*.67)%6.28;
  tmp.scale.set(.7+(i%3)*.14,.8+(i%5)*.07,.7+(i%3)*.14);
  tmp.updateMatrix();treeMesh.setMatrixAt(i,tmp.matrix);
@@ -402,13 +425,13 @@ function setView(which){
  const wide=Math.max(1,1/aspect);
  let eye,target;
  if(which==='top'){eye=new THREE.Vector3(0,1150*wide,1);target=new THREE.Vector3(0,0,0)}
- else if(which==='stand'){eye=new THREE.Vector3(200,78,-TURN_RADIUS-210);target=new THREE.Vector3(115,3,-TURN_RADIUS+35)}
- else if(which==='goal'){eye=new THREE.Vector3(finishP.p.x+48,20,-TURN_RADIUS-52);target=new THREE.Vector3(finishP.p.x,2,-TURN_RADIUS+25)}
+ else if(which==='stand'){eye=new THREE.Vector3(160,85,TURN_RADIUS-80);target=new THREE.Vector3(65,22,TURN_RADIUS+90)}
+ else if(which==='goal'){eye=new THREE.Vector3(finishP.p.x+48,33,TURN_RADIUS+65);target=new THREE.Vector3(finishP.p.x,4,TURN_RADIUS-15)}
  else if(which==='first'){eye=new THREE.Vector3(STRAIGHT/2+280,160,10);target=new THREE.Vector3(STRAIGHT/2+30,1,0)}
  else if(which==='third'){eye=new THREE.Vector3(-STRAIGHT/2-280,150,10);target=new THREE.Vector3(-STRAIGHT/2-30,1,0)}
  else if(which==='chase'){
   const p=positionAt(FINISH_DISTANCE+travel);eye=p.p.clone().add(new THREE.Vector3(-18,11,-20));target=p.p.clone().add(new THREE.Vector3(0,1,0));
- }else{eye=new THREE.Vector3(70,780*wide,1150*wide);target=new THREE.Vector3(0,0,0)}
+ }else{eye=new THREE.Vector3(70,780*wide,-1150*wide);target=new THREE.Vector3(0,0,0)}
  controls.target.copy(target);camera.position.copy(eye);camera.lookAt(target);controls.update();
 }
 document.querySelectorAll('#views button').forEach(button=>button.addEventListener('click',()=>setView(button.dataset.view)));
