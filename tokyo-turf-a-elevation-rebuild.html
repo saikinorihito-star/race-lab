@@ -151,6 +151,7 @@ const LEFT_TURN_LEN=LAP-STRAIGHT-BACK_STRAIGHT-RIGHT_TURN_LEN;
 const TURN_RADIUS=RIGHT_TURN_LEN/Math.PI,CURVE_LEN=RIGHT_TURN_LEN,FINISH_DISTANCE=525.9;
 const BACK_START=STRAIGHT+RIGHT_TURN_LEN,BACK_END=BACK_START+BACK_STRAIGHT;
 const TRACK={name:'東京 芝 A',lap:LAP,lapMeasurement:'inner-rail-plus-1m',straightFinal:FINISH_DISTANCE,widthMin:31,widthMax:41,elevation:2.7,turn:'left'};
+const DIRT_SPEC={lap:1899,width:25,straight:501.6,elevation:2.5}; // JRA公式データ
 const N=560;
 // JRA公式「芝コース高低断面図」を目視照合した推定節点。
 // 横軸はゴールまでの残り距離[m]。縦軸はゴール付近を0mとした相対高度[m]。
@@ -342,6 +343,49 @@ function offsetAt(s,n,y=0){
  return a.p.clone().addScaledVector(a.inward,n).add(new THREE.Vector3(0,y,0));
 }
 
+// 芝内側のダート（東京）を平行曲線として近似。内ラチの外側1mの水平周回距離を合わせる。
+function horizontalDirtLap(offset,steps=1000){
+ let len=0,prev=offsetAt(0,offset);
+ for(let i=1;i<=steps;i++){
+  const p=offsetAt(LAP*i/steps,offset);
+  len+=Math.hypot(p.x-prev.x,p.z-prev.z);
+  prev=p;
+ }
+ return len;
+}
+function calibratedDirtOffset(){
+ let low=10,high=50;
+ for(let i=0;i<30;i++){
+  const mid=(low+high)/2;
+  if(horizontalDirtLap(mid)>DIRT_SPEC.lap)low=mid;else high=mid;
+ }
+ return (low+high)/2;
+}
+const DIRT_MEASURE_OFFSET=calibratedDirtOffset();
+const DIRT_INNER_OFFSET=DIRT_MEASURE_OFFSET+1;
+const DIRT_OUTER_OFFSET=DIRT_INNER_OFFSET-DIRT_SPEC.width;
+const DIRT_MODEL_LAP=horizontalDirtLap(DIRT_MEASURE_OFFSET);
+console.assert(Math.abs(DIRT_MODEL_LAP-DIRT_SPEC.lap)<.3,'dirt lap measurement',DIRT_MODEL_LAP);
+// 公式のダート高低差2.5m／最後の上り約2.4mを参考にした近似節点。
+const dirtProfile=[
+ [0,0],[180,0],[300,0],[380,-1.05],[460,-2.4],[580,-2.4],
+ [750,-2.46],[850,-2.5],[980,-2.20],[1110,-.42],[1200,-.42],
+ [1300,-1.72],[1550,-1.04],[1800,-.49],[2000,0],[LAP,0]
+];
+function dirtRelativeAltitude(remain){
+ const r=Math.max(0,Math.min(LAP,remain));
+ for(let i=0;i<dirtProfile.length-1;i++){
+  const a=dirtProfile[i],b=dirtProfile[i+1];
+  if(r<=b[0])return lerp(a[1],b[1],smooth((r-a[0])/(b[0]-a[0])));
+ }
+ return 0;
+}
+function dirtElevation(s){return ELEVATION_BASE+dirtRelativeAltitude(remainingAtStation(s))*DISPLAY_RELIEF;}
+function dirtPoint(s,offset,lift=0){
+ const p=offsetAt(s,offset);
+ p.y=dirtElevation(s)+lift;return p;
+}
+
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x9ed0dd);
 scene.fog=new THREE.FogExp2(0x9ed0dd,.00075);
@@ -415,19 +459,93 @@ function borderBand(distanceA,distanceB,color){
 }
 borderBand(s=>MEASURE_OFFSET-widthAt(s)-3,s=>MEASURE_OFFSET-widthAt(s),0x95a58e);
 borderBand(s=>MEASURE_OFFSET,s=>MEASURE_OFFSET+2,0x65a35b);
-// 3D表示時も芝コース端から周囲の芝地面までを連続させる。
-function terrainApron(inner){
- const start=s=>offsetAt(s,inner?MEASURE_OFFSET+2:MEASURE_OFFSET-widthAt(s)-3,.012);
- const end=s=>{
-  const p=offsetAt(s,inner?MEASURE_OFFSET+29:MEASURE_OFFSET-widthAt(s)-29,0);
-  p.y=.12;return p;
- };
- const mesh=new THREE.Mesh(ringGeom(start,end),
-  new THREE.MeshStandardMaterial({color:inner?0x438e4a:0x4a8750,side:THREE.DoubleSide,roughness:1}));
- scene.add(mesh);
+// 芝とダートの緩衝帯。双方の標高に追従する。
+const separator=new THREE.Mesh(ringGeom(
+ s=>offsetAt(s,MEASURE_OFFSET+2,.02),
+ s=>dirtPoint(s,DIRT_OUTER_OFFSET,-.04)
+),new THREE.MeshStandardMaterial({color:0x4b964f,side:THREE.DoubleSide,roughness:1}));
+scene.add(separator);
+// ダート内側と芝外側の盛り土を地面に繋ぐ。
+function slopedGround(from,to,color){
+ scene.add(new THREE.Mesh(ringGeom(from,to),
+  new THREE.MeshStandardMaterial({color,side:THREE.DoubleSide,roughness:1})));
 }
-terrainApron(true);terrainApron(false);
-if(DISPLAY_RELIEF===1)borderBand(s=>MEASURE_OFFSET+18,s=>MEASURE_OFFSET+36,0xb7a080);
+slopedGround(s=>offsetAt(s,MEASURE_OFFSET-widthAt(s)-3,.015),s=>{
+ const p=offsetAt(s,MEASURE_OFFSET-widthAt(s)-29);p.y=.12;return p;
+},0x4a8750);
+slopedGround(s=>dirtPoint(s,DIRT_INNER_OFFSET,.01),s=>{
+ const p=offsetAt(s,DIRT_INNER_OFFSET+31);p.y=.12;return p;
+},0x508c49);
+// 著作権フリーの手続き的な砂粒・ブラシ跡。外部画像読み込み不要。
+function makeSandTexture(){
+ const c=document.createElement('canvas');c.width=256;c.height=256;
+ const ctx=c.getContext('2d'),image=ctx.createImageData(256,256);
+ let seed=19426;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
+ for(let i=0;i<image.data.length;i+=4){
+  const d=(rand()-.5)*32+(rand()>.978?18:0);
+  image.data[i]=Math.max(0,Math.min(255,196+d));
+  image.data[i+1]=Math.max(0,Math.min(255,166+d*.87));
+  image.data[i+2]=Math.max(0,Math.min(255,128+d*.72));
+  image.data[i+3]=255;
+ }
+ ctx.putImageData(image,0,0);ctx.strokeStyle='rgba(106,79,50,.12)';ctx.lineWidth=.75;
+ for(let i=0;i<110;i++){
+  const x=rand()*256,y=rand()*256;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+3+rand()*12,y+(rand()-.5));ctx.stroke();
+ }
+ const texture=new THREE.CanvasTexture(c);
+ texture.wrapS=THREE.RepeatWrapping;texture.wrapT=THREE.RepeatWrapping;
+ texture.colorSpace=THREE.SRGBColorSpace;
+ texture.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ return texture;
+}
+const SAND_LENGTH_STEPS=720,SAND_WIDTH_STEPS=6;
+const sandPositions=[],sandUVs=[],sandShades=[],sandFaces=[];
+for(let i=0;i<=SAND_LENGTH_STEPS;i++){
+ const s=LAP*i/SAND_LENGTH_STEPS;
+ for(let j=0;j<=SAND_WIDTH_STEPS;j++){
+  const across=j/SAND_WIDTH_STEPS;
+  const d=lerp(DIRT_OUTER_OFFSET,DIRT_INNER_OFFSET,across);
+  const bank=.075*(1-across); // 視覚上の軽い傾斜（測量値ではない）
+  const p=dirtPoint(s,d,.09+bank);
+  sandPositions.push(p.x,p.y,p.z);
+  sandUVs.push(s/14,across*3.2);
+  const wheel=1-.09*Math.exp(-Math.pow((across-.34)/.125,2))-.055*Math.exp(-Math.pow((across-.72)/.12,2));
+  const v=wheel*(.97+.024*Math.sin(i*.16)+.013*Math.sin(i*.74));
+  sandShades.push(v,v,v);
+  if(i<SAND_LENGTH_STEPS&&j<SAND_WIDTH_STEPS){
+   const a=i*(SAND_WIDTH_STEPS+1)+j,b=a+SAND_WIDTH_STEPS+1;
+   sandFaces.push(a,a+1,b,a+1,b+1,b);
+  }
+ }
+}
+const sandGeometry=new THREE.BufferGeometry();
+sandGeometry.setAttribute('position',new THREE.Float32BufferAttribute(sandPositions,3));
+sandGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(sandUVs,2));
+sandGeometry.setAttribute('color',new THREE.Float32BufferAttribute(sandShades,3));
+sandGeometry.setIndex(sandFaces);sandGeometry.computeVertexNormals();
+scene.add(new THREE.Mesh(sandGeometry,new THREE.MeshStandardMaterial({
+ map:makeSandTexture(),vertexColors:true,side:THREE.DoubleSide,roughness:.99
+})));
+// ごく薄い整地跡。実在レースの走行経路を意味しない。
+function sandStripeGeometry(near,far,steps=480){
+ const verts=[],faces=[];
+ for(let i=0;i<=steps;i++){
+  const s=LAP*i/steps;
+  for(const offset of [near,far]){
+   const p=dirtPoint(s,offset,.191);
+   verts.push(p.x,p.y,p.z);
+  }
+  if(i<steps){const a=i*2;faces.push(a,a+1,a+2,a+1,a+3,a+2);}
+ }
+ const g=new THREE.BufferGeometry();
+ g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+ g.setIndex(faces);g.computeVertexNormals();return g;
+}
+const streakMat=new THREE.MeshBasicMaterial({color:0x947451,transparent:true,opacity:.09,depthWrite:false,side:THREE.DoubleSide});
+for(const lane of [6.2,11.7,17.1,21.9]){
+ scene.add(new THREE.Mesh(sandStripeGeometry(DIRT_OUTER_OFFSET+lane-.48,DIRT_OUTER_OFFSET+lane+.48),streakMat));
+}
 
 // 芝A内ラチ・外ラチ。上下二段横材と支柱を配置。寸法は視認性優先の近似。
 function createRail(inner){
@@ -455,6 +573,37 @@ function createRail(inner){
  posts.instanceMatrix.needsUpdate=true;scene.add(posts);
 }
 createRail(true);createRail(false);
+// ダートにも二段式の内ラチと外ラチ。支柱はInstancedMeshで軽量化。
+function createDirtRail(offset){
+ const n=280,beams=[[],[]];
+ for(let i=0;i<n;i++){
+  const s=LAP*i/n;
+  beams[0].push(dirtPoint(s,offset,1.32));
+  beams[1].push(dirtPoint(s,offset,.65));
+ }
+ const railMat=new THREE.MeshStandardMaterial({color:0xf4f5ef,roughness:.5});
+ for(let j=0;j<2;j++){
+  const curve=new THREE.CatmullRomCurve3(beams[j],true,'centripetal');
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,1000,j===0?.15:.09,5,true),railMat));
+ }
+ const posts=new THREE.InstancedMesh(
+  new THREE.CylinderGeometry(.105,.13,1.36,6),
+  new THREE.MeshStandardMaterial({color:0xe1e4dd,roughness:.7}),n);
+ const dummy=new THREE.Object3D();
+ for(let i=0;i<n;i++){
+  const s=LAP*i/n,p=dirtPoint(s,offset,.68);
+  dummy.position.copy(p);dummy.updateMatrix();posts.setMatrixAt(i,dummy.matrix);
+ }
+ posts.instanceMatrix.needsUpdate=true;scene.add(posts);
+}
+createDirtRail(DIRT_OUTER_OFFSET);createDirtRail(DIRT_INNER_OFFSET);
+// 両コースのゴール位置を示す砂上の白いライン。ダートの詳細な計測位置は近似。
+const dirtGoal=dirtPoint(FINISH_DISTANCE,(DIRT_INNER_OFFSET+DIRT_OUTER_OFFSET)/2,.21);
+const dirtStripe=new THREE.Mesh(new THREE.PlaneGeometry(.85,DIRT_SPEC.width),
+ new THREE.MeshBasicMaterial({color:0xf7f6ed,side:THREE.DoubleSide}));
+dirtStripe.rotation.x=-Math.PI/2;
+dirtStripe.rotation.z=-Math.atan2(positionAt(FINISH_DISTANCE).t.z,positionAt(FINISH_DISTANCE).t.x);
+dirtStripe.position.copy(dirtGoal);scene.add(dirtStripe);
 
 // Finishing line: from inner rail to outer rail, plus separate white/yellow goal marker.
 const finishP=positionAt(FINISH_DISTANCE),courseW=widthAt(FINISH_DISTANCE);
