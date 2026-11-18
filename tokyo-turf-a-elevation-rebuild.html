@@ -113,7 +113,7 @@ a{color:#95e8df}
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
-<div id="message">芝Aの18頭同時発走テストです。18枠から全頭が同時に走り出し、固定レーンで走ります。競走能力差・追い抜き・衝突回避はまだ未実装です。専用ポケットの形状と発馬機の大きさは試作用の近似です。</div>
+<div id="message">黄色い走行ラインと矢印を撤去。発馬機は固定枠幅で1番側より18番側に余白を残す配置へ変更しました。発馬機・ポケット形状とも試作用の近似モデルです。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -728,25 +728,7 @@ label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+11,dirtLabelPos
   label3D('残り'+remain+'m',place.x,place.y+11.0,place.z,5.0,remain<=600?'#8a3e40':'#24525e','minor');
  }
  label3D('芝 Aコース｜左回り',-5,35,0,16,'#1c665c');
-// 黄色の矢印は馬が走る方向。設置位置は仮コースの中心線に沿う。
-const arrowMaterial=new THREE.MeshBasicMaterial({color:0xffd96c,side:THREE.DoubleSide});
-function addCourseArrow(s){
- const a=positionAt(s),t=a.t,inward=a.inward;
- const forward=a.p.clone().add(new THREE.Vector3(0,.35,0));
- const shape=[[-9,-2],[-2,-2],[-2,-4.5],[9,0],[-2,4.5],[-2,2],[-9,2]];
- const verts=[],inds=[];
- for(const [dist,width] of shape){
-  const p=forward.clone().addScaledVector(t,dist).addScaledVector(inward,width);
-  verts.push(p.x,p.y,p.z);
- }
- for(let i=1;i<shape.length-1;i++)inds.push(0,i,i+1);
- const geo=new THREE.BufferGeometry();
- geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
- geo.setIndex(inds);geo.computeVertexNormals();
- scene.add(new THREE.Mesh(geo,arrowMaterial));
-}
-[285,850,1380,1840].forEach(addCourseArrow);
-
+// 黄色い進行方向の矢印は表示しない。
 // 大型モニター用の自主制作テスト映像。実在のレース動画・放映画面ではない。
 function makeRaceMonitorTexture(){
  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=176;
@@ -954,9 +936,7 @@ function makePocket(spec){
  geom.setIndex(indices);geom.computeVertexNormals();
  const turf=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.95}));
  scene.add(turf);
- const yellow=new THREE.Mesh(new THREE.TubeGeometry(curve,120,.23,5,false),
-  new THREE.MeshBasicMaterial({color:0xf1d36d}));
- scene.add(yellow);
+ // 走路の中央の黄色い補助線は撤去。
  return {...spec,curve,length,remaining,start:curve.getPointAt(0)};
 }
 const POCKETS=new Map(POCKET_DATA.map(x=>[x.distance,makePocket(x)]));
@@ -989,15 +969,7 @@ function clearRoute(){
 }
 function highlightRace(plan){
  clearRoute();
- const samples=Math.ceil(plan.distance/11),points=[];
- for(let i=0;i<=samples;i++){
-  const p=racePointAt(plan,plan.distance*i/samples).p.clone();
-  p.y+=.27;points.push(p);
- }
- routeVisual.add(new THREE.Mesh(
-  new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),Math.max(150,samples*2),.31,4,false),
-  new THREE.MeshBasicMaterial({color:0xffd467,transparent:true,opacity:.95})
- ));
+ // 走路を邪魔する黄色い走行ラインは表示しない。
  const first=racePointAt(plan,0);
  const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.9,plan.pocket?26:widthAt(plan.startStation)),
   new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}));
@@ -1030,7 +1002,9 @@ function fallbackHorse(){
  return g;
 }
 // ===== 18頭同時スタート：低負荷の仮馬体と試作用の発馬機 =====
-const FIELD_COUNT=18,FIELD_MARGIN=1.2,HORSE_WIDTH=.8;
+// 試作上の発馬機枠幅は固定。外側18番の余白を広く残す。
+// 寸法は実測ではなく、18頭の仮モデル配置確認用。
+const FIELD_COUNT=18,FIELD_STALL_WIDTH=1.17,FIELD_INNER_MARGIN=1.10,HORSE_WIDTH=.8;
 const fieldHorses=[],fieldRoot=new THREE.Group(),gateRoot=new THREE.Group();
 scene.add(fieldRoot);scene.add(gateRoot);
 let gateDoors=[],gateOpening=0;
@@ -1050,19 +1024,22 @@ function fieldCenterAt(plan,distance){
  const racingWidth=plan.pocket?lerp(pocketWidth,fullWidth,blend):fullWidth;
  return {p:offsetAt(s,MEASURE_OFFSET-fullWidth/2,.15),t:positionAt(s).t,width:racingWidth};
 }
-function fieldStallWidth(width){return (width-2*FIELD_MARGIN)/FIELD_COUNT}
+function fieldStallWidth(){return FIELD_STALL_WIDTH;}
+function fieldOuterMargin(width){return width-FIELD_INNER_MARGIN-FIELD_COUNT*FIELD_STALL_WIDTH;}
+function fieldGateCenterShift(width){return width/2-FIELD_INNER_MARGIN-FIELD_COUNT*FIELD_STALL_WIDTH/2;}
 function fieldHorseAt(plan,distance,i){
  const a=fieldCenterAt(plan,distance),side=new THREE.Vector3(a.t.z,0,-a.t.x);
- const lane=(8.5-i)*fieldStallWidth(a.width);
+ const lane=fieldGateCenterShift(a.width)+(8.5-i)*FIELD_STALL_WIDTH;
  return {p:a.p.clone().addScaledVector(side,lane),t:a.t,width:a.width};
 }
 function fieldLayoutCheck(plan){
- const a=fieldCenterAt(plan,0),stall=fieldStallWidth(a.width);
+ const a=fieldCenterAt(plan,0),stall=FIELD_STALL_WIDTH;
  const positions=Array.from({length:FIELD_COUNT},(_,i)=>fieldHorseAt(plan,0,i).p);
- let gap=Infinity;
- for(let i=1;i<FIELD_COUNT;i++)gap=Math.min(gap,positions[i].distanceTo(positions[i-1]));
- const margin=(a.width-stall*FIELD_COUNT)/2-HORSE_WIDTH/2;
- return {ok:gap>HORSE_WIDTH+.22&&margin>.6,stall,margin,width:a.width};
+ let minGap=Infinity;
+ for(let i=1;i<positions.length;i++)minGap=Math.min(minGap,positions[i].distanceTo(positions[i-1]));
+ const inner=FIELD_INNER_MARGIN-HORSE_WIDTH/2;
+ const outer=fieldOuterMargin(a.width)-HORSE_WIDTH/2;
+ return {ok:minGap>HORSE_WIDTH+.22&&inner>.55&&outer>.85,stall,inner,outer,width:a.width};
 }
 const silkColors=[0xff3b39,0x2c7bd9,0xeec232,0x1b965e,0x914bc0,0xf0f0f0,0xf57e25,0x15a8c2,0x284d89];
 const sharedHorse=fallbackHorse();
@@ -1263,7 +1240,7 @@ function selectRace(){
  positionRunner();positionFieldHorses();updateGateDoors();
  const test=fieldLayoutCheck(activePlan);
  gridStatus.textContent='芝'+activeDistance+'m｜18枠 '+(test.ok?'配置OK':'要調整')+
- '｜幅'+test.width.toFixed(1)+'m／1枠'+test.stall.toFixed(2)+'m'+
+ '｜固定枠幅'+test.stall.toFixed(2)+'m／1番側余白'+test.inner.toFixed(1)+'m／18番側余白'+test.outer.toFixed(1)+'m'+
  (activePlan.pocket?'（ポケット形状は近似）':'');
  const description=activePlan.pocket
   ?activeDistance+'m：'+activePlan.pocket.label+'／ポケット'+Math.round(activePlan.pocket.length)+'mから合流'
