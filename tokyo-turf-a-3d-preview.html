@@ -652,15 +652,30 @@ function setView(which){
  controls.target.copy(target);camera.position.copy(eye);camera.lookAt(target);controls.update();
 }
 document.querySelectorAll('#views button').forEach(button=>button.addEventListener('click',()=>setView(button.dataset.view)));
+const raceSelector=document.querySelector('#raceDistance'),startInfo=document.querySelector('#startInfo');
+function selectRace(){
+ activeDistance=Number(raceSelector.value);
+ activePlan=racePlan(activeDistance);
+ playing=false;travel=0;demoBtn.textContent='SからGへ走らせる';
+ highlightRace(activePlan);positionRunner();
+ const description=activePlan.pocket
+  ?activeDistance+'m：'+activePlan.pocket.label+'／ポケット'+Math.round(activePlan.pocket.length)+'mから合流'
+  :activeDistance+'m：'+regionForS(activePlan.startStation)+'のSから発走'+(activeDistance===2600?'（仮配置）':'');
+ startInfo.textContent=description+'／Gまで'+activeDistance+'m';
+ if(view==='chase'||view==='start')setView('all');
+}
+raceSelector.addEventListener('change',selectRace);
+document.querySelector('#startView').addEventListener('click',()=>setView('start'));
 function resetDemo(){
- travel=0;playing=false;demoBtn.textContent='1頭の周回デモを開始';positionRunner();
+ travel=0;playing=false;demoBtn.textContent='SからGへ走らせる';positionRunner();
  if(view==='chase')setView('chase');
 }
 demoBtn.addEventListener('click',()=>{
- if(travel>=LAP)travel=0;
+ if(!activePlan)return;
+ if(travel>=activePlan.distance)travel=0;
  playing=!playing;
  demoBtn.textContent=playing?'一時停止':'再開';
- if(playing&&view==='all')setView('chase');
+ if(playing&&view==='start')setView('chase');
 });
 document.querySelector('#reset').addEventListener('click',resetDemo);
 checkLabels.addEventListener('change',()=>{textLabels.forEach(x=>x.visible=checkLabels.checked)});
@@ -672,15 +687,15 @@ function resize(){
  if(view==='all'||view==='top')setView(view);
 }
 window.addEventListener('resize',resize);
-resize();setView('all');positionRunner();
+resize();setView('all');selectRace();
 function animate(time){
  requestAnimationFrame(animate);
  const dt=Math.min(clock.getDelta(),.05);
  if(playing){
   const step=16.7*Number(rate.value)*dt;
-  travel=Math.min(LAP,travel+step);
+  travel=Math.min(activePlan?.distance||LAP,travel+step);
   if(runnerMixer)runnerMixer.update(dt*Math.min(2,16.7*Number(rate.value)/16.7));
-  if(travel>=LAP){playing=false;demoBtn.textContent='1周完了・もう一度'}
+  if(activePlan&&travel>=activePlan.distance){playing=false;demoBtn.textContent='ゴール到達・もう一度'}
  }
  positionRunner();
  controls.update();
@@ -688,8 +703,8 @@ function animate(time){
  fpsCount++;
  if(time-lastTime>1200){
   fps=fpsCount*1000/(time-lastTime||1);fpsCount=0;lastTime=time;
-  const rest=Math.max(0,Math.round(LAP-travel));
-  info.textContent='東京芝A｜周回 2,083.1m\n'+(playing?'周回デモ走行中':'3Dコース表示中')+'\n走行 '+Math.round(travel)+'m ／ 残り '+rest+'m\nFPS '+fps.toFixed(0)+(usedStoredGLB?'／保存GLB使用':'／簡易馬モデル');
+  const rest=Math.max(0,Math.round((activePlan?.distance||1400)-travel));
+  info.textContent='東京芝A｜'+activeDistance+'m／S→G\n'+(playing?'指定距離を走行中':'スタート地点の検証中')+'\n走行 '+Math.round(travel)+'m ／ 残り '+rest+'m\nFPS '+fps.toFixed(0)+(usedStoredGLB?'／保存GLB使用':'／簡易馬モデル');
   info.style.whiteSpace='pre-line';
  }
 }
