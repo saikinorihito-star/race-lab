@@ -62,7 +62,7 @@ a{color:#95e8df}
 <button data-view="goal">ゴール周辺</button>
 <button data-view="first">1・2コーナー</button>
 <button data-view="third">3・4コーナー</button>
-<button data-view="hill">最後の坂</button>
+<button data-view="hill">最後の坂（低い視点）</button>
 <button data-view="chase">1頭を追走</button>
 </div>
 <div class="tools" id="raceStarts">
@@ -104,9 +104,10 @@ a{color:#95e8df}
 <button id="reset">最初に戻す</button>
 <label>デモ速度 <select id="rate"><option value="1">1倍</option><option value="4">4倍</option><option value="8" selected>8倍（確認向け）</option></select></label>
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
+ <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
-<div id="message">JRA芝コース高低断面図を基に、1～向正面の下り・3角手前の上り・3～4角の下り・残り460～300mの上りを反映しました。上のレース距離を選んで、S→Gの走行を確認できます。</div>
-<div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">白：内・外ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
+<div id="message">坂が分かるよう、初期表示を最後の直線の低い視点に変更しました。3D起伏は見やすさのため3倍に強調しています（実際の高低差ではありません）。「実寸（1倍）」で縮尺を戻せます。白い内・外ラチも立体表示しています。</div>
+<div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">白：内・外の二段ラチと支柱</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
  <canvas id="elevationChart" width="980" height="286" aria-label="東京競馬場 芝A 高低差グラフ"></canvas>
@@ -117,7 +118,7 @@ a{color:#95e8df}
  <span class="gradeChip">残り460～300m：上り約2m</span>
  </div>
  <div class="profileCaption" id="profileReadout">高低差を検証するための標高曲線です。</div>
- <p class="profileCaption">JRA公式高低断面図を目視で読み取った<strong>近似曲線</strong>です。最大高低差2.7mは公式値ですが、各地点の標高は測量値ではありません。グラフはゴール付近を0mとした相対高度です。</p>
+ <p class="profileCaption">JRA公式高低断面図を目視で読み取った<strong>近似曲線</strong>です。最大高低差2.7mは公式値ですが、各地点の標高は測量値ではありません。グラフはゴール付近を0mとした相対高度です。<strong>3Dの高さ強調（2～3倍）は見やすさのための演出で、グラフ・距離・公式数値には反映しません。</strong></p>
 </section>
 <section class="notice">
 <h2>3D制作上の精度区分</h2>
@@ -130,7 +131,7 @@ a{color:#95e8df}
 <tr><td>芝Aの周回長</td><td>内柵から外側1mで2,083.1mに設定</td><td>JRA施行規程第64条</td></tr>
 <tr><td>直線・ゴール</td><td>4角出口から525.9mに決勝線を設置</td><td>公表直線距離を基準に配置</td></tr>
 <tr><td>坂・標高</td><td>JRA芝の高低断面図に近い形へ修正し、右上ではなく「残り距離」で各区間を定義。最高0m・最低-2.7m</td><td>最大高低差は公表値／各地点の相対標高は図の目視読取による近似</td></tr>
-<tr><td>内柵・外柵</td><td>幅31～41mで周回配置</td><td>公表幅員を基準</td></tr>
+<tr><td>内柵・外柵</td><td>幅31～41mで周回配置、二段白ラチ・支柱を表示（柵の断面寸法・間隔は視認性を優先した近似）</td><td>公表幅員を基準／柵形状は演出</td></tr>
 <tr><td>フジビュー・メモリアル60</td><td>低負荷3D建物</td><td>外観・おおよその位置を近似</td></tr>
 <tr><td>ターフビジョン</td><td>表示面66.4m×11.2m</td><td>JRA公表画面寸法</td></tr>
 <tr><td>距離標識</td><td>内柵から1mの基準線に沿い200～2000mを逆算。番号2、4、…20のハロン棒</td><td>JRA施行規程・用語辞典／現地の詳細座標は未確認</td></tr>
@@ -155,7 +156,17 @@ const N=560;
 // 横軸はゴールまでの残り距離[m]。縦軸はゴール付近を0mとした相対高度[m]。
 // JRA公式数値は「最大高低差2.7m」および坂の相対位置のみ。
 // 下記の各距離・高度の組合せは実測値ではなく視覚的な再構築値。
-const ELEVATION_BASE=3.05; // 3D描画用の地面とのオフセット（標高の意味を持たない）
+// 坂の見え方を調整する表示用倍率。公式の標高データ／断面図は常に実寸。
+const requestedRelief=Number(new URLSearchParams(window.location.search).get('relief'));
+const DISPLAY_RELIEF=[1,2,3].includes(requestedRelief)?requestedRelief:3;
+const ELEVATION_BASE=3.05+(DISPLAY_RELIEF-1)*2.7; // 最低地点を地面より上に保つ描画オフセット。標高ではない。
+const reliefMode=document.querySelector('#reliefMode');
+reliefMode.value=String(DISPLAY_RELIEF);
+reliefMode.addEventListener('change',()=>{
+ const url=new URL(window.location.href);
+ url.searchParams.set('relief',reliefMode.value);
+ window.location.assign(url.toString());
+});
 const profile=[
  [0,0],[160,0],[300,0],[380,-.85],[460,-2.0],[525.9,-2.05],
  [650,-2.13],[760,-2.32],[850,-2.7],[900,-2.55],
@@ -200,7 +211,7 @@ function relativeAltitude(remaining){
 function remainingAtStation(raw){return modulo(FINISH_DISTANCE-raw,LAP)}
 function elevation(raw){
  // すべての3D走路・ラチ・ポールに同じ標高を適用する。
- return ELEVATION_BASE+relativeAltitude(remainingAtStation(raw));
+ return ELEVATION_BASE+relativeAltitude(remainingAtStation(raw))*DISPLAY_RELIEF;
 }
 
 function widthAt(s){return 36+5*Math.sin((s/LAP)*Math.PI*2+.5)}
@@ -404,28 +415,44 @@ function borderBand(distanceA,distanceB,color){
 }
 borderBand(s=>MEASURE_OFFSET-widthAt(s)-3,s=>MEASURE_OFFSET-widthAt(s),0x95a58e);
 borderBand(s=>MEASURE_OFFSET,s=>MEASURE_OFFSET+2,0x65a35b);
-borderBand(s=>MEASURE_OFFSET+18,s=>MEASURE_OFFSET+36,0xb7a080);
+// 3D表示時も芝コース端から周囲の芝地面までを連続させる。
+function terrainApron(inner){
+ const start=s=>offsetAt(s,inner?MEASURE_OFFSET+2:MEASURE_OFFSET-widthAt(s)-3,.012);
+ const end=s=>{
+  const p=offsetAt(s,inner?MEASURE_OFFSET+29:MEASURE_OFFSET-widthAt(s)-29,0);
+  p.y=.12;return p;
+ };
+ const mesh=new THREE.Mesh(ringGeom(start,end),
+  new THREE.MeshStandardMaterial({color:inner?0x438e4a:0x4a8750,side:THREE.DoubleSide,roughness:1}));
+ scene.add(mesh);
+}
+terrainApron(true);terrainApron(false);
+if(DISPLAY_RELIEF===1)borderBand(s=>MEASURE_OFFSET+18,s=>MEASURE_OFFSET+36,0xb7a080);
 
-// rail using lightweight cylindrical continuous beams and instanced upright posts
+// 芝A内ラチ・外ラチ。上下二段横材と支柱を配置。寸法は視認性優先の近似。
 function createRail(inner){
- const samples=[],posts=[],total=300;
- for(let i=0;i<=total;i++){
-  const s=LAP*i/total,p=offsetAt(s,inner?MEASURE_OFFSET:MEASURE_OFFSET-widthAt(s),.83);
-  samples.push(p);
-  if(i<total)posts.push(p);
+ const count=330,offset=s=>inner?MEASURE_OFFSET:MEASURE_OFFSET-widthAt(s);
+ const beamMat=new THREE.MeshStandardMaterial({color:0xf4f9fa,roughness:.38,metalness:.04});
+ const postMat=new THREE.MeshStandardMaterial({color:0xdfe9e8,roughness:.63});
+ function beam(height,radius){
+  const samples=[];
+  for(let i=0;i<count;i++){
+   const s=LAP*i/count;
+   samples.push(offsetAt(s,offset(s),height));
+  }
+  const curve=new THREE.CatmullRomCurve3(samples,true,'centripetal');
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,1150,radius,6,true),beamMat));
  }
- const curve=new THREE.CatmullRomCurve3(samples,true,'centripetal');
- const rail=new THREE.Mesh(new THREE.TubeGeometry(curve,840,.095,5,true),
-   new THREE.MeshStandardMaterial({color:0xf9fbfb,roughness:.50,metalness:.16}));
- scene.add(rail);
- const postGeo=new THREE.CylinderGeometry(.063,.075,.95,5);
- const postMat=new THREE.MeshStandardMaterial({color:0xf0f2ea});
- const inst=new THREE.InstancedMesh(postGeo,postMat,posts.length);
+ beam(1.43,.20);
+ beam(.76,.12);
+ const postGeo=new THREE.CylinderGeometry(.14,.17,1.52,7);
+ const posts=new THREE.InstancedMesh(postGeo,postMat,count);
  const dummy=new THREE.Object3D();
- for(let i=0;i<posts.length;i++){
-  const p=posts[i];dummy.position.set(p.x,p.y-.48,p.z);dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);
+ for(let i=0;i<count;i++){
+  const station=LAP*i/count,p=offsetAt(station,offset(station),.76);
+  dummy.position.copy(p);dummy.updateMatrix();posts.setMatrixAt(i,dummy.matrix);
  }
- inst.instanceMatrix.needsUpdate=true;scene.add(inst);
+ posts.instanceMatrix.needsUpdate=true;scene.add(posts);
 }
 createRail(true);createRail(false);
 
@@ -756,9 +783,10 @@ function setView(which){
  else if(which==='first'){eye=new THREE.Vector3(STRAIGHT/2+280,160,10);target=new THREE.Vector3(STRAIGHT/2+30,1,0)}
  else if(which==='third'){eye=new THREE.Vector3(-STRAIGHT/2-280,150,10);target=new THREE.Vector3(-STRAIGHT/2-30,1,0)}
  else if(which==='hill'){
-  const a=positionAt(FINISH_DISTANCE-410);
-  eye=a.p.clone().addScaledVector(a.inward,-55).addScaledVector(a.t,-48).add(new THREE.Vector3(0,33,0));
-  target=a.p.clone().addScaledVector(a.t,25).add(new THREE.Vector3(0,1,0));
+  const a=positionAt(FINISH_DISTANCE-445);
+  // 低い斜めの視点で、最後の上り坂の開始～上り切りを見通す。
+  eye=a.p.clone().addScaledVector(a.inward,-26).addScaledVector(a.t,-65).add(new THREE.Vector3(0,8.5,0));
+  target=a.p.clone().addScaledVector(a.t,118).add(new THREE.Vector3(0,3.1,0));
  }
  else if(which==='start'&&activePlan){
   const a=racePointAt(activePlan,0);
@@ -810,7 +838,7 @@ function resize(){
  drawElevationProfile();
 }
 window.addEventListener('resize',resize);
-resize();setView('all');selectRace();
+resize();setView('hill');selectRace();
 function animate(time){
  requestAnimationFrame(animate);
  const dt=Math.min(clock.getDelta(),.05);
@@ -828,7 +856,7 @@ function animate(time){
   fps=fpsCount*1000/(time-lastTime||1);fpsCount=0;lastTime=time;
   const rest=Math.max(0,Math.round((activePlan?.distance||1400)-travel));
   drawElevationProfile();
-  info.textContent='東京芝A｜'+activeDistance+'m／S→G\n'+(playing?'指定距離を走行中':'スタート地点の検証中')+'\n走行 '+Math.round(travel)+'m ／ 残り '+rest+'m\nFPS '+fps.toFixed(0)+(usedStoredGLB?'／保存GLB使用':'／簡易馬モデル');
+  info.textContent='東京芝A｜'+activeDistance+'m／S→G\n'+(playing?'指定距離を走行中':'スタート地点の検証中')+'\n走行 '+Math.round(travel)+'m ／ 残り '+rest+'m\nFPS '+fps.toFixed(0)+'／坂の3D強調 '+DISPLAY_RELIEF+'倍'+(usedStoredGLB?'／保存GLB使用':'／簡易馬モデル');
   info.style.whiteSpace='pre-line';
  }
 }
