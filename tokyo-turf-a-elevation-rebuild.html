@@ -66,6 +66,7 @@ a{color:#95e8df}
 <button data-view="hill">最後の坂（低い視点）</button>
 <button data-view="dirt">内側のダート</button>
 <button data-view="chase">1頭を追走</button>
+<button data-view="field">18頭を追走</button>
 </div>
 <div class="tools" id="raceStarts">
 <label>レースの距離（S）
@@ -80,7 +81,7 @@ a{color:#95e8df}
 <option value="2600">芝2600m（仮配置）</option>
 <option value="3400">芝3400m</option>
 </select></label>
-<button id="startView">S地点を拡大</button>
+<button id="startView">発馬機・S地点を見る</button>
 <span class="pill" id="startInfo">Sはスタート位置、Gはゴール</span>
 </div>
 <div class="tools" id="distanceViews">
@@ -102,15 +103,17 @@ a{color:#95e8df}
 <span class="pill" id="markerInfo">表示は残り距離。発走地点とは別です。</span>
 </div>
 <div class="tools">
-<button id="demo">SからGへ走らせる</button>
-<button id="reset">最初に戻す</button>
-<label>デモ速度 <select id="rate"><option value="1">1倍</option><option value="4">4倍</option><option value="8" selected>8倍（確認向け）</option></select></label>
+<label>走行テスト <select id="fieldMode"><option value="field18" selected>18頭の同時発走</option><option value="single">従来の1頭走行</option></select></label>
+<button id="demo">18頭を一斉にスタート</button>
+<button id="reset">発馬機へ戻す</button>
+<label>デモ速度 <select id="rate"><option value="1" selected>1倍（発走確認）</option><option value="4">4倍</option><option value="8">8倍（確認向け）</option></select></label>
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
 <label><input type="checkbox" id="courseSigns"/>大きな案内看板（全景用）</label>
 <label><input type="checkbox" id="showStands" checked/>スタンド建物を表示</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
-<div id="message">中央の仮建物4棟を撤去し、ゴール板を追加。スタンドのガラス階層・ひさしの支持材、枝葉のある樹木、枠と試作映像の付いたターフビジョンを改善しました。ゴール板の専用カメラがあります。走路はこれまでの近似モデルのままです。</div>
+<div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
+<div id="message">芝Aの18頭同時発走テストです。18枠から全頭が同時に走り出し、固定レーンで走ります。競走能力差・追い抜き・衝突回避はまだ未実装です。専用ポケットの形状と発馬機の大きさは試作用の近似です。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -153,6 +156,7 @@ const stage=document.querySelector('#stage'),info=document.querySelector('#telem
 const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate'),checkLabels=document.querySelector('#labels');
 const courseSigns=document.querySelector('#courseSigns');
 const showStands=document.querySelector('#showStands');
+const fieldMode=document.querySelector('#fieldMode'),gridStatus=document.querySelector('#gridStatus');
 const LAP=2083.1,STRAIGHT=560,BACK_STRAIGHT=542,RIGHT_TURN_LEN=449,MEASURE_OFFSET=1;
 const LEFT_TURN_LEN=LAP-STRAIGHT-BACK_STRAIGHT-RIGHT_TURN_LEN;
 const TURN_RADIUS=RIGHT_TURN_LEN/Math.PI,CURVE_LEN=RIGHT_TURN_LEN,FINISH_DISTANCE=525.9;
@@ -914,7 +918,7 @@ const POCKET_DATA=[
 function makePocket(spec){
  const remaining=modulo(FINISH_DISTANCE-spec.join,LAP);
  const targetLength=spec.distance-remaining;
- const end=offsetAt(spec.join,-6,.12),tangent=positionAt(spec.join).t;
+ const end=offsetAt(spec.join,MEASURE_OFFSET-widthAt(spec.join)/2,.12),tangent=positionAt(spec.join).t; // 18頭用にポケット出口を本線中央へ接続
  const direction=new THREE.Vector3(spec.deltaX,0,spec.deltaZ).normalize();
  function curveFor(scale){
   const p0=end.clone().addScaledVector(direction,scale);
@@ -1025,6 +1029,106 @@ function fallbackHorse(){
  }
  return g;
 }
+// ===== 18頭同時スタート：低負荷の仮馬体と試作用の発馬機 =====
+const FIELD_COUNT=18,FIELD_MARGIN=1.2,HORSE_WIDTH=.8;
+const fieldHorses=[],fieldRoot=new THREE.Group(),gateRoot=new THREE.Group();
+scene.add(fieldRoot);scene.add(gateRoot);
+let gateDoors=[],gateOpening=0;
+function fieldCenterAt(plan,distance){
+ const d=Math.max(0,Math.min(distance,plan.distance));
+ if(plan.pocket&&d<plan.pocket.length){
+  const u=d/plan.pocket.length;
+  return {p:plan.pocket.curve.getPointAt(u),t:plan.pocket.curve.getTangentAt(u).normalize(),
+   width:plan.distance===1800?24:28};
+ }
+ const s=plan.startStation+d-(plan.pocket?plan.pocket.length:0);
+ return {p:offsetAt(s,MEASURE_OFFSET-widthAt(s)/2,.15),t:positionAt(s).t,width:widthAt(s)};
+}
+function fieldStallWidth(width){return (width-2*FIELD_MARGIN)/FIELD_COUNT}
+function fieldHorseAt(plan,distance,i){
+ const a=fieldCenterAt(plan,distance),side=new THREE.Vector3(a.t.z,0,-a.t.x);
+ const lane=(8.5-i)*fieldStallWidth(a.width);
+ return {p:a.p.clone().addScaledVector(side,lane),t:a.t,width:a.width};
+}
+function fieldLayoutCheck(plan){
+ const a=fieldCenterAt(plan,0),stall=fieldStallWidth(a.width);
+ const positions=Array.from({length:FIELD_COUNT},(_,i)=>fieldHorseAt(plan,0,i).p);
+ let gap=Infinity;
+ for(let i=1;i<FIELD_COUNT;i++)gap=Math.min(gap,positions[i].distanceTo(positions[i-1]));
+ const margin=(a.width-stall*FIELD_COUNT)/2-HORSE_WIDTH/2;
+ return {ok:gap>HORSE_WIDTH+.22&&margin>.6,stall,margin,width:a.width};
+}
+const silkColors=[0xff3b39,0x2c7bd9,0xeec232,0x1b965e,0x914bc0,0xf0f0f0,0xf57e25,0x15a8c2,0x284d89];
+const sharedHorse=fallbackHorse();
+for(let i=0;i<FIELD_COUNT;i++){
+ const horse=sharedHorse.clone(true);
+ // 4番目のメッシュは騎手の勝負服。配色だけを個別に変える。
+ horse.children[3].material=new THREE.MeshStandardMaterial({color:silkColors[i%silkColors.length]});
+ horse.children[4].material=new THREE.MeshStandardMaterial({color:silkColors[i%silkColors.length]});
+ horse.userData.legs=horse.children.slice(5);
+ fieldRoot.add(horse);fieldHorses.push(horse);
+}
+function positionFieldHorses(){
+ if(!activePlan)return;
+ for(let i=0;i<FIELD_COUNT;i++){
+  const a=fieldHorseAt(activePlan,travel,i),horse=fieldHorses[i];
+  const phase=travel*.67+i*.22,motion=Math.min(1,travel/5);
+  horse.position.copy(a.p);horse.position.y+=.05*motion*Math.sin(phase*2);
+  horse.rotation.y=Math.atan2(a.t.x,a.t.z);
+  horse.userData.legs.forEach((leg,j)=>{leg.rotation.x=motion*.35*Math.sin(phase+(j%2?Math.PI:0)+(j>1?Math.PI:0))});
+ }
+}
+function drawFieldGate(plan){
+ gateRoot.traverse(x=>{
+  if(x.geometry)x.geometry.dispose();
+  if(x.material){
+   const mats=Array.isArray(x.material)?x.material:[x.material];
+   for(const m of mats){if(m.map)m.map.dispose();m.dispose()}
+  }
+ });
+ gateRoot.clear();gateDoors=[];gateOpening=0;
+ const a=fieldCenterAt(plan,0),w=fieldStallWidth(a.width),total=FIELD_COUNT*w;
+ gateRoot.position.copy(a.p);gateRoot.rotation.y=Math.atan2(a.t.x,a.t.z);
+ const frame=new THREE.MeshStandardMaterial({color:0x6a9280,metalness:.48,roughness:.48});
+ const roof=new THREE.MeshStandardMaterial({color:0x214b54,roughness:.6});
+ const doorMat=new THREE.MeshStandardMaterial({color:0xd8e4df,roughness:.65});
+ function part(x,y,z,dx,dy,dz,material){
+  const obj=new THREE.Mesh(new THREE.BoxGeometry(dx,dy,dz),material);
+  obj.position.set(x,y,z);gateRoot.add(obj);return obj;
+ }
+ for(let k=0;k<=FIELD_COUNT;k++){
+  part((k-FIELD_COUNT/2)*w,1.5,0,.08,2.95,3.2,frame);
+ }
+ part(0,3.1,0,total+.36,.30,3.5,roof);
+ part(0,2.5,-1.5,total+.3,.11,.12,frame);
+ // 枠番は1が内側。モデルローカルの右端から1番になる。
+ const canvas=document.createElement('canvas');canvas.width=1152;canvas.height=72;
+ const ctx=canvas.getContext('2d');
+ for(let i=0;i<FIELD_COUNT;i++){
+  ctx.fillStyle=i%2?'#245a64':'#347380';ctx.fillRect(i*64,0,64,72);
+  ctx.fillStyle='#ffffff';ctx.font='bold 36px sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(18-i),i*64+32,38);
+ }
+ const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
+ const sign=new THREE.Mesh(new THREE.PlaneGeometry(total,.86),
+  new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}));
+ sign.position.set(0,3.42,1.79);gateRoot.add(sign);
+ for(let i=0;i<FIELD_COUNT;i++){
+  const x=(i-8.5)*w;
+  for(const side of [-1,1]){
+   const door=part(x+side*w*.26,1.02,1.56,w*.46,1.85,.10,doorMat);
+   gateDoors.push({door,side});
+  }
+ }
+}
+function updateGateDoors(){
+ for(const {door,side} of gateDoors)door.rotation.y=side*gateOpening*1.1;
+}
+const layoutTests=[1400,1600,1800,2000,2300,2400,2500,2600,3400].map(distance=>
+ ({distance,...fieldLayoutCheck(racePlan(distance))}));
+console.assert(layoutTests.every(t=>t.ok),'18頭の発馬枠幅検証',layoutTests);
+// ===== 18頭テストここまで =====
+
 runner=new THREE.Group();const fallback=fallbackHorse();runner.add(fallback);scene.add(runner);
 async function maybeLoadStoredHorse(){
  try{
@@ -1050,7 +1154,7 @@ async function maybeLoadStoredHorse(){
   runnerMixer=gltf.animations.length?new THREE.AnimationMixer(gltf.scene):null;
   if(runnerMixer){const action=runnerMixer.clipAction(gltf.animations[0]);action.play()}
   usedStoredGLB=true;
-  msg.textContent='端末の保存済みDesign01 GLBを自動読み込みしました。全景を確認し、1頭周回デモや追走カメラを試せます。';
+  if(fieldMode.value==='single')msg.textContent='端末保存の3D馬モデルを使った1頭走行です。';
  }catch(err){console.warn('端末のGLB確認（代替モデルを使用）',err)}
 }
 maybeLoadStoredHorse();
@@ -1059,7 +1163,7 @@ function positionRunner(){
  const a=racePointAt(activePlan,travel),pos=a.p;
  runner.position.copy(pos);
  runner.rotation.y=Math.atan2(a.t.x,a.t.z);
- if(view==='chase'){
+ if(view==='chase'&&fieldMode.value==='single'){
   const desired=pos.clone().addScaledVector(a.t,-18).add(new THREE.Vector3(0,10,0));
   const target=pos.clone().addScaledVector(a.t,6).add(new THREE.Vector3(0,2,0));
   camera.position.lerp(desired,.16);controls.target.lerp(target,.16);
@@ -1116,7 +1220,17 @@ function setView(which){
    eye=dirtPoint(station,DIRT_INNER_OFFSET+40,15).addScaledVector(a.t,-75);
    target=dirtPoint(station,DIRT_OUTER_OFFSET+12,2.5).addScaledVector(a.t,118);
   }
-  else if(which==='start'&&activePlan){
+  else if(which==='start'&&activePlan&&fieldMode.value==='field18'){
+  const a=fieldCenterAt(activePlan,0),side=new THREE.Vector3(a.t.z,0,-a.t.x);
+  eye=a.p.clone().addScaledVector(a.t,76).addScaledVector(side,-12).add(new THREE.Vector3(0,27,0));
+  target=a.p.clone().addScaledVector(a.t,3).add(new THREE.Vector3(0,2,0));
+ }
+ else if(which==='field'&&activePlan){
+  const a=fieldCenterAt(activePlan,travel),side=new THREE.Vector3(a.t.z,0,-a.t.x);
+  eye=a.p.clone().addScaledVector(a.t,-68).addScaledVector(side,-10).add(new THREE.Vector3(0,28,0));
+  target=a.p.clone().addScaledVector(a.t,14).add(new THREE.Vector3(0,2,0));
+ }
+ else if(which==='start'&&activePlan){
   const a=racePointAt(activePlan,0);
   const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
   eye=a.p.clone().addScaledVector(side,-60).addScaledVector(a.t,-50).add(new THREE.Vector3(0,45,0));
@@ -1134,27 +1248,41 @@ const raceSelector=document.querySelector('#raceDistance'),startInfo=document.qu
 function selectRace(){
  activeDistance=Number(raceSelector.value);
  activePlan=racePlan(activeDistance);
- playing=false;travel=0;demoBtn.textContent='SからGへ走らせる';
- highlightRace(activePlan);positionRunner();
+ playing=false;travel=0;gateOpening=0;
+ demoBtn.textContent=fieldMode.value==='field18'?'18頭を一斉にスタート':'SからGへ走らせる';
+ highlightRace(activePlan);drawFieldGate(activePlan);
+ fieldRoot.visible=fieldMode.value==='field18';
+ gateRoot.visible=fieldMode.value==='field18';
+ runner.visible=fieldMode.value==='single';
+ positionRunner();positionFieldHorses();updateGateDoors();
+ const test=fieldLayoutCheck(activePlan);
+ gridStatus.textContent='芝'+activeDistance+'m｜18枠 '+(test.ok?'配置OK':'要調整')+
+ '｜幅'+test.width.toFixed(1)+'m／1枠'+test.stall.toFixed(2)+'m'+
+ (activePlan.pocket?'（ポケット形状は近似）':'');
  const description=activePlan.pocket
   ?activeDistance+'m：'+activePlan.pocket.label+'／ポケット'+Math.round(activePlan.pocket.length)+'mから合流'
   :activeDistance+'m：'+regionForS(activePlan.startStation)+'のSから発走'+(activeDistance===2600?'（仮配置）':'');
  startInfo.textContent=description+'／Gまで'+activeDistance+'m';
  drawElevationProfile();
- if(view==='chase'||view==='start')setView('all');
+ if(view==='chase'||view==='start'||view==='field')setView(fieldMode.value==='field18'?'start':'all');
 }
 raceSelector.addEventListener('change',selectRace);
+fieldMode.addEventListener('change',()=>{selectRace();if(fieldMode.value==='field18')setView('start')});
 document.querySelector('#startView').addEventListener('click',()=>setView('start'));
 function resetDemo(){
- travel=0;playing=false;demoBtn.textContent='SからGへ走らせる';positionRunner();
- if(view==='chase')setView('chase');
+ travel=0;playing=false;gateOpening=0;updateGateDoors();
+ demoBtn.textContent=fieldMode.value==='field18'?'18頭を一斉にスタート':'SからGへ走らせる';
+ positionRunner();positionFieldHorses();
+ if(fieldMode.value==='field18')setView('start');
+ else if(view==='chase')setView('chase');
 }
 demoBtn.addEventListener('click',()=>{
  if(!activePlan)return;
  if(travel>=activePlan.distance)travel=0;
  playing=!playing;
  demoBtn.textContent=playing?'一時停止':'再開';
- if(playing&&view==='start')setView('chase');
+ if(playing&&fieldMode.value==='single'&&view==='start')setView('chase');
+ if(playing&&fieldMode.value==='field18'&&!['start','field'].includes(view))setView('start');
 });
 document.querySelector('#reset').addEventListener('click',()=>{resetDemo();drawElevationProfile()});
 // 看板類は標準非表示。俯瞰でだけ任意に表示し、近景でコースを隠さない。
@@ -1171,7 +1299,7 @@ function updateSceneLabelVisibility(){
      :isWide;
   sprite.visible=checkLabels.checked&&inThisView;
  }
- const closeViews=new Set(['goal','goalboard','hill','dirt','chase','start','marker']);
+ const closeViews=new Set(['goal','goalboard','hill','dirt','chase','field','start','marker']);
  turfVisionGroups.forEach(group=>{group.visible=!closeViews.has(view)});
 }
 checkLabels.addEventListener('change',updateSceneLabelVisibility);
@@ -1185,17 +1313,29 @@ function resize(){
  drawElevationProfile();
 }
 window.addEventListener('resize',resize);
-resize();setView('all');selectRace();
+resize();setView('all');selectRace();setView('start');
 function animate(time){
  requestAnimationFrame(animate);
  const dt=Math.min(clock.getDelta(),.05);
  if(playing){
   const step=16.7*Number(rate.value)*dt;
   travel=Math.min(activePlan?.distance||LAP,travel+step);
-  if(runnerMixer)runnerMixer.update(dt*Math.min(2,16.7*Number(rate.value)/16.7));
-  if(activePlan&&travel>=activePlan.distance){playing=false;demoBtn.textContent='ゴール到達・もう一度'}
+  if(fieldMode.value==='single'&&runnerMixer)runnerMixer.update(dt*Math.min(2,16.7*Number(rate.value)/16.7));
+  if(activePlan&&travel>=activePlan.distance){
+   playing=false;demoBtn.textContent=fieldMode.value==='field18'?'18頭ゴール・もう一度':'ゴール到達・もう一度';
+  }
  }
- positionRunner();
+ positionRunner();positionFieldHorses();
+ if(fieldMode.value==='field18'){
+  gateOpening=travel>0?Math.min(1,gateOpening+dt*4):0;updateGateDoors();
+  if(playing&&view==='start'&&travel>85)setView('field');
+  if(view==='field'&&activePlan){
+   const a=fieldCenterAt(activePlan,travel),side=new THREE.Vector3(a.t.z,0,-a.t.x);
+   const eye=a.p.clone().addScaledVector(a.t,-68).addScaledVector(side,-10).add(new THREE.Vector3(0,28,0));
+   const target=a.p.clone().addScaledVector(a.t,14).add(new THREE.Vector3(0,2,0));
+   camera.position.lerp(eye,.16);controls.target.lerp(target,.16);
+  }
+ }
  controls.update();
  // ピンチ操作で屋根や床の内部に入ったときは、障害物の模型だけ一時的に隠す。
  for(const item of stadiumGroups){
@@ -1210,7 +1350,7 @@ function animate(time){
   fps=fpsCount*1000/(time-lastTime||1);fpsCount=0;lastTime=time;
   const rest=Math.max(0,Math.round((activePlan?.distance||1400)-travel));
   drawElevationProfile();
-  info.textContent='東京芝A '+activeDistance+'m｜'+(playing?'走行中':'確認中')+'\n残り'+rest+'m｜FPS '+fps.toFixed(0)+'｜坂 '+DISPLAY_RELIEF+'倍';
+  info.textContent='東京芝A '+activeDistance+'m｜'+(playing?'走行中':'発走待ち')+'\n'+(fieldMode.value==='field18'?'18頭同時':'1頭デモ')+'｜残り'+rest+'m｜FPS '+fps.toFixed(0);
   info.style.whiteSpace='pre-line';
  }
 }
