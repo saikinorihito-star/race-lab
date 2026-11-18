@@ -1182,6 +1182,29 @@ function stepRace(tick){
    state.finished=true;state.finishTime=raceElapsed;state.postDistance=0;raceFinished.push(state.number);
   }
  }
+ // 最終安全補正: 同時更新で同じ進路へ集まった馬の中心間を空ける。
+ // 短い間隔の補正のみであり、物理エンジンによる接触計算ではない。
+ for(let pass=0;pass<4;pass++){
+  let corrected=false;
+  for(let i=0;i<FIELD_COUNT;i++)for(let j=i+1;j<FIELD_COUNT;j++){
+   const a=raceHorses[i],b=raceHorses[j];
+   if(a.finished||b.finished)continue;
+   const lateral=a.lane-b.lane,longitudinal=a.distance-b.distance;
+   if(lateral*lateral+longitudinal*longitudinal>=1.15*1.15)continue;
+   const front=longitudinal>1e-6?a:longitudinal< -1e-6?b:
+    (a.pace>b.pace?a:b);
+   const back=front===a?b:a;
+   const needed=Math.sqrt(Math.max(0,1.15*1.15-lateral*lateral))+.025;
+   const safeDistance=Math.max(0,front.distance-needed);
+   if(back.distance>safeDistance+1e-5){
+    back.distance=safeDistance;back.speed=0;raceContactWarnings++;corrected=true;
+    const limit=fieldCenterAt(activePlan,back.distance).width/2-.9;
+    back.lane=Math.max(-limit,Math.min(limit,back.lane));
+    back.targetLane=Math.max(-limit,Math.min(limit,back.targetLane));
+   }
+  }
+  if(!corrected)break;
+ }
  // 終了した馬の順位は初回のゴール時刻で固定。同時刻なら枠番号で安定化。
 }
 function updateRace(dt){
