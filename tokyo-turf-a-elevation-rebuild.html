@@ -47,10 +47,10 @@ a{color:#95e8df}
 <body>
 <header>
 <h1>東京芝A｜コース地形・坂の再構築</h1>
-<div class="subtitle">JRA公式の芝高低断面図を参照して3D地形を再構築。下り坂・3コーナー手前の上り坂・残り460～300mの坂を反映し、S・G・9距離の切替も維持しています。</div>
+<div class="subtitle">JRA公式の芝・ダート資料を参照。外側の芝A、内側の砂の走路、二段ラチ、坂、ターフビジョンを同時に表示します。</div>
 </header>
 <main>
-<div class="pillrow"><span class="pill">芝A｜1周 2,083.1m</span><span class="pill">直線 525.9m</span><span class="pill">高低差 2.7m</span><span class="pill">幅員 31～41m</span><span class="pill">左回り（反時計回り）</span></div>
+<div class="pillrow"><span class="pill">芝A｜1周2,083.1m／幅31～41m</span><span class="pill">芝直線525.9m／高低差2.7m</span><span class="pill">ダート｜1周1,899m／幅25m</span><span class="pill">ダート直線501.6m／高低差2.5m</span><span class="pill">左回り</span></div>
 <div id="stage">
  <div id="telemetry">3Dコースを準備中…</div>
  <div id="help">1本指ドラッグ：回転　2本指：拡大縮小・移動　Mac：ドラッグ／ホイール</div>
@@ -63,6 +63,7 @@ a{color:#95e8df}
 <button data-view="first">1・2コーナー</button>
 <button data-view="third">3・4コーナー</button>
 <button data-view="hill">最後の坂（低い視点）</button>
+<button data-view="dirt">内側のダート</button>
 <button data-view="chase">1頭を追走</button>
 </div>
 <div class="tools" id="raceStarts">
@@ -106,8 +107,8 @@ a{color:#95e8df}
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
-<div id="message">坂が分かるよう、初期表示を最後の直線の低い視点に変更しました。3D起伏は見やすさのため3倍に強調しています（実際の高低差ではありません）。「実寸（1倍）」で縮尺を戻せます。白い内・外ラチも立体表示しています。</div>
-<div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">白：内・外の二段ラチと支柱</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
+<div id="message">芝の内側にダートコースを追加しました。「内側のダート」で砂と柵を近くから確認できます。1頭の走行デモは引き続き芝A専用です。坂の3倍表示は視覚上の誇張です。</div>
+<div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
  <canvas id="elevationChart" width="980" height="286" aria-label="東京競馬場 芝A 高低差グラフ"></canvas>
@@ -122,16 +123,17 @@ a{color:#95e8df}
 </section>
 <section class="notice">
 <h2>3D制作上の精度区分</h2>
-<strong>JRA公表値：</strong>芝Aの1周2,083.1m、幅員31～41m、最後の直線525.9m、最大高低差2.7m、左回り。<strong>JRA施行規程第64条により1周距離の計測線は内柵の外側1m</strong>。施設名称およびターフビジョンの公表画面寸法（66.4m×11.2m）。<br>
-<strong>近似・演出：</strong>コーナー半径・中心線の詳細座標・道路脇の建物位置・スタンド高さ／外形・観客席の段数・公式断面図を目視読取した各標高点。公式図・コース説明に近づけた近似曲線から作った3D模型で、測量図の完全複製ではありません。<br>
-<strong>この段階に含めないもの：</strong>B／C／Dへの内柵切替、全18頭のコーナー走行、実際のレース展開。距離別のS地点はJRA-VANの図に基づく近似です。2600mは今回の参考画像にないため4コーナー側に仮配置します。
+<strong>JRA公表値：</strong>芝Aは1周2,083.1m、幅員31～41m、直線525.9m、高低差2.7m。ダートは1周1,899m、幅員25m、直線501.6m、高低差2.5m。いずれも左回り。<strong>JRA施行規程第64条により1周距離の計測線は内柵の外側1m</strong>。施設名称およびターフビジョンの公表画面寸法（66.4m×11.2m）。<br>
+<strong>近似・演出：</strong>ダートのコーナー曲率・相対位置・起伏節点・砂の色むら・整地跡・柵の寸法、芝のコーナー半径・中心線の詳細座標・道路脇の建物位置・スタンド高さ／外形・観客席の段数・公式断面図を目視読取した各標高点。公式図・コース説明に近づけた近似曲線から作った3D模型で、測量図の完全複製ではありません。<br>
+<strong>この段階に含めないもの：</strong>ダートの距離別スタート・ダートレース走行、B／C／Dへの内柵切替、全18頭のコーナー走行、実際のレース展開。距離別のS地点はJRA-VANの図に基づく近似です。2600mは今回の参考画像にないため4コーナー側に仮配置します。
 <table>
 <thead><tr><th>対象</th><th>今回</th><th>基準</th></tr></thead>
 <tbody>
 <tr><td>芝Aの周回長</td><td>内柵から外側1mで2,083.1mに設定</td><td>JRA施行規程第64条</td></tr>
 <tr><td>直線・ゴール</td><td>4角出口から525.9mに決勝線を設置</td><td>公表直線距離を基準に配置</td></tr>
 <tr><td>坂・標高</td><td>JRA芝の高低断面図に近い形へ修正し、右上ではなく「残り距離」で各区間を定義。最高0m・最低-2.7m</td><td>最大高低差は公表値／各地点の相対標高は図の目視読取による近似</td></tr>
-<tr><td>内柵・外柵</td><td>幅31～41mで周回配置、二段白ラチ・支柱を表示（柵の断面寸法・間隔は視認性を優先した近似）</td><td>公表幅員を基準／柵形状は演出</td></tr>
+<tr><td>内柵・外柵</td><td>芝A・ダート双方の内外に二段式ラチ。両コース間に緑の緩衝帯</td><td>公式幅員／ラチ位置・柵寸法は近似</td></tr>
+<tr><td>ダート走路</td><td>幅25m、周回1,899m相当の砂の走路、整地跡、専用ラチ</td><td>周長と幅員は公式値／走路形状・起伏は近似</td></tr>
 <tr><td>フジビュー・メモリアル60</td><td>低負荷3D建物</td><td>外観・おおよその位置を近似</td></tr>
 <tr><td>ターフビジョン</td><td>表示面66.4m×11.2m</td><td>JRA公表画面寸法</td></tr>
 <tr><td>距離標識</td><td>内柵から1mの基準線に沿い200～2000mを逆算。番号2、4、…20のハロン棒</td><td>JRA施行規程・用語辞典／現地の詳細座標は未確認</td></tr>
@@ -618,6 +620,8 @@ const goalOuter=offsetAt(FINISH_DISTANCE,MEASURE_OFFSET-courseW-4,0);
 addBox(scene,goalOuter.x,goalOuter.y+7.3,goalOuter.z,1.05,14,1.05,0xffffff);
 addBox(scene,goalOuter.x,goalOuter.y+14.8,goalOuter.z,4.1,2.0,1.2,0xd2bb5a);
 const goalSign=label3D('G｜ゴール',goalOuter.x,goalOuter.y+20,goalOuter.z,14,'#8e7634');
+const dirtLabelPos=dirtPoint(FINISH_DISTANCE-210,DIRT_INNER_OFFSET+15,.1);
+label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+16,dirtLabelPos.z,14,'#755b3d');
 
 
  // JRAのゴールから逆方向に、内柵1m外側の測定線に沿って200mごとに設置。
@@ -937,7 +941,12 @@ function setView(which){
   eye=a.p.clone().addScaledVector(a.inward,-26).addScaledVector(a.t,-65).add(new THREE.Vector3(0,8.5,0));
   target=a.p.clone().addScaledVector(a.t,118).add(new THREE.Vector3(0,3.1,0));
  }
- else if(which==='start'&&activePlan){
+ else if(which==='dirt'){
+   const station=FINISH_DISTANCE-360,a=positionAt(station);
+   eye=dirtPoint(station,DIRT_INNER_OFFSET+40,15).addScaledVector(a.t,-75);
+   target=dirtPoint(station,DIRT_OUTER_OFFSET+12,2.5).addScaledVector(a.t,118);
+  }
+  else if(which==='start'&&activePlan){
   const a=racePointAt(activePlan,0);
   const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
   eye=a.p.clone().addScaledVector(side,-60).addScaledVector(a.t,-50).add(new THREE.Vector3(0,45,0));
@@ -987,7 +996,7 @@ function resize(){
  drawElevationProfile();
 }
 window.addEventListener('resize',resize);
-resize();setView('hill');selectRace();
+resize();setView('all');selectRace();
 function animate(time){
  requestAnimationFrame(animate);
  const dt=Math.min(clock.getDelta(),.05);
