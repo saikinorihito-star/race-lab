@@ -60,6 +60,7 @@ a{color:#95e8df}
 <button data-view="top">真上</button>
 <button data-view="stand">スタンド側</button>
 <button data-view="goal">ゴール周辺</button>
+<button data-view="goalboard">ゴール板</button>
 <button data-view="first">1・2コーナー</button>
 <button data-view="third">3・4コーナー</button>
 <button data-view="hill">最後の坂（低い視点）</button>
@@ -109,7 +110,7 @@ a{color:#95e8df}
 <label><input type="checkbox" id="showStands" checked/>スタンド建物を表示</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
-<div id="message">コースを隠していた階段状の仮観覧席は撤去しました。スタンドは外壁・ガラス面・屋根のみを残し、「スタンド建物を表示」で切り替えられます。芝・ダート・坂・柵・1頭走行の機能はそのままです。</div>
+<div id="message">実在施設と紐づかない馬場内の灰色建物4棟を撤去し、芝の内柵側に鏡付きゴール板を設置。ゴール板の専用カメラを追加し、樹木の幹と樹冠を改善しました。各施設の詳細形状は近似です。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -648,9 +649,49 @@ finishStripe.rotation.z=-Math.atan2(finishP.t.z,finishP.t.x);
 finishStripe.position.copy(finishMiddle);
 scene.add(finishStripe);
 const goalOuter=offsetAt(FINISH_DISTANCE,MEASURE_OFFSET-courseW-4,0);
-addBox(scene,goalOuter.x,goalOuter.y+7.3,goalOuter.z,1.05,14,1.05,0xffffff);
-addBox(scene,goalOuter.x,goalOuter.y+14.8,goalOuter.z,4.1,2.0,1.2,0xd2bb5a);
-const goalSign=label3D('G｜ゴール',goalOuter.x,goalOuter.y+14,goalOuter.z,8,'#8e7634','major');
+// 決勝撮影用の細いポール（外柵側）。旧来の大きな金色案内板は撤去。
+addBox(scene,goalOuter.x,goalOuter.y+5.1,goalOuter.z,.5,10.2,.5,0xd9e2e4);
+addBox(scene,goalOuter.x,goalOuter.y+10.35,goalOuter.z,1.1,.55,.85,0x44545e);
+const goalSign=label3D('G｜ゴール',goalOuter.x,goalOuter.y+13,goalOuter.z,7,'#355264','major');
+// JRAによる「決勝線の内柵側にある鏡」を備えたゴール板。
+// 東京競馬場の青い弓形サインを参考にした近似モデル。現地実測寸法ではない。
+const goalBoard=new THREE.Group();
+const goalBoardFoot=offsetAt(FINISH_DISTANCE,MEASURE_OFFSET+2.15,0);
+goalBoard.position.copy(goalBoardFoot);
+scene.add(goalBoard);
+const boardBlue=new THREE.MeshStandardMaterial({color:0x2261a2,metalness:.22,roughness:.4});
+const boardNavy=new THREE.MeshStandardMaterial({color:0x0e326a,metalness:.18,roughness:.42});
+addBox(goalBoard,0,.37,0,2.55,.74,.92,0xdce0e0);
+for(const x of [-.95,.95]){
+ const shaft=new THREE.Mesh(new THREE.BoxGeometry(.43,4.38,.50),boardBlue);
+ shaft.position.set(x,2.92,0);goalBoard.add(shaft);
+}
+const arch=new THREE.Mesh(new THREE.TorusGeometry(.95,.25,9,40,Math.PI),boardNavy);
+arch.position.set(0,5.12,.025);goalBoard.add(arch);
+const mirror=new THREE.Mesh(new THREE.BoxGeometry(.33,3.48,.16),
+ new THREE.MeshStandardMaterial({color:0xe0ecf0,metalness:.80,roughness:.09}));
+mirror.position.set(0,3.06,.27);goalBoard.add(mirror);
+addBox(goalBoard,.06,3.06,.36,.055,3.34,.035,0xf9ffff,.45);
+const topDisc=new THREE.Mesh(new THREE.CircleGeometry(.34,24),new THREE.MeshStandardMaterial({color:0xffffff}));
+topDisc.position.set(0,6.04,.23);goalBoard.add(topDisc);
+const centerDisc=new THREE.Mesh(new THREE.CircleGeometry(.16,24),boardBlue);
+centerDisc.position.set(0,6.04,.25);goalBoard.add(centerDisc);
+function goalBoardLettering(word){
+ const canvas=document.createElement('canvas');canvas.width=128;canvas.height=512;
+ const ctx=canvas.getContext('2d');
+ ctx.clearRect(0,0,128,512);ctx.textAlign='center';ctx.textBaseline='middle';
+ ctx.fillStyle='#f7f9fd';
+ const letters=word.split(''),size=Math.min(58,410/letters.length);
+ ctx.font='bold '+size+'px Arial,sans-serif';
+ letters.forEach((letter,i)=>ctx.fillText(letter,64,46+(i+.5)*420/letters.length));
+ const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+ return texture;
+}
+for(const [x,word] of [[-.95,'TOKYO'],[.95,'RACECOURSE']]){
+ const panel=new THREE.Mesh(new THREE.PlaneGeometry(.32,3.85),
+  new THREE.MeshBasicMaterial({map:goalBoardLettering(word),transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+ panel.position.set(x,2.9,.269);goalBoard.add(panel);
+}
 const dirtLabelPos=dirtPoint(FINISH_DISTANCE-210,DIRT_INNER_OFFSET+15,.1);
 label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+11,dirtLabelPos.z,9.5,'#755b3d');
 
@@ -770,22 +811,36 @@ const paddock=new THREE.Mesh(new THREE.TorusGeometry(36,2.1,7,58),new THREE.Mesh
 paddock.rotation.x=-Math.PI/2;paddock.position.set(-290,.9,TURN_RADIUS+265);scene.add(paddock);
 label3D('パドック（近似）',-290,19,TURN_RADIUS+267,12);
 
-// A few surrounding service blocks, trees and infield buildings for immersion.
-for(const [x,z,w,d,h] of [[-300,23,82,25,11],[55,58,80,28,10],[160,-35,40,23,6],[-70,-36,50,24,7]]){
- addBox(scene,x,h/2,z,w,h,d,0xc6c9b4);
- addBox(scene,x,h+.7,z,w+3,1.2,d+3,0x6b8279);
+// 仮の灰色建物4棟は実在施設と紐づけできないため撤去。
+// 周囲の木は円すい形ではなく、幹＋凹凸のある2層の樹冠で表現する。
+const TREE_COUNT=88;
+const trunkGeo=new THREE.CylinderGeometry(.62,.85,6,7);
+const crownGeo=new THREE.IcosahedronGeometry(4.7,1);
+const capGeo=new THREE.IcosahedronGeometry(3.7,1);
+const trunks=new THREE.InstancedMesh(trunkGeo,new THREE.MeshStandardMaterial({color:0x655246,roughness:.98}),TREE_COUNT);
+const canopyMat=new THREE.MeshStandardMaterial({color:0x487b48,flatShading:true,roughness:1});
+const crowns=new THREE.InstancedMesh(crownGeo,canopyMat,TREE_COUNT);
+const caps=new THREE.InstancedMesh(capGeo,canopyMat,TREE_COUNT);
+const greens=[0x35623e,0x3f7646,0x4c8552,0x32683f];
+const dummyTree=new THREE.Object3D();
+for(let i=0;i<TREE_COUNT;i++){
+ const row=Math.floor(i/44),x=-545+(i%44)*25;
+ const z=row===0?-TURN_RADIUS-94:TURN_RADIUS+310;
+ const scale=.78+(i%7)*.065;
+ dummyTree.rotation.set(0,i*.8,0);
+ dummyTree.position.set(x,3*scale,z);
+ dummyTree.scale.set(scale,scale,scale);dummyTree.updateMatrix();trunks.setMatrixAt(i,dummyTree.matrix);
+ dummyTree.position.set(x+.6,8.6*scale,z-.35);
+ dummyTree.scale.set(scale*1.12,scale*.96,scale*1.03);
+ dummyTree.updateMatrix();crowns.setMatrixAt(i,dummyTree.matrix);
+ dummyTree.position.set(x-.9,12.2*scale,z+.8);
+ dummyTree.scale.set(scale*.82,scale*.68,scale*.88);
+ dummyTree.updateMatrix();caps.setMatrixAt(i,dummyTree.matrix);
+ crowns.setColorAt(i,new THREE.Color(greens[i%greens.length]));
+ caps.setColorAt(i,new THREE.Color(greens[(i+1)%greens.length]));
 }
-const treeGeo=new THREE.ConeGeometry(3.8,10,6),treeMat=new THREE.MeshStandardMaterial({color:0x387044});
-const treeMesh=new THREE.InstancedMesh(treeGeo,treeMat,88);scene.add(treeMesh);
-const tmp=new THREE.Object3D();
-for(let i=0;i<88;i++){
- const row=Math.floor(i/44),xx=-545+(i%44)*25;
- const zz=row===0?-TURN_RADIUS-94:TURN_RADIUS+310;
- tmp.position.set(xx,6,zz);tmp.rotation.y=(i*.67)%6.28;
- tmp.scale.set(.7+(i%3)*.14,.8+(i%5)*.07,.7+(i%3)*.14);
- tmp.updateMatrix();treeMesh.setMatrixAt(i,tmp.matrix);
-}
-treeMesh.instanceMatrix.needsUpdate=true;
+trunks.instanceMatrix.needsUpdate=true;crowns.instanceMatrix.needsUpdate=true;
+caps.instanceMatrix.needsUpdate=true;scene.add(trunks);scene.add(crowns);scene.add(caps);
 
 // 芝9距離のS→G走行経路。コース外形・専用ポケットの座標は参考図に基づく近似。
 const RACE_DISTANCES=[1400,1600,1800,2000,2300,2400,2500,2600,3400];
@@ -980,6 +1035,11 @@ function setView(which){
   target=new THREE.Vector3(46,4,TURN_RADIUS+8);
  }
  else if(which==='goal'){eye=new THREE.Vector3(finishP.p.x+48,33,TURN_RADIUS+65);target=new THREE.Vector3(finishP.p.x,4,TURN_RADIUS-15)}
+ else if(which==='goalboard'){
+  const a=positionAt(FINISH_DISTANCE);
+  eye=goalBoardFoot.clone().addScaledVector(a.t,25).addScaledVector(a.inward,-35).add(new THREE.Vector3(0,13,0));
+  target=goalBoardFoot.clone().add(new THREE.Vector3(0,3.1,0));
+ }
  else if(which==='first'){eye=new THREE.Vector3(STRAIGHT/2+280,160,10);target=new THREE.Vector3(STRAIGHT/2+30,1,0)}
  else if(which==='third'){eye=new THREE.Vector3(-STRAIGHT/2-280,150,10);target=new THREE.Vector3(-STRAIGHT/2-30,1,0)}
  else if(which==='hill'){
@@ -1048,7 +1108,7 @@ function updateSceneLabelVisibility(){
      :isWide;
   sprite.visible=checkLabels.checked&&inThisView;
  }
- const closeViews=new Set(['goal','hill','dirt','chase','start','marker']);
+ const closeViews=new Set(['goal','goalboard','hill','dirt','chase','start','marker']);
  turfVisionGroups.forEach(group=>{group.visible=!closeViews.has(view)});
 }
 checkLabels.addEventListener('change',updateSceneLabelVisibility);
