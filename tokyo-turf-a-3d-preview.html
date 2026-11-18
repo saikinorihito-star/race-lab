@@ -599,15 +599,14 @@ async function maybeLoadStoredHorse(){
 }
 maybeLoadStoredHorse();
 function positionRunner(){
- const a=positionAt(FINISH_DISTANCE+travel);
- const pos=offsetAt(FINISH_DISTANCE+travel,-6,0);
+ if(!activePlan)return;
+ const a=racePointAt(activePlan,travel),pos=a.p;
  runner.position.copy(pos);
  runner.rotation.y=Math.atan2(a.t.x,a.t.z);
  if(view==='chase'){
-  const back=a.t.clone().multiplyScalar(-15);
-  const desired=pos.clone().add(back).add(new THREE.Vector3(0,7.5,0));
-  const desiredTarget=pos.clone().add(a.t.clone().multiplyScalar(6)).add(new THREE.Vector3(0,2.0,0));
-  camera.position.lerp(desired,.15);controls.target.lerp(desiredTarget,.15);
+  const desired=pos.clone().addScaledVector(a.t,-18).add(new THREE.Vector3(0,10,0));
+  const target=pos.clone().addScaledVector(a.t,6).add(new THREE.Vector3(0,2,0));
+  camera.position.lerp(desired,.16);controls.target.lerp(target,.16);
  }
 }
 let view='all';
@@ -640,8 +639,15 @@ function setView(which){
  else if(which==='goal'){eye=new THREE.Vector3(finishP.p.x+48,33,TURN_RADIUS+65);target=new THREE.Vector3(finishP.p.x,4,TURN_RADIUS-15)}
  else if(which==='first'){eye=new THREE.Vector3(STRAIGHT/2+280,160,10);target=new THREE.Vector3(STRAIGHT/2+30,1,0)}
  else if(which==='third'){eye=new THREE.Vector3(-STRAIGHT/2-280,150,10);target=new THREE.Vector3(-STRAIGHT/2-30,1,0)}
- else if(which==='chase'){
-  const p=positionAt(FINISH_DISTANCE+travel);eye=p.p.clone().add(new THREE.Vector3(-18,11,-20));target=p.p.clone().add(new THREE.Vector3(0,1,0));
+ else if(which==='start'&&activePlan){
+  const a=racePointAt(activePlan,0);
+  const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
+  eye=a.p.clone().addScaledVector(side,-60).addScaledVector(a.t,-50).add(new THREE.Vector3(0,45,0));
+  target=a.p.clone().add(new THREE.Vector3(0,6,0));
+ }else if(which==='chase'&&activePlan){
+  const a=racePointAt(activePlan,travel);
+  eye=a.p.clone().addScaledVector(a.t,-18).add(new THREE.Vector3(0,11,0));
+  target=a.p.clone().add(new THREE.Vector3(0,2,0));
  }else{eye=new THREE.Vector3(70,780*wide,-1150*wide);target=new THREE.Vector3(0,0,0)}
  controls.target.copy(target);camera.position.copy(eye);camera.lookAt(target);controls.update();
 }
