@@ -105,9 +105,10 @@ a{color:#95e8df}
 <button id="reset">最初に戻す</button>
 <label>デモ速度 <select id="rate"><option value="1">1倍</option><option value="4">4倍</option><option value="8" selected>8倍（確認向け）</option></select></label>
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
+<label><input type="checkbox" id="courseSigns"/>大きな案内看板（全景用）</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
-<div id="message">全景の霞、砂の色、芝の細かな色むら、スタンドの窓を改善しました。「内側のダート」で近接表示できます。1頭走行は芝専用、坂3倍は見やすさのための誇張です。</div>
+<div id="message">コースが見えるよう、大きな看板を標準で非表示にしました。ゴール・坂・ダート・追走などの接近カメラではラベルと大型ビジョンも自動で隠します。看板は「大きな案内看板（全景用）」で再表示できます。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -148,6 +149,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
 const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate'),checkLabels=document.querySelector('#labels');
+const courseSigns=document.querySelector('#courseSigns');
 const LAP=2083.1,STRAIGHT=560,BACK_STRAIGHT=542,RIGHT_TURN_LEN=449,MEASURE_OFFSET=1;
 const LEFT_TURN_LEN=LAP-STRAIGHT-BACK_STRAIGHT-RIGHT_TURN_LEN;
 const TURN_RADIUS=RIGHT_TURN_LEN/Math.PI,CURVE_LEN=RIGHT_TURN_LEN,FINISH_DISTANCE=525.9;
@@ -418,12 +420,16 @@ function makeCanvasTexture(lines,color='#ffffff',back='#1b4b58',width=512,height
  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=2;
  return tex;
 }
+// 奥の看板がコースの上に浮かないように深度テストを有効化。
 const textLabels=[];
-function label3D(text,x,y,z,size=22,background='#154b53'){
+function label3D(text,x,y,z,size=22,background='#154b53',kind='major'){
  const texture=makeCanvasTexture([text], '#f2ffff',background,512,120);
- const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false}));
+ const sprite=new THREE.Sprite(new THREE.SpriteMaterial({
+  map:texture,transparent:true,depthTest:true,depthWrite:false
+ }));
  sprite.position.set(x,y,z);sprite.scale.set(size*4.2,size,1);
- sprite.renderOrder=10;scene.add(sprite);textLabels.push(sprite);return sprite;
+ sprite.userData.kind=kind;
+ scene.add(sprite);textLabels.push(sprite);return sprite;
 }
 // 外部画像不要の草地色むら。256pxの繰り返し模様でiPhoneの負荷を抑える。
 function makeGrassTexture(){
@@ -642,7 +648,7 @@ scene.add(finishStripe);
 const goalOuter=offsetAt(FINISH_DISTANCE,MEASURE_OFFSET-courseW-4,0);
 addBox(scene,goalOuter.x,goalOuter.y+7.3,goalOuter.z,1.05,14,1.05,0xffffff);
 addBox(scene,goalOuter.x,goalOuter.y+14.8,goalOuter.z,4.1,2.0,1.2,0xd2bb5a);
-const goalSign=label3D('G｜ゴール',goalOuter.x,goalOuter.y+20,goalOuter.z,14,'#8e7634');
+const goalSign=label3D('G｜ゴール',goalOuter.x,goalOuter.y+14,goalOuter.z,8,'#8e7634','major');
 const dirtLabelPos=dirtPoint(FINISH_DISTANCE-210,DIRT_INNER_OFFSET+15,.1);
 label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+11,dirtLabelPos.z,9.5,'#755b3d');
 
@@ -667,11 +673,12 @@ label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+11,dirtLabelPos
   }
   const plaque=new THREE.Sprite(new THREE.SpriteMaterial({
    map:makeCanvasTexture([String(remain/100)],'#202a33','#f7f8f1',220,220),
-   transparent:true,depthTest:false
+   transparent:true,depthTest:true,depthWrite:false
   }));
   plaque.position.set(place.x,place.y+6.2,place.z);plaque.scale.set(3.3,3.3,1);
-  scene.add(plaque);
-  label3D('残り'+remain+'m',place.x,place.y+12.5,place.z,6.5,remain<=600?'#8a3e40':'#24525e');
+  plaque.userData.kind='minor';
+  scene.add(plaque);textLabels.push(plaque);
+  label3D('残り'+remain+'m',place.x,place.y+11.0,place.z,5.0,remain<=600?'#8a3e40':'#24525e','minor');
  }
  label3D('芝 Aコース｜左回り',-5,35,0,16,'#1c665c');
 // 黄色の矢印は馬が走る方向。設置位置は仮コースの中心線に沿う。
@@ -693,10 +700,11 @@ function addCourseArrow(s){
 }
 [285,850,1380,1840].forEach(addCourseArrow);
 
-// Infield turf vision structures: JRA's published dimensions describe screen only.
+// コース近景で遮蔽物となる大型ビジョンを、カメラモードに応じて切り替える。
+const turfVisionGroups=[];
 function turfVision(x,z,caption){
  const baseY=2.5;
- const group=new THREE.Group();scene.add(group);
+ const group=new THREE.Group();scene.add(group);turfVisionGroups.push(group);
  group.position.set(x,baseY,z);
  addBox(group,0,8,4,70,16,5,0x526871);
  addBox(group,0,13,-.1,67.6,13.2,1.5,0x111a20);
@@ -845,9 +853,9 @@ function racePointAt(plan,distance){
 }
 const routeVisual=new THREE.Group();scene.add(routeVisual);
 const startCanvas=makeCanvasTexture(['S'],'#122530','#ffffff',256,256);
-const startPin=new THREE.Sprite(new THREE.SpriteMaterial({map:startCanvas,transparent:true,depthTest:false}));
-startPin.scale.set(18,18,1);scene.add(startPin);
-const startName=label3D('S地点',0,10,0,11,'#1c5d65');
+const startPin=new THREE.Sprite(new THREE.SpriteMaterial({map:startCanvas,transparent:true,depthTest:true,depthWrite:false}));
+startPin.scale.set(13,13,1);startPin.userData.kind='start';scene.add(startPin);textLabels.push(startPin);
+const startName=label3D('S地点',0,10,0,8,'#1c5d65','start');
 let activePlan=null,activeDistance=1400;
 function clearRoute(){
  routeVisual.traverse(obj=>{
@@ -953,6 +961,7 @@ function inspectMarker(){
  view='marker';
  document.querySelectorAll('#views button').forEach(x=>x.classList.remove('selected'));
  controls.target.copy(target);camera.position.copy(eye);camera.lookAt(target);controls.update();
+ updateSceneLabelVisibility();
  markerInfo.textContent=remain===0?'決勝線：残り距離の基準点':('ハロン棒「'+remain/100+'」＝残り'+remain+'m ／ '+regionForS(ss)+'（近似）');
 }
 markerFocus.addEventListener('change',inspectMarker);
@@ -990,6 +999,7 @@ function setView(which){
   target=a.p.clone().add(new THREE.Vector3(0,2,0));
  }else{eye=new THREE.Vector3(70,700*wide,-1025*wide);target=new THREE.Vector3(0,0,0)}
  controls.target.copy(target);camera.position.copy(eye);camera.lookAt(target);controls.update();
+ updateSceneLabelVisibility();
 }
 document.querySelectorAll('#views button').forEach(button=>button.addEventListener('click',()=>setView(button.dataset.view)));
 const raceSelector=document.querySelector('#raceDistance'),startInfo=document.querySelector('#startInfo');
@@ -1019,7 +1029,25 @@ demoBtn.addEventListener('click',()=>{
  if(playing&&view==='start')setView('chase');
 });
 document.querySelector('#reset').addEventListener('click',()=>{resetDemo();drawElevationProfile()});
-checkLabels.addEventListener('change',()=>{textLabels.forEach(x=>x.visible=checkLabels.checked)});
+// 看板類は標準非表示。俯瞰でだけ任意に表示し、近景でコースを隠さない。
+function updateSceneLabelVisibility(){
+ const isWide=view==='all'||view==='top';
+ for(const sprite of textLabels){
+  const kind=sprite.userData.kind||'major';
+  const inThisView=(kind==='major')
+   ?(isWide&&courseSigns.checked)
+   :(kind==='minor')
+    ?isWide
+    :(kind==='start')
+     ?(isWide||view==='start')
+     :isWide;
+  sprite.visible=checkLabels.checked&&inThisView;
+ }
+ const closeViews=new Set(['goal','hill','dirt','chase','start','marker']);
+ turfVisionGroups.forEach(group=>{group.visible=!closeViews.has(view)});
+}
+checkLabels.addEventListener('change',updateSceneLabelVisibility);
+courseSigns.addEventListener('change',updateSceneLabelVisibility);
 const clock=new THREE.Clock();
 let lastTime=0,fpsCount=0,fps=0;
 function resize(){
