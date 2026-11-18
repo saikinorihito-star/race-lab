@@ -269,9 +269,9 @@ finishStripe.rotation.z=-Math.atan2(finishP.t.z,finishP.t.x);
 finishStripe.position.copy(finishMiddle);
 scene.add(finishStripe);
 const goalOuter=offsetAt(FINISH_DISTANCE,MEASURE_OFFSET-courseW-4,0);
-addBox(scene,goalOuter.x,7.3,goalOuter.z,1.05,14,1.05,0xffffff);
-addBox(scene,goalOuter.x,14.8,goalOuter.z,4.1,2.0,1.2,0xd2bb5a);
-const goalSign=label3D('GOAL / ゴール',goalOuter.x,20,goalOuter.z,14,'#8e7634');
+addBox(scene,goalOuter.x,goalOuter.y+7.3,goalOuter.z,1.05,14,1.05,0xffffff);
+addBox(scene,goalOuter.x,goalOuter.y+14.8,goalOuter.z,4.1,2.0,1.2,0xd2bb5a);
+const goalSign=label3D('GOAL / ゴール',goalOuter.x,goalOuter.y+20,goalOuter.z,14,'#8e7634');
 
 
  // JRAのゴールから逆方向に、内柵1m外側の測定線に沿って200mごとに設置。
@@ -290,15 +290,15 @@ const goalSign=label3D('GOAL / ゴール',goalOuter.x,20,goalOuter.z,14,'#8e7634
   markerRefs.set(remain,{s,place,region:regionForS(s)});
   for(let segment=0;segment<5;segment++){
    const color=segment%2?0xb82930:0xf1f2e9;
-   addBox(scene,place.x,.55+segment*1.05,place.z,.72,1.04,.72,color);
+   addBox(scene,place.x,place.y+.55+segment*1.05,place.z,.72,1.04,.72,color);
   }
   const plaque=new THREE.Sprite(new THREE.SpriteMaterial({
    map:makeCanvasTexture([String(remain/100)],'#202a33','#f7f8f1',220,220),
    transparent:true,depthTest:false
   }));
-  plaque.position.set(place.x,6.2,place.z);plaque.scale.set(3.3,3.3,1);
+  plaque.position.set(place.x,place.y+6.2,place.z);plaque.scale.set(3.3,3.3,1);
   scene.add(plaque);
-  label3D('残り'+remain+'m',place.x,12.5,place.z,6.5,remain<=600?'#8a3e40':'#24525e');
+  label3D('残り'+remain+'m',place.x,place.y+12.5,place.z,6.5,remain<=600?'#8a3e40':'#24525e');
  }
  label3D('芝 Aコース｜左回り',-5,50,0,27,'#1c665c');
 // 黄色の矢印は馬が走る方向。設置位置は仮コースの中心線に沿う。
