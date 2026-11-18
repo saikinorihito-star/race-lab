@@ -1424,7 +1424,7 @@ function setView(which){
    eye=dirtPoint(station,DIRT_INNER_OFFSET+40,15).addScaledVector(a.t,-75);
    target=dirtPoint(station,DIRT_OUTER_OFFSET+12,2.5).addScaledVector(a.t,118);
   }
-  else if(which==='start'&&activePlan&&fieldMode.value==='field18'){
+  else if(which==='start'&&activePlan&&fieldMode.value!=='single'){
   const a=fieldCenterAt(activePlan,0),side=new THREE.Vector3(a.t.z,0,-a.t.x);
   // コース中央ではなく、余白調整した18連の発馬機そのものを画面の中心にする。
   const gateAt=a.p.clone().addScaledVector(side,fieldGateCenterShift(a.width));
@@ -1454,11 +1454,12 @@ const raceSelector=document.querySelector('#raceDistance'),startInfo=document.qu
 function selectRace(){
  activeDistance=Number(raceSelector.value);
  activePlan=racePlan(activeDistance);
- playing=false;travel=0;gateOpening=0;
- demoBtn.textContent=fieldMode.value==='field18'?'18頭を一斉にスタート':'SからGへ走らせる';
+ playing=false;travel=0;gateOpening=0;initRaceHorses();
+ demoBtn.textContent=initialDemoText();
+ document.querySelector('#raceOrder').textContent=fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  highlightRace(activePlan);drawFieldGate(activePlan);
- fieldRoot.visible=fieldMode.value==='field18';
- gateRoot.visible=fieldMode.value==='field18';
+ fieldRoot.visible=fieldMode.value!=='single';
+ gateRoot.visible=fieldMode.value!=='single';
  runner.visible=fieldMode.value==='single';
  positionRunner();positionFieldHorses();updateGateDoors();
  const test=fieldLayoutCheck(activePlan);
@@ -1470,28 +1471,29 @@ function selectRace(){
   :activeDistance+'m：'+regionForS(activePlan.startStation)+'のSから発走'+(activeDistance===2600?'（仮配置）':'');
  startInfo.textContent=description+'／Gまで'+activeDistance+'m';
  drawElevationProfile();
- if(view==='chase'||view==='start'||view==='field')setView(fieldMode.value==='field18'?'start':'all');
+ if(view==='chase'||view==='start'||view==='field')setView(fieldMode.value!=='single'?'start':'all');
 }
 raceSelector.addEventListener('change',selectRace);
-fieldMode.addEventListener('change',()=>{selectRace();if(fieldMode.value==='field18')setView('start')});
+fieldMode.addEventListener('change',()=>{selectRace();if(fieldMode.value!=='single')setView('start')});
 document.querySelector('#startView').addEventListener('click',()=>setView('start'));
 function resetDemo(){
- travel=0;playing=false;gateOpening=0;updateGateDoors();
- demoBtn.textContent=fieldMode.value==='field18'?'18頭を一斉にスタート':'SからGへ走らせる';
+ travel=0;playing=false;gateOpening=0;initRaceHorses();updateGateDoors();
+ demoBtn.textContent=initialDemoText();
+ document.querySelector('#raceOrder').textContent=fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  positionRunner();positionFieldHorses();
- if(fieldMode.value==='field18')setView('start');
+ if(fieldMode.value!=='single')setView('start');
  else if(view==='chase')setView('chase');
 }
 demoBtn.addEventListener('click',()=>{
  if(!activePlan)return;
- if(travel>=activePlan.distance){
-  travel=0;gateOpening=0;updateGateDoors();positionFieldHorses();
-  if(fieldMode.value==='field18')setView('start');
+ if(travel>=activePlan.distance||fieldMode.value==='race18'&&raceFinished.length===FIELD_COUNT){
+  travel=0;gateOpening=0;initRaceHorses();updateGateDoors();positionFieldHorses();
+  if(fieldMode.value!=='single')setView('start');
  }
  playing=!playing;
  demoBtn.textContent=playing?'一時停止':'再開';
  if(playing&&fieldMode.value==='single'&&view==='start')setView('chase');
- if(playing&&fieldMode.value==='field18'&&!['start','field'].includes(view))setView('start');
+ if(playing&&fieldMode.value!=='single'&&!['start','field'].includes(view))setView('start');
 });
 document.querySelector('#reset').addEventListener('click',()=>{resetDemo();drawElevationProfile()});
 // 看板類は標準非表示。俯瞰でだけ任意に表示し、近景でコースを隠さない。
@@ -1527,22 +1529,30 @@ function animate(time){
  requestAnimationFrame(animate);
  const dt=Math.min(clock.getDelta(),.05);
  if(playing){
-  const step=16.7*Number(rate.value)*dt;
-  travel=Math.min(activePlan?.distance||LAP,travel+step);
-  if(fieldMode.value==='single'&&runnerMixer)runnerMixer.update(dt*Math.min(2,16.7*Number(rate.value)/16.7));
-  if(activePlan&&travel>=activePlan.distance){
-   playing=false;demoBtn.textContent=fieldMode.value==='field18'?'18頭ゴール・もう一度':'ゴール到達・もう一度';
+  if(fieldMode.value==='race18'){
+   if(updateRace(dt)){playing=false;demoBtn.textContent='18頭ゴール・もう一度'}
+  }else{
+   const step=16.7*Number(rate.value)*dt;
+   travel=Math.min(activePlan?.distance||LAP,travel+step);
+   if(fieldMode.value==='single'&&runnerMixer){
+    runnerMixer.update(dt*Math.min(2,Number(rate.value)));
+   }
+   if(activePlan&&travel>=activePlan.distance){
+    playing=false;demoBtn.textContent=fieldMode.value==='field18'?'18頭ゴール・もう一度':'ゴール到達・もう一度';
+   }
   }
  }
  positionRunner();positionFieldHorses();
- if(fieldMode.value==='field18'){
+ if(fieldMode.value!=='single'){
   gateOpening=travel>0?Math.min(1,gateOpening+dt*4):0;updateGateDoors();
   if(playing&&view==='start'&&travel>85)setView('field');
   if(view==='field'&&activePlan){
-   const a=fieldCenterAt(activePlan,travel),side=new THREE.Vector3(a.t.z,0,-a.t.x);
-   const eye=a.p.clone().addScaledVector(a.t,-68).addScaledVector(side,-10).add(new THREE.Vector3(0,28,0));
-   const target=a.p.clone().addScaledVector(a.t,14).add(new THREE.Vector3(0,2,0));
-   camera.position.lerp(eye,.16);controls.target.lerp(target,.16);
+   const followDistance=fieldMode.value==='race18'?
+    (racePositions()[0].distance+racePositions()[FIELD_COUNT-1].distance)/2:travel;
+   const a=fieldCenterAt(activePlan,followDistance),side=new THREE.Vector3(a.t.z,0,-a.t.x);
+   const eye=a.p.clone().addScaledVector(a.t,-77).addScaledVector(side,-19).add(new THREE.Vector3(0,40,0));
+   const target=a.p.clone().addScaledVector(a.t,11).add(new THREE.Vector3(0,3,0));
+   camera.position.lerp(eye,.12);controls.target.lerp(target,.12);
   }
  }
  controls.update();
@@ -1559,7 +1569,11 @@ function animate(time){
   fps=fpsCount*1000/(time-lastTime||1);fpsCount=0;lastTime=time;
   const rest=Math.max(0,Math.round((activePlan?.distance||1400)-travel));
   drawElevationProfile();
-  info.textContent='東京芝A '+activeDistance+'m｜'+(playing?'走行中':'発走待ち')+'\n'+(fieldMode.value==='field18'?'18頭同時':'1頭デモ')+'｜残り'+rest+'m｜FPS '+fps.toFixed(0);
+  const modeName=fieldMode.value==='race18'?'18頭レース':
+   fieldMode.value==='field18'?'18頭等速':'1頭デモ';
+  info.textContent='東京芝A '+activeDistance+'m｜'+(playing?'走行中':'停止中')+
+   '\n'+modeName+'｜残り'+rest+'m｜FPS '+fps.toFixed(0);
+  if(fieldMode.value==='race18')document.querySelector('#raceOrder').textContent=raceOrderText();
   info.style.whiteSpace='pre-line';
  }
 }
