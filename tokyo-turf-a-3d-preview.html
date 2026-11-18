@@ -110,14 +110,17 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
 const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate'),checkLabels=document.querySelector('#labels');
-const LAP=2083.1,STRAIGHT=690,MEASURE_OFFSET=1,TURN_RADIUS=(LAP-2*STRAIGHT)/(2*Math.PI);
-const CURVE_LEN=Math.PI*TURN_RADIUS,FINISH_DISTANCE=525.9;
+const LAP=2083.1,STRAIGHT=560,BACK_STRAIGHT=542,RIGHT_TURN_LEN=449,MEASURE_OFFSET=1;
+const LEFT_TURN_LEN=LAP-STRAIGHT-BACK_STRAIGHT-RIGHT_TURN_LEN;
+const TURN_RADIUS=RIGHT_TURN_LEN/Math.PI,CURVE_LEN=RIGHT_TURN_LEN,FINISH_DISTANCE=525.9;
+const BACK_START=STRAIGHT+RIGHT_TURN_LEN,BACK_END=BACK_START+BACK_STRAIGHT;
 const TRACK={name:'東京 芝 A',lap:LAP,lapMeasurement:'inner-rail-plus-1m',straightFinal:FINISH_DISTANCE,widthMin:31,widthMax:41,elevation:2.7,turn:'left'};
 const N=560;
 const profile=[
  [0,.45],[65.9,.45],[225.9,2.45],[525.9,2.45],
- [690,2.7],[920,2.10],[1240,.8],[1330,.8],[1450,0],
- [1600,1.5],[1680,1.5],[1820,.88],[1970,.45],[LAP,.45]
+ [560,2.7],[735,2.10],[1009,1.15],[1250,.50],
+ [1410,0],[1510,1.5],[1551,1.5],[1680,1.25],
+ [1910,.76],[LAP,.45]
 ];
 function lerp(a,b,u){return a+(b-a)*u}
 function modulo(n,m){return (n%m+m)%m}
@@ -131,28 +134,63 @@ function elevation(raw){
  return .45;
 }
 function widthAt(s){return 36+5*Math.sin((s/LAP)*Math.PI*2+.5)}
-// JRA規程で定める内柵から外側1mの計測線を、直線2本と半円2つで近似したコース。
+// 距離別のスタート位置を優先した試作線。JRAの正確な測量座標ではありません。
+// モデル基準区間：正面560m、1-2コーナー449m、向正面542m、3-4コーナー532.1m。
+const LEFT_START_X=STRAIGHT/2-BACK_STRAIGHT;
+const LEFT_DRIFT=-STRAIGHT/2-LEFT_START_X;
+function leftXY(t,rx){
+ const theta=Math.PI*t;
+ return {x:LEFT_START_X+LEFT_DRIFT*t-rx*Math.sin(theta),z:-TURN_RADIUS*Math.cos(theta)};
+}
+function leftCurveLength(rx,steps=600){
+ let total=0,p=leftXY(0,rx);
+ for(let i=1;i<=steps;i++){
+  const q=leftXY(i/steps,rx);total+=Math.hypot(q.x-p.x,q.z-p.z);p=q;
+ }
+ return total;
+}
+function solveLeftRadius(){
+ let lo=10,hi=420;
+ for(let i=0;i<36;i++){
+  const mid=(lo+hi)/2;
+  if(leftCurveLength(mid)<LEFT_TURN_LEN)lo=mid;else hi=mid;
+ }
+ return (lo+hi)/2;
+}
+const LEFT_RX=solveLeftRadius();
+const LEFT_LOOKUP=[{t:0,s:0}];
+{
+ let total=0,p=leftXY(0,LEFT_RX);
+ for(let i=1;i<=900;i++){
+  const t=i/900,q=leftXY(t,LEFT_RX);
+  total+=Math.hypot(q.x-p.x,q.z-p.z);LEFT_LOOKUP.push({t,s:total});p=q;
+ }
+}
+const LEFT_TOTAL=LEFT_LOOKUP[LEFT_LOOKUP.length-1].s;
+function leftTForStation(meters){
+ const target=Math.max(0,Math.min(LEFT_TOTAL,meters*LEFT_TOTAL/LEFT_TURN_LEN));
+ let lo=0,hi=LEFT_LOOKUP.length-1;
+ while(hi-lo>1){const m=(lo+hi)>>1;if(LEFT_LOOKUP[m].s<target)lo=m;else hi=m}
+ const a=LEFT_LOOKUP[lo],b=LEFT_LOOKUP[hi];
+ return a.t+(b.t-a.t)*(target-a.s)/Math.max(1e-9,b.s-a.s);
+}
 function positionAt(raw){
  const s=modulo(raw,LAP),half=STRAIGHT/2;
  let x,z,dx,dz;
- if(s<STRAIGHT){x=-half+s;z=-TURN_RADIUS;dx=1;dz=0}
- else if(s<STRAIGHT+CURVE_LEN){
+ if(s<STRAIGHT){x=-half+s;z=TURN_RADIUS;dx=1;dz=0}
+ else if(s<BACK_START){
   const theta=-Math.PI/2+(s-STRAIGHT)/TURN_RADIUS;
-  x=half+TURN_RADIUS*Math.cos(theta);z=TURN_RADIUS*Math.sin(theta);
-  dx=-Math.sin(theta);dz=Math.cos(theta);
- }else if(s<2*STRAIGHT+CURVE_LEN){
-  const d=s-(STRAIGHT+CURVE_LEN);
-  x=half-d;z=TURN_RADIUS;dx=-1;dz=0;
+  x=half+TURN_RADIUS*Math.cos(theta);z=-TURN_RADIUS*Math.sin(theta);
+  dx=-Math.sin(theta);dz=-Math.cos(theta);
+ }else if(s<BACK_END){
+  x=half-(s-BACK_START);z=-TURN_RADIUS;dx=-1;dz=0;
  }else{
-  const theta=Math.PI/2+(s-(2*STRAIGHT+CURVE_LEN))/TURN_RADIUS;
-  x=-half+TURN_RADIUS*Math.cos(theta);z=TURN_RADIUS*Math.sin(theta);
-  dx=-Math.sin(theta);dz=Math.cos(theta);
+  const t=leftTForStation(s-BACK_END),p=leftXY(t,LEFT_RX);
+  const th=Math.PI*t,vx=LEFT_DRIFT-LEFT_RX*Math.PI*Math.cos(th),vz=TURN_RADIUS*Math.PI*Math.sin(th);
+  const len=Math.hypot(vx,vz)||1;
+  x=p.x;z=p.z;dx=vx/len;dz=vz/len;
  }
- // Three.jsの上空視点ではz正方向が画面下。ホームストレッチを手前側に反転し、
- // 進行方向を上空から見て反時計回り（東京芝の左回り）にする。
- z=-z;dz=-dz;
  const y=elevation(s),p=new THREE.Vector3(x,y,z),t=new THREE.Vector3(dx,0,dz);
- // 走行方向から見て左側（コースの内側）を向く横方向ベクトル。
  const inward=new THREE.Vector3(dz,0,-dx);
  return {p,t,inward,s};
 }
@@ -280,8 +318,8 @@ const goalSign=label3D('GOAL / ゴール',goalOuter.x,goalOuter.y+20,goalOuter.z
  function remainingAt(s){return modulo(FINISH_DISTANCE-s,LAP)}
  function regionForS(s){
   if(s<STRAIGHT)return '正面直線';
-  if(s<STRAIGHT+CURVE_LEN)return '1〜2コーナー';
-  if(s<2*STRAIGHT+CURVE_LEN)return '向正面';
+  if(s<BACK_START)return '1〜2コーナー';
+  if(s<BACK_END)return '向正面';
   return '3〜4コーナー';
  }
  for(let remain=200;remain<=2000;remain+=200){
