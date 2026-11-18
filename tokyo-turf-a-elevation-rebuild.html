@@ -1012,7 +1012,7 @@ const fieldHorses=[],fieldRoot=new THREE.Group(),gateRoot=new THREE.Group();
 scene.add(fieldRoot);scene.add(gateRoot);
 let gateDoors=[],gateOpening=0;
 function fieldCenterAt(plan,distance){
- const d=Math.max(0,Math.min(distance,plan.distance));
+ const d=Math.max(0,Math.min(distance,plan.distance+90));
  if(plan.pocket&&d<plan.pocket.length){
   const u=d/plan.pocket.length;
   return {p:plan.pocket.curve.getPointAt(u),t:plan.pocket.curve.getTangentAt(u).normalize(),
@@ -1058,7 +1058,7 @@ function initRaceHorses(){
  raceElapsed=0;raceFinished=[];raceAccumulator=0;raceContactWarnings=0;
  const width=activePlan?fieldCenterAt(activePlan,0).width:31;
  raceHorses=Array.from({length:FIELD_COUNT},(_,i)=>({
-  number:i+1,idx:i,distance:0,speed:0,finished:false,finishTime:null,
+  number:i+1,idx:i,distance:0,postDistance:0,speed:0,finished:false,finishTime:null,
   lane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
   targetLane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
   pace:16.2+((i*7+3)%18)*.087,
@@ -1069,7 +1069,7 @@ function initRaceHorses(){
  }));
 }
 function raceHorsePosition(horse){
- const a=fieldCenterAt(activePlan,horse.distance);
+ const a=fieldCenterAt(activePlan,horse.distance+(horse.postDistance||0));
  const side=new THREE.Vector3(a.t.z,0,-a.t.x);
  const margin=.62;
  const lane=Math.max(-a.width/2+margin,Math.min(a.width/2-margin,horse.lane));
@@ -1110,7 +1110,12 @@ function stepRace(tick){
  raceElapsed+=tick;
  // 横方向の安全判定は同一時点の状態を使い、更新順で有利不利を生まない。
  const next=raceHorses.map((h,i)=>{
-  if(h.finished)return {distance:h.distance,lane:h.lane,speed:0};
+  if(h.finished){
+   // 先にゴールした馬がゴールライン上で停まって後続と重なるのを防ぐ。
+   const advance=Math.max(3,14.0*(1-h.postDistance/110));
+   h.postDistance=Math.min(88,h.postDistance+advance*tick);
+   return {distance:h.distance,lane:h.lane,speed:0};
+  }
   const at=fieldCenterAt(activePlan,h.distance),a=previous[i];
   const progress=Math.min(1,h.distance/activePlan.distance);
   const kick=progress>.76?h.lastKick*Math.pow((progress-.76)/.24,1.35):0;
@@ -1166,7 +1171,7 @@ function stepRace(tick){
   state.distance=Math.max(0,Math.min(activePlan.distance,result.distance));
   state.lane=result.lane;state.speed=result.speed;
   if(state.distance>=activePlan.distance){
-   state.finished=true;state.finishTime=raceElapsed;raceFinished.push(state.number);
+   state.finished=true;state.finishTime=raceElapsed;state.postDistance=0;raceFinished.push(state.number);
   }
  }
  // 終了した馬の順位は初回のゴール時刻で固定。同時刻なら枠番号で安定化。
