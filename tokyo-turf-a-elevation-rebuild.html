@@ -1124,16 +1124,66 @@ function drawFieldGate(plan){
  const header=new THREE.Mesh(new THREE.PlaneGeometry(total,.57),
   new THREE.MeshBasicMaterial({map:headerTexture,side:THREE.DoubleSide}));
  header.position.set(0,3.71,1.79);gateRoot.add(header);
+ // 金属格子の網目を透明なCanvasTextureで描画。板状の扉を廃止。
+ const meshCanvas=document.createElement('canvas');
+ meshCanvas.width=96;meshCanvas.height=128;
+ const mx=meshCanvas.getContext('2d');
+ mx.clearRect(0,0,96,128);
+ mx.strokeStyle='rgba(55,66,70,.94)';mx.lineWidth=3;
+ for(let x=0;x<=96;x+=13){mx.beginPath();mx.moveTo(x,0);mx.lineTo(x,128);mx.stroke()}
+ for(let y=0;y<=128;y+=12){mx.beginPath();mx.moveTo(0,y);mx.lineTo(96,y);mx.stroke()}
+ mx.strokeStyle='#cbd4d4';mx.lineWidth=5;mx.strokeRect(2,2,92,124);
+ const meshTex=new THREE.CanvasTexture(meshCanvas);meshTex.colorSpace=THREE.SRGBColorSpace;
+ const metalMesh=new THREE.MeshBasicMaterial({map:meshTex,transparent:true,side:THREE.DoubleSide,depthWrite:false,alphaTest:.06});
+ const sideGeometry=new THREE.PlaneGeometry(2.85,1.77);
+ const sidePanels=new THREE.InstancedMesh(sideGeometry,metalMesh,FIELD_COUNT+1);
+ const tmpSide=new THREE.Object3D();
+ for(let i=0;i<=FIELD_COUNT;i++){
+  const x=(i-FIELD_COUNT/2)*w;
+  tmpSide.position.set(x,1.29,0);tmpSide.rotation.set(0,Math.PI/2,0);
+  tmpSide.updateMatrix();sidePanels.setMatrixAt(i,tmpSide.matrix);
+ }
+ sidePanels.instanceMatrix.needsUpdate=true;sidePanels.frustumCulled=false;
+ gateRoot.add(sidePanels);
+ const leafGeo=new THREE.PlaneGeometry(w*.45,1.64);
  for(let i=0;i<FIELD_COUNT;i++){
   const x=(i-8.5)*w;
   for(const side of [-1,1]){
-   const door=part(x+side*w*.26,1.02,1.56,w*.46,1.85,.10,doorMat);
-   gateDoors.push({door,side});
+   // 扉の回転軸を左右の支柱に固定し、観音開きにする。
+   const hinge=new THREE.Group();
+   hinge.position.set(x+side*w/2,1.03,1.57);
+   const leafX=-side*w*.245;
+   const sheet=new THREE.Mesh(leafGeo,metalMesh);
+   sheet.position.set(leafX,0,.06);hinge.add(sheet);
+   for(const edge of [-w*.226,w*.226]){
+    const strip=new THREE.Mesh(new THREE.BoxGeometry(.052,1.75,.06),doorMat);
+    strip.position.set(leafX+edge,0,.08);hinge.add(strip);
+   }
+   for(const h of [-.76,0,.76]){
+    const strip=new THREE.Mesh(new THREE.BoxGeometry(w*.46,.058,.07),doorMat);
+    strip.position.set(leafX,h,.08);hinge.add(strip);
+   }
+   gateRoot.add(hinge);gateDoors.push({door:hinge,side});
+  }
+  // 発馬後も閉じたままの後扉の格子
+  const back=new THREE.Mesh(new THREE.PlaneGeometry(w*.86,1.66),metalMesh);
+  back.position.set(x,1.07,-1.60);gateRoot.add(back);
+ }
+ const tire=new THREE.MeshStandardMaterial({color:0x292e31,roughness:.94});
+ const hub=new THREE.MeshStandardMaterial({color:0xabbac0,metalness:.70,roughness:.36});
+ for(const x of [-total/2-.21,total/2+.21]){
+  part(x,.83,0,.24,.20,3.32,frame);
+  for(const z of [-1.29,1.29]){
+   const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.41,.41,.23,12),tire);
+   wheel.rotation.z=Math.PI/2;wheel.position.set(x,.42,z);gateRoot.add(wheel);
+   const axle=new THREE.Mesh(new THREE.CylinderGeometry(.17,.17,.25,12),hub);
+   axle.rotation.z=Math.PI/2;axle.position.set(x,.42,z);gateRoot.add(axle);
   }
  }
 }
 function updateGateDoors(){
- for(const {door,side} of gateDoors)door.rotation.y=side*gateOpening*1.1;
+ // 扉はゲートの中央ではなく端の支点から回る。
+ for(const {door,side} of gateDoors)door.rotation.y=side*gateOpening*1.17;
 }
 const layoutTests=[1400,1600,1800,2000,2300,2400,2500,2600,3400].map(distance=>
  ({distance,...fieldLayoutCheck(racePlan(distance))}));
