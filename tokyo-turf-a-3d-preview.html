@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="theme-color" content="#101f26"/>
-<title>Race Lab｜東京競馬場 芝Aコース 3D全景【左回り修正】</title>
+<title>Race Lab｜東京芝A 距離標識・計測基準修正版</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color-scheme:dark}
 *{box-sizing:border-box}
@@ -40,8 +40,8 @@ a{color:#95e8df}
 </head>
 <body>
 <header>
-<h1>東京競馬場・芝Aコース｜左回り3D全景</h1>
-<div class="subtitle">Race Lab コース制作 第1段階／左回り（反時計回り）に修正済みの1周試作モデル。JRA公表数値を採用し、未公開の平面座標や建物寸法は近似しています。</div>
+<h1>東京芝A｜距離標識・計測線修正版</h1>
+<div class="subtitle">JRA規程に基づき「内柵から外側1m」の計測線を周回距離の基準に変更しました。距離標識を再配置した検証モデルです。</div>
 </header>
 <main>
 <div class="pillrow"><span class="pill">芝A｜1周 2,083.1m</span><span class="pill">直線 525.9m</span><span class="pill">高低差 2.7m</span><span class="pill">幅員 31～41m</span><span class="pill">左回り（反時計回り）</span></div>
@@ -68,13 +68,13 @@ a{color:#95e8df}
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">白：内・外ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">白赤：残り距離標識</span><span class="legend">黄：ゴール</span></div>
 <section class="notice">
 <h2>3D制作上の精度区分</h2>
-<strong>JRA公表値：</strong>芝Aの1周2,083.1m、幅員31～41m、最後の直線525.9m、最大高低差2.7m、左回り。施設名称およびターフビジョンの公表画面寸法（66.4m×11.2m）。<br>
+<strong>JRA公表値：</strong>芝Aの1周2,083.1m、幅員31～41m、最後の直線525.9m、最大高低差2.7m、左回り。<strong>JRA施行規程第64条により1周距離の計測線は内柵の外側1m</strong>。施設名称およびターフビジョンの公表画面寸法（66.4m×11.2m）。<br>
 <strong>近似・演出：</strong>コーナー半径・中心線の詳細座標・道路脇の建物位置・スタンド高さ／外形・観客席の段数・高低差の細かな勾配。コースの長さを満たすスタジアム形状から作った初期3D模型で、測量図の完全複製ではありません。<br>
 <strong>この段階に含めないもの：</strong>B／C／Dへの内柵切替、芝1800m・2000mの引き込み線、距離別の正確な発馬位置、全18頭のコーナー走行、実際のレース展開。これらは次工程で追加します。今回の1頭は「1周の経路確認」用で、公式の発走距離ではありません。
 <table>
 <thead><tr><th>対象</th><th>今回</th><th>基準</th></tr></thead>
 <tbody>
-<tr><td>芝Aの周回長</td><td>2,083.1mとして生成</td><td>JRA公表値</td></tr>
+<tr><td>芝Aの周回長</td><td>内柵から外側1mで2,083.1mに設定</td><td>JRA施行規程第64条</td></tr>
 <tr><td>直線・ゴール</td><td>4角出口から525.9mに決勝線を設置</td><td>公表直線距離を基準に配置</td></tr>
 <tr><td>坂・標高</td><td>最大2.7mの試作起伏</td><td>高低差は公表値／勾配座標は近似</td></tr>
 <tr><td>内柵・外柵</td><td>幅31～41mで周回配置</td><td>公表幅員を基準</td></tr>
@@ -92,9 +92,9 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
 const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate'),checkLabels=document.querySelector('#labels');
-const LAP=2083.1,STRAIGHT=690,TURN_RADIUS=(LAP-2*STRAIGHT)/(2*Math.PI);
+const LAP=2083.1,STRAIGHT=690,MEASURE_OFFSET=1,TURN_RADIUS=(LAP-2*STRAIGHT)/(2*Math.PI);
 const CURVE_LEN=Math.PI*TURN_RADIUS,FINISH_DISTANCE=525.9;
-const TRACK={name:'東京 芝 A',lap:LAP,straightFinal:FINISH_DISTANCE,widthMin:31,widthMax:41,elevation:2.7,turn:'left'};
+const TRACK={name:'東京 芝 A',lap:LAP,lapMeasurement:'inner-rail-plus-1m',straightFinal:FINISH_DISTANCE,widthMin:31,widthMax:41,elevation:2.7,turn:'left'};
 const N=560;
 const profile=[
  [0,.45],[65.9,.45],[225.9,2.45],[525.9,2.45],
@@ -113,7 +113,7 @@ function elevation(raw){
  return .45;
 }
 function widthAt(s){return 36+5*Math.sin((s/LAP)*Math.PI*2+.5)}
-// A周回を直線2本＋2半円から生成。周長2083.1mに一致。半径は近似値。
+// JRA規程で定める内柵から外側1mの計測線を、直線2本と半円2つで近似したコース。
 function positionAt(raw){
  const s=modulo(raw,LAP),half=STRAIGHT/2;
  let x,z,dx,dz;
@@ -204,8 +204,8 @@ function ringGeom(innerFn,outerFn){
  g.setIndex(ind);g.computeVertexNormals();return g;
 }
 const ring=new THREE.Mesh(ringGeom(
- s=>offsetAt(s,widthAt(s)*.5,.065),
- s=>offsetAt(s,-widthAt(s)*.5,.065)
+ s=>offsetAt(s,MEASURE_OFFSET,.065),
+ s=>offsetAt(s,MEASURE_OFFSET-widthAt(s),.065)
 ),matTurf);scene.add(ring);
 // Turf boundaries: narrow walkways and inner dirt silhouette for visual orientation only.
 function borderBand(distanceA,distanceB,color){
@@ -214,15 +214,15 @@ function borderBand(distanceA,distanceB,color){
  const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color,side:THREE.DoubleSide,roughness:.94}));
  scene.add(mesh);return mesh;
 }
-borderBand(s=>-widthAt(s)/2-3,s=>-widthAt(s)/2,0x95a58e);
-borderBand(s=>widthAt(s)/2,s=>widthAt(s)/2+2,0x65a35b);
-borderBand(s=>widthAt(s)/2+18,s=>widthAt(s)/2+36,0xb7a080);
+borderBand(s=>MEASURE_OFFSET-widthAt(s)-3,s=>MEASURE_OFFSET-widthAt(s),0x95a58e);
+borderBand(s=>MEASURE_OFFSET,s=>MEASURE_OFFSET+2,0x65a35b);
+borderBand(s=>MEASURE_OFFSET+18,s=>MEASURE_OFFSET+36,0xb7a080);
 
 // rail using lightweight cylindrical continuous beams and instanced upright posts
 function createRail(inner){
  const samples=[],posts=[],total=300;
  for(let i=0;i<=total;i++){
-  const s=LAP*i/total,p=offsetAt(s,(inner?1:-1)*widthAt(s)/2,.83);
+  const s=LAP*i/total,p=offsetAt(s,inner?MEASURE_OFFSET:MEASURE_OFFSET-widthAt(s),.83);
   samples.push(p);
   if(i<total)posts.push(p);
  }
@@ -243,13 +243,14 @@ createRail(true);createRail(false);
 
 // Finishing line: from inner rail to outer rail, plus separate white/yellow goal marker.
 const finishP=positionAt(FINISH_DISTANCE),courseW=widthAt(FINISH_DISTANCE);
+const finishMiddle=offsetAt(FINISH_DISTANCE,MEASURE_OFFSET-courseW/2,.095);
 const finishStripe=new THREE.Mesh(new THREE.PlaneGeometry(.75,courseW),
  new THREE.MeshBasicMaterial({color:0xfaf9d9,side:THREE.DoubleSide}));
 finishStripe.rotation.x=-Math.PI/2;
 finishStripe.rotation.z=-Math.atan2(finishP.t.z,finishP.t.x);
-finishStripe.position.copy(finishP.p).add(new THREE.Vector3(0,.095,0));
+finishStripe.position.copy(finishMiddle);
 scene.add(finishStripe);
-const goalOuter=offsetAt(FINISH_DISTANCE,-courseW/2-4,0);
+const goalOuter=offsetAt(FINISH_DISTANCE,MEASURE_OFFSET-courseW-4,0);
 addBox(scene,goalOuter.x,7.3,goalOuter.z,1.05,14,1.05,0xffffff);
 addBox(scene,goalOuter.x,14.8,goalOuter.z,4.1,2.0,1.2,0xd2bb5a);
 const goalSign=label3D('GOAL / ゴール',goalOuter.x,20,goalOuter.z,14,'#8e7634');
@@ -407,7 +408,7 @@ async function maybeLoadStoredHorse(){
 maybeLoadStoredHorse();
 function positionRunner(){
  const a=positionAt(FINISH_DISTANCE+travel);
- const pos=a.p.clone().addScaledVector(a.inward,0);
+ const pos=offsetAt(FINISH_DISTANCE+travel,-6,0);
  runner.position.copy(pos);
  runner.rotation.y=Math.atan2(a.t.x,a.t.z);
  if(view==='chase'){
