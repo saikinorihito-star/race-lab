@@ -1318,7 +1318,7 @@ let lastTime=0,fpsCount=0,fps=0;
 function resize(){
  const w=stage.clientWidth,h=stage.clientHeight;
  camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();renderer.setSize(w,h,false);
- if(view==='all'||view==='top')setView(view);
+ if(view==='all'||view==='top'||view==='start')setView(view);
  drawElevationProfile();
 }
 window.addEventListener('resize',resize);
