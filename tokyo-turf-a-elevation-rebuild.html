@@ -1070,11 +1070,13 @@ function drawFieldGate(plan){
   }
  });
  gateRoot.clear();gateDoors=[];gateOpening=0;
- const a=fieldCenterAt(plan,0),w=fieldStallWidth(a.width),total=FIELD_COUNT*w;
- gateRoot.position.copy(a.p);gateRoot.rotation.y=Math.atan2(a.t.x,a.t.z);
- const frame=new THREE.MeshStandardMaterial({color:0x6a9280,metalness:.48,roughness:.48});
- const roof=new THREE.MeshStandardMaterial({color:0x214b54,roughness:.6});
- const doorMat=new THREE.MeshStandardMaterial({color:0xd8e4df,roughness:.65});
+ const a=fieldCenterAt(plan,0),w=FIELD_STALL_WIDTH,total=FIELD_COUNT*w;
+ const gateSide=new THREE.Vector3(a.t.z,0,-a.t.x);
+ gateRoot.position.copy(a.p).addScaledVector(gateSide,fieldGateCenterShift(a.width));
+ gateRoot.rotation.y=Math.atan2(a.t.x,a.t.z);
+ const frame=new THREE.MeshStandardMaterial({color:0x2c704a,metalness:.55,roughness:.46});
+ const roof=new THREE.MeshStandardMaterial({color:0x235439,metalness:.34,roughness:.53});
+ const doorMat=new THREE.MeshStandardMaterial({color:0xaebdbf,metalness:.58,roughness:.42});
  function part(x,y,z,dx,dy,dz,material){
   const obj=new THREE.Mesh(new THREE.BoxGeometry(dx,dy,dz),material);
   obj.position.set(x,y,z);gateRoot.add(obj);return obj;
@@ -1082,20 +1084,46 @@ function drawFieldGate(plan){
  for(let k=0;k<=FIELD_COUNT;k++){
   part((k-FIELD_COUNT/2)*w,1.5,0,.08,2.95,3.2,frame);
  }
- part(0,3.1,0,total+.36,.30,3.5,roof);
+ // 細い二本の上部トラスと三角ブレース
+ part(0,3.05,-1.54,total+.36,.18,.23,roof);
+ part(0,3.05,1.54,total+.36,.18,.23,roof);
+ part(0,3.78,-1.54,total+.36,.15,.18,frame);
+ part(0,3.78,1.54,total+.36,.15,.18,frame);
+ for(let i=0;i<FIELD_COUNT;i++){
+  const x=-total/2+(i+.5)*w;
+  for(const z of [-1.54,1.54]){
+   const bar=part(x,3.42,z,w*.95,.08,.08,frame);
+   bar.rotation.z=(i%2?1:-1)*.46;
+  }
+ }
  part(0,2.5,-1.5,total+.3,.11,.12,frame);
  // 枠番は1が内側。モデルローカルの右端から1番になる。
- const canvas=document.createElement('canvas');canvas.width=1152;canvas.height=72;
+ const canvas=document.createElement('canvas');canvas.width=1152;canvas.height=128;
  const ctx=canvas.getContext('2d');
  for(let i=0;i<FIELD_COUNT;i++){
-  ctx.fillStyle=i%2?'#245a64':'#347380';ctx.fillRect(i*64,0,64,72);
-  ctx.fillStyle='#ffffff';ctx.font='bold 36px sans-serif';
-  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(18-i),i*64+32,38);
+  ctx.fillStyle='#ebd02f';ctx.fillRect(i*64+2,3,60,122);
+  ctx.fillStyle='#182c22';ctx.fillRect(i*64+5,6,54,116);
+  ctx.fillStyle='#f4db3e';ctx.fillRect(i*64+9,10,46,108);
+  ctx.fillStyle='#1b291c';ctx.font='bold 49px sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(18-i),i*64+32,64,45);
  }
  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
- const sign=new THREE.Mesh(new THREE.PlaneGeometry(total,.86),
+ const sign=new THREE.Mesh(new THREE.PlaneGeometry(total,.78),
   new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}));
- sign.position.set(0,3.42,1.79);gateRoot.add(sign);
+ sign.position.set(0,3.33,1.78);gateRoot.add(sign);
+ const headerCanvas=document.createElement('canvas');
+ headerCanvas.width=1024;headerCanvas.height=128;
+ const hctx=headerCanvas.getContext('2d');
+ hctx.fillStyle='#286141';hctx.fillRect(0,0,1024,128);
+ hctx.strokeStyle='#c4ddc9';hctx.lineWidth=6;hctx.strokeRect(3,3,1018,122);
+ hctx.textAlign='center';hctx.textBaseline='middle';hctx.fillStyle='#fff';
+ hctx.font='bold 65px Arial,sans-serif';
+ hctx.fillText('TOKYO RACECOURSE',512,64,970);
+ const headerTexture=new THREE.CanvasTexture(headerCanvas);
+ headerTexture.colorSpace=THREE.SRGBColorSpace;
+ const header=new THREE.Mesh(new THREE.PlaneGeometry(total,.57),
+  new THREE.MeshBasicMaterial({map:headerTexture,side:THREE.DoubleSide}));
+ header.position.set(0,3.71,1.79);gateRoot.add(header);
  for(let i=0;i<FIELD_COUNT;i++){
   const x=(i-8.5)*w;
   for(const side of [-1,1]){
