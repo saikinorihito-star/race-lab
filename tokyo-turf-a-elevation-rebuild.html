@@ -38,6 +38,8 @@ a{color:#95e8df}
 .elevationPanel h2{color:#d2f6e8;font-size:15px;margin-bottom:8px}
 #elevationChart{display:block;width:100%;max-height:250px;border-radius:9px;background:#0d232a}
 .profileCaption{font-size:12px;line-height:1.65;color:#c6d9dc;margin-top:7px}
+#raceOrder{margin:0 12px 9px;padding:9px 11px;border-radius:9px;background:#1d3540;border:1px solid #35555e;color:#dcefe9;font-size:12px;line-height:1.6}
+#raceOrder strong{color:#f2e8b0}
 #profileReadout{font-size:12px;color:#ffdf9a;font-weight:650}
 .gradeChip{display:inline-block;padding:3px 7px;border-radius:8px;background:#29434e;margin:3px 4px 1px 0;font-size:11px}
 @media(min-width:800px){h1{font-size:23px}.tools{gap:10px}#stage{min-height:590px}}
@@ -103,8 +105,8 @@ a{color:#95e8df}
 <span class="pill" id="markerInfo">表示は残り距離。発走地点とは別です。</span>
 </div>
 <div class="tools">
-<label>走行テスト <select id="fieldMode"><option value="field18" selected>18頭の同時発走</option><option value="single">従来の1頭走行</option></select></label>
-<button id="demo">18頭を一斉にスタート</button>
+<label>走行テスト <select id="fieldMode"><option value="race18" selected>18頭レース展開（能力差あり）</option><option value="field18">18頭同時走行（固定レーン）</option><option value="single">従来の1頭走行</option></select></label>
+<button id="demo">18頭のレースを開始</button>
 <button id="reset">発馬機へ戻す</button>
 <label>デモ速度 <select id="rate"><option value="1" selected>1倍（発走確認）</option><option value="4">4倍</option><option value="8">8倍（確認向け）</option></select></label>
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
@@ -113,7 +115,8 @@ a{color:#95e8df}
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
-<div id="message">黄色い走行ラインと矢印を撤去。発馬機は固定枠幅で1番側より18番側に余白を残す配置へ変更しました。発馬機・ポケット形状とも試作用の近似モデルです。</div>
+<div id="raceOrder" aria-live="polite">18頭の順位とレース展開を準備しています。</div>
+<div id="message">18頭の能力差・加速・隊列・進路変更・前方馬との間隔調整を追加しました。能力・着順は架空のテスト値で、JRA実績の再現ではありません。「18頭同時走行」を選ぶと従来の等速テストも使えます。芝・ダートの外観と発馬機は維持しています。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -1041,6 +1044,144 @@ function fieldLayoutCheck(plan){
  const outer=fieldOuterMargin(a.width)-HORSE_WIDTH/2;
  return {ok:minGap>HORSE_WIDTH+.22&&inner>.55&&outer>.85,stall,inner,outer,width:a.width};
 }
+// ===== 試作：18頭それぞれの速度・走行位置・着順を持つレース展開 =====
+// JRAの馬の実測能力ではなく、シミュレーション基盤の動作確認用に固定した架空値。
+const RACE_TICK=1/60;
+const RACE_CLEARANCE=.96;     // 近い位置にいる馬同士の横方向中心間隔の目標
+const RACE_FRONT_GAP=2.65;    // 同一進路で追突しないための前後中心間隔の目標
+let raceHorses=[],raceElapsed=0,raceFinished=[],raceAccumulator=0,raceContactWarnings=0;
+function initialDemoText(){
+ return fieldMode.value==='race18'?'18頭のレースを開始':
+  fieldMode.value==='field18'?'18頭を一斉にスタート':'SからGへ走らせる';
+}
+function initRaceHorses(){
+ raceElapsed=0;raceFinished=[];raceAccumulator=0;raceContactWarnings=0;
+ const width=activePlan?fieldCenterAt(activePlan,0).width:31;
+ raceHorses=Array.from({length:FIELD_COUNT},(_,i)=>({
+  number:i+1,idx:i,distance:0,speed:0,finished:false,finishTime:null,
+  lane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
+  targetLane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
+  pace:16.2+((i*7+3)%18)*.087,
+  acceleration:2.5+((i*5+1)%9)*.11,
+  stamina:.89+((i*11+2)%17)*.008,
+  lastKick:((i*5+3)%11)*.082,
+  moveCooldown:0
+ }));
+}
+function raceHorsePosition(horse){
+ const a=fieldCenterAt(activePlan,horse.distance);
+ const side=new THREE.Vector3(a.t.z,0,-a.t.x);
+ const margin=.62;
+ const lane=Math.max(-a.width/2+margin,Math.min(a.width/2-margin,horse.lane));
+ return {p:a.p.clone().addScaledVector(side,lane),t:a.t,width:a.width};
+}
+function racePositions(){
+ return raceHorses.slice().sort((a,b)=>{
+  if(a.finished&&b.finished)return a.finishTime-b.finishTime;
+  if(a.finished)return -1;
+  if(b.finished)return 1;
+  return b.distance-a.distance||a.number-b.number;
+ });
+}
+function raceOrderText(){
+ const sorted=racePositions();
+ const top=sorted.slice(0,6).map((h,i)=>(i+1)+'位 '+h.number+'番').join('　');
+ const done=raceFinished.length;
+ const lead=sorted[0];
+ return (done===FIELD_COUNT?'全18頭ゴール':
+   '18頭レース展開｜'+(done?done+'頭ゴール済':'走行中'))+
+   '｜先頭 '+Math.round(lead?.distance||0)+'m / '+activeDistance+'m\n'+top+
+   '｜経過 '+raceElapsed.toFixed(1)+'秒';
+}
+function canChangeLane(state,target,others){
+ const at=fieldCenterAt(activePlan,state.distance);
+ if(target>at.width/2-.85||target< -at.width/2+.85)return false;
+ for(const other of others){
+  if(state===other || other.finished)continue;
+  // 横切る相手が3.6m以内にいる場合は、無理に進路を変えない。
+  if(Math.abs(other.distance-state.distance)<3.6&&
+    Math.abs(other.lane-target)<1.32)return false;
+ }
+ return true;
+}
+function stepRace(tick){
+ if(!activePlan||raceFinished.length>=FIELD_COUNT)return;
+ const previous=raceHorses.map(h=>({distance:h.distance,lane:h.lane,speed:h.speed,finished:h.finished}));
+ raceElapsed+=tick;
+ // 横方向の安全判定は同一時点の状態を使い、更新順で有利不利を生まない。
+ const next=raceHorses.map((h,i)=>{
+  if(h.finished)return {distance:h.distance,lane:h.lane,speed:0};
+  const at=fieldCenterAt(activePlan,h.distance),a=previous[i];
+  const progress=Math.min(1,h.distance/activePlan.distance);
+  const kick=progress>.76?h.lastKick*Math.pow((progress-.76)/.24,1.35):0;
+  const fatigue=(progress>.48?(progress-.48)*(.94-h.stamina)*1.6:0);
+  const cruising=Math.max(14.4,h.pace+kick-fatigue);
+  const turnStation=modulo(activePlan.startStation+h.distance-(activePlan.pocket?activePlan.pocket.length:0),LAP);
+  const corner=(turnStation>=STRAIGHT&&turnStation<BACK_START)||(turnStation>=BACK_END);
+  const targetSpeed=cruising-(corner?.28*Math.abs(h.lane)/(at.width/2):0);
+  const accel=targetSpeed>h.speed?h.acceleration:3.6;
+  let speed=h.speed+Math.max(-accel*tick,Math.min(accel*tick,targetSpeed-h.speed));
+  h.moveCooldown=Math.max(0,h.moveCooldown-tick);
+  let lane=h.lane;
+  // 進路の前方に遅い馬がいる場合、内・外いずれか空いている側へ移動を試みる。
+  let nearest=-1,frontGap=1000;
+  for(let j=0;j<previous.length;j++){
+   if(i===j||previous[j].finished)continue;
+   const gap=previous[j].distance-a.distance;
+   if(gap>0&&gap<frontGap&&Math.abs(previous[j].lane-lane)<1.34){
+    nearest=j;frontGap=gap;
+   }
+  }
+  if(nearest>=0&&frontGap<8.8&&h.moveCooldown===0){
+   const preferIn=h.number%3!==0;
+   const attempts=preferIn?[1,-1]:[-1,1];
+   for(const side of attempts){
+    const goal=lane+side*1.34;
+    if(canChangeLane(h,goal,raceHorses)){
+     h.targetLane=goal;h.moveCooldown=2.1;break;
+    }
+   }
+  }
+  const move=Math.max(-1.5*tick,Math.min(1.5*tick,h.targetLane-lane));
+  const targetLane=lane+move;
+  if(canChangeLane(h,targetLane,raceHorses))lane=targetLane;
+  else h.targetLane=lane;
+  lane=Math.max(-at.width/2+.85,Math.min(at.width/2-.85,lane));
+  // 同じ進路の前方馬に近付いたときは、前後間隔を優先して減速。
+  let maximumDistance=Math.min(activePlan.distance,a.distance+speed*tick);
+  for(let j=0;j<previous.length;j++){
+   if(i===j||previous[j].finished)continue;
+   const ahead=previous[j].distance-a.distance;
+   if(ahead>=0&&ahead<6.5&&Math.abs(previous[j].lane-lane)<RACE_CLEARANCE){
+    maximumDistance=Math.min(maximumDistance,
+      previous[j].distance-RACE_FRONT_GAP+Math.min(previous[j].speed*tick, .5));
+   }
+  }
+  const distance=Math.max(a.distance,maximumDistance);
+  if(distance< a.distance+speed*tick-.005) speed=Math.max(0,(distance-a.distance)/tick);
+  return {distance,lane,speed};
+ });
+ for(let i=0;i<raceHorses.length;i++){
+  const state=raceHorses[i],result=next[i];if(state.finished)continue;
+  state.distance=Math.max(0,Math.min(activePlan.distance,result.distance));
+  state.lane=result.lane;state.speed=result.speed;
+  if(state.distance>=activePlan.distance){
+   state.finished=true;state.finishTime=raceElapsed;raceFinished.push(state.number);
+  }
+ }
+ // 終了した馬の順位は初回のゴール時刻で固定。同時刻なら枠番号で安定化。
+}
+function updateRace(dt){
+ // 高速再生でも刻み幅を固定し、画面FPSで追突判定が変わりにくいようにする。
+ raceAccumulator+=Math.min(.3,dt*Number(rate.value));
+ let count=0;
+ while(raceAccumulator>=RACE_TICK&&count<25){
+  stepRace(RACE_TICK);raceAccumulator-=RACE_TICK;count++;
+ }
+ const lead=racePositions()[0];travel=Math.max(0,lead?.distance||0);
+ return raceFinished.length===FIELD_COUNT;
+}
+
 const silkColors=[0xff3b39,0x2c7bd9,0xeec232,0x1b965e,0x914bc0,0xf0f0f0,0xf57e25,0x15a8c2,0x284d89];
 const sharedHorse=fallbackHorse();
 for(let i=0;i<FIELD_COUNT;i++){
@@ -1054,8 +1195,10 @@ for(let i=0;i<FIELD_COUNT;i++){
 function positionFieldHorses(){
  if(!activePlan)return;
  for(let i=0;i<FIELD_COUNT;i++){
-  const a=fieldHorseAt(activePlan,travel,i),horse=fieldHorses[i];
-  const phase=travel*.67+i*.22,motion=Math.min(1,travel/5);
+  const state=fieldMode.value==='race18'?raceHorses[i]:null;
+  const a=state?raceHorsePosition(state):fieldHorseAt(activePlan,travel,i),horse=fieldHorses[i];
+  const horseDistance=state?state.distance:travel;
+  const phase=horseDistance*.67+i*.22,motion=Math.min(1,horseDistance/5);
   horse.position.copy(a.p);horse.position.y+=.05*motion*Math.sin(phase*2);
   horse.rotation.y=Math.atan2(a.t.x,a.t.z);
   horse.userData.legs.forEach((leg,j)=>{leg.rotation.x=motion*.35*Math.sin(phase+(j%2?Math.PI:0)+(j>1?Math.PI:0))});
