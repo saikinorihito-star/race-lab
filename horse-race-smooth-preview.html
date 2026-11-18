@@ -705,10 +705,11 @@ function repaintHorse(i,frame){
 
 function formationFor(i,n){
  // 横に余裕を設けた8車線スタート。実寸はGLBの包囲範囲から決める。
- const lanes=n>12?8:n>6?6:Math.min(n,4),lane=i%lanes,row=Math.floor(i/lanes);
+ const lanes=n>12?10:n>6?8:Math.min(8,n+2),occupied=n>12?6:lanes-2;
+ const lane=(i%occupied)+(n>12?2:1),row=Math.floor(i/occupied);
  const width=Math.max(1.12,horseLong*.61),spacing=Math.max(2.62,horseLong*1.40);
  const x=(lane-(lanes-1)*.5)*width;
- const z=-row*spacing+[.04,-.04,.07,-.06,.03,-.07,.05,-.02][i%8];
+ const z=-row*spacing+[.21,-.17,.11,-.21,.15,-.10,.06,-.13][i%8];
  return {x,z,lane,lanes,width,phase:i*.93};
 }
 function smoothstep01(x){const k=clamp(x,0,1);return k*k*(3-2*k)}
@@ -735,7 +736,7 @@ function positionsAtTime(t){
   if(v.progress<1||t<v.planCooldown)continue;
   const desiredSpeed=r.velocity*WORLD_PER_METER;
   const blocker=before.find((o,j)=>j!==i&&Math.abs(o.x-v.x)<safeX
-    &&o.z>v.z&&o.z-v.z<marginAhead&&desiredSpeed>o.forwardSpeed+.08);
+    &&o.z>v.z&&o.z-v.z<marginAhead&&desiredSpeed>o.forwardSpeed+.015);
   if(!blocker)continue;
   const options=[v.lane+(i%2?1:-1),v.lane+(i%2?-1:1)].filter(k=>k>=0&&k<lanes);
   for(const k of options){
@@ -744,7 +745,7 @@ function positionsAtTime(t){
     if(j===i)return true;
     if(Math.abs(o.x-target)>=safeX*1.10)return true;
     const zFuture=o.z+o.forwardSpeed*1.5;
-    return zFuture<futureZ-(safeZ+1.2)||zFuture>futureZ+(safeZ+1.6);
+    return zFuture<futureZ-(safeZ+.25)||zFuture>futureZ+(safeZ+.50);
    });
    if(targetLaneClear){
     v.fromX=v.x;v.targetLane=k;v.progress=0;v.planCooldown=t+1.9;
