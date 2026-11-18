@@ -110,7 +110,7 @@ a{color:#95e8df}
 <label><input type="checkbox" id="showStands" checked/>スタンド建物を表示</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
-<div id="message">実在施設と紐づかない馬場内の灰色建物4棟を撤去し、芝の内柵側に鏡付きゴール板を設置。ゴール板の専用カメラを追加し、樹木の幹と樹冠を改善しました。各施設の詳細形状は近似です。</div>
+<div id="message">中央の仮建物4棟を撤去し、ゴール板を追加。スタンドのガラス階層・ひさしの支持材、枝葉のある樹木、枠と試作映像の付いたターフビジョンを改善しました。ゴール板の専用カメラがあります。走路はこれまでの近似モデルのままです。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -743,19 +743,69 @@ function addCourseArrow(s){
 }
 [285,850,1380,1840].forEach(addCourseArrow);
 
+// 大型モニター用の自主制作テスト映像。実在のレース動画・放映画面ではない。
+function makeRaceMonitorTexture(){
+ const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=176;
+ const ctx=canvas.getContext('2d');
+ const bg=ctx.createLinearGradient(0,0,0,176);
+ bg.addColorStop(0,'#203f54');bg.addColorStop(1,'#071725');
+ ctx.fillStyle=bg;ctx.fillRect(0,0,1024,176);
+ // 模擬映像と中継オーバーレイを別領域に分け、画面らしい奥行きを持たせる。
+ const field=ctx.createLinearGradient(0,25,0,160);
+ field.addColorStop(0,'#508a61');field.addColorStop(1,'#244e35');
+ ctx.fillStyle=field;ctx.fillRect(8,19,661,137);
+ ctx.fillStyle='#8ab36d';ctx.fillRect(8,119,661,37);
+ ctx.strokeStyle='#e5e8db';ctx.lineWidth=3;
+ ctx.beginPath();ctx.moveTo(8,122);ctx.lineTo(669,122);ctx.stroke();
+ for(const [x,y] of [[110,96],[240,107],[356,97],[482,111],[590,101]]){
+  ctx.fillStyle='#25262b';ctx.beginPath();ctx.ellipse(x,y,22,10,-.15,0,Math.PI*2);ctx.fill();
+  ctx.fillRect(x+13,y-18,6,19);
+  ctx.beginPath();ctx.arc(x+16,y-21,6,0,Math.PI*2);ctx.fill();
+  ctx.lineWidth=4;ctx.strokeStyle='#28292e';
+  for(const offset of [-13,-3,7,17]){
+   ctx.beginPath();ctx.moveTo(x+offset,y+5);ctx.lineTo(x+offset-5,y+17);ctx.stroke();
+  }
+  ctx.fillStyle='#f5dfba';ctx.fillRect(x-5,y-20,9,10);
+ }
+ ctx.fillStyle='#102b40';ctx.fillRect(8,6,661,21);
+ ctx.fillStyle='#f5fbff';ctx.font='bold 16px Arial,sans-serif';
+ ctx.fillText('TOKYO RACECOURSE  /  TURF  /  DIRT',18,22);
+ ctx.fillStyle='#101e31';ctx.fillRect(683,8,334,148);
+ ctx.fillStyle='#6be1d1';ctx.font='bold 22px Arial,sans-serif';ctx.fillText('RACE LAB',699,38);
+ ctx.fillStyle='#f4f7f0';ctx.font='bold 30px Arial,sans-serif';ctx.fillText('TOKYO',699,77);
+ ctx.fillStyle='#b9cede';ctx.font='16px Arial,sans-serif';ctx.fillText('DEMO MONITOR',699,106);
+ for(let n=0;n<4;n++){
+  ctx.fillStyle=n%2?'#295569':'#20485d';
+  ctx.fillRect(699,121+n*8,290-n*24,5);
+ }
+ ctx.fillStyle='#06121f';ctx.fillRect(0,157,1024,19);
+ ctx.fillStyle='#b1ccd8';ctx.font='12px Arial,sans-serif';
+ ctx.fillText('3D COURSE PREVIEW - NOT A LIVE BROADCAST',17,171);
+ const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+ return texture;
+}
+const raceMonitorTexture=makeRaceMonitorTexture();
 // コース近景で遮蔽物となる大型ビジョンを、カメラモードに応じて切り替える。
 const turfVisionGroups=[];
 function turfVision(x,z,caption){
  const baseY=2.5;
  const group=new THREE.Group();scene.add(group);turfVisionGroups.push(group);
  group.position.set(x,baseY,z);
- addBox(group,0,8,4,70,16,5,0x526871);
- addBox(group,0,13,-.1,67.6,13.2,1.5,0x111a20);
+ // 幅66.4m×高さ11.2mはJRAの公表値。支柱などの寸法は近似。
+ addBox(group,0,13,-.05,68.1,13.1,1.42,0x1a252f,.28);
+ addBox(group,0,6.35,2.5,67.8,1.35,3.7,0x5a7179,.15);
+ for(const px of [-28,-14,0,14,28]){
+  addBox(group,px,5.35,2.6,1.10,10.5,1.5,0x65757b,.28);
+  addBox(group,px,11.5,1.4,.43,2.25,1.25,0x9eafb5,.23);
+ }
+ addBox(group,0,13,-.86,67.1,12.05,.20,0x60757c,.19);
  const screen=new THREE.Mesh(new THREE.PlaneGeometry(66.4,11.2),
-  new THREE.MeshBasicMaterial({map:makeCanvasTexture(['TOKYO RACECOURSE','TURF VISION'], '#e9ffff','#123849',1024,280),side:THREE.DoubleSide}));
- screen.position.set(0,13,-1.02);group.add(screen);
- for(const px of [-28,-14,0,14,28])addBox(group,px,0,3,.8,4,1,0x61767d);
- label3D(caption,x,33,z,16,'#1e5360');
+  new THREE.MeshBasicMaterial({map:raceMonitorTexture,side:THREE.DoubleSide}));
+ screen.position.set(0,13,-1.04);group.add(screen);
+ // 分割パネルの継ぎ目と金属外枠
+ for(const px of [-11.05,11.05])addBox(group,px,13,-1.10,.09,11.2,.09,0x1c2833,.24);
+ addBox(group,0,19.9,-.1,69,.65,1.9,0x778d94,.2);
+ addBox(group,0,6.1,-.55,68.0,.55,1.0,0x647883,.18);
 }
 turfVision(-225,9,'西側ターフビジョン');
 turfVision(210,22,'東側ターフビジョン');
@@ -774,10 +824,23 @@ function stadiumStand(name,x,len,backZ,height,color,accent){
  addBox(group,0,height+2.5,16,len+20,3.0,26,accent);
  const roofTrim=addBox(group,0,height+3.9,-9,len+24,1.3,58,0xeff5ee,.05);
  roofTrim.rotation.x=-.028;
- // long horizontal ribbons of glass (low draw-call count)
- for(const y of [height*.35,height*.53,height*.72]){
-  addBox(group,0,y,29,len*.94,2.0,.9,0x8baeba,.24);
+ // 複数階のガラス面、サッシ、水平帯でスタンドらしい陰影を作る。
+ for(let floor=0;floor<5;floor++){
+  const y=height*(.19+floor*.148);
+  addBox(group,0,y,29.22,len*.95,height*.085,.66,0x2d5a6b,.3);
+  addBox(group,0,y+height*.055,29.50,len*.95,.68,1.02,0xb3c4cb,.2);
+  addBox(group,0,y-height*.055,29.50,len*.95,.44,.95,0x788c94,.1);
  }
+ // ひさしの細い支持材。以前の巨大な棚状観覧席は復活させない。
+ const ribCount=28;
+ const ribMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(.39,.48,14),
+  new THREE.MeshStandardMaterial({color:0x70828a,metalness:.2,roughness:.58}),ribCount);
+ const ribDummy=new THREE.Object3D();
+ for(let i=0;i<ribCount;i++){
+  ribDummy.position.set(-len*.47+i*(len*.94)/(ribCount-1),height+1.4,12);
+  ribDummy.updateMatrix();ribMesh.setMatrixAt(i,ribDummy.matrix);
+ }
+ ribMesh.instanceMatrix.needsUpdate=true;group.add(ribMesh);
  // 窓の区切りを加え、横長の建物が一枚板に見えないようにする。
  const mullionCount=36;
  const mullions=new THREE.InstancedMesh(new THREE.BoxGeometry(.32,height*.44,.55),
