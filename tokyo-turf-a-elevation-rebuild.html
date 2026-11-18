@@ -107,7 +107,7 @@ a{color:#95e8df}
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
-<div id="message">芝の内側にダートコースを追加しました。「内側のダート」で砂と柵を近くから確認できます。1頭の走行デモは引き続き芝A専用です。坂の3倍表示は視覚上の誇張です。</div>
+<div id="message">全景の霞、砂の色、芝の細かな色むら、スタンドの窓を改善しました。「内側のダート」で近接表示できます。1頭走行は芝専用、坂3倍は見やすさのための誇張です。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -389,20 +389,20 @@ function dirtPoint(s,offset,lift=0){
 }
 
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x9ed0dd);
-scene.fog=new THREE.FogExp2(0x9ed0dd,.00075);
+scene.background=new THREE.Color(0x9ec8dd);
+scene.fog=new THREE.FogExp2(0x9ec8dd,.00011); // 遠景を見通せるように減霧
 const camera=new THREE.PerspectiveCamera(43,1,.15,6000);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(1.4,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.26;
+renderer.toneMappingExposure=1.09;
 stage.prepend(renderer.domElement);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=.075;controls.minDistance=7;controls.maxDistance=3300;controls.maxPolarAngle=Math.PI*.49;
-scene.add(new THREE.HemisphereLight(0xf2fbff,0x506b48,2.1));
-const sun=new THREE.DirectionalLight(0xfff6e1,2.8);
+scene.add(new THREE.HemisphereLight(0xeaf7ff,0x4e6450,1.42));
+const sun=new THREE.DirectionalLight(0xfff4e6,1.95);
 sun.position.set(-400,640,-260);scene.add(sun);
 function addBox(parent,x,y,z,w,h,d,color,metalness=0){
  const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.78,metalness}));
@@ -425,17 +425,39 @@ function label3D(text,x,y,z,size=22,background='#154b53'){
  sprite.position.set(x,y,z);sprite.scale.set(size*4.2,size,1);
  sprite.renderOrder=10;scene.add(sprite);textLabels.push(sprite);return sprite;
 }
-// 草地、内馬場
-addBox(scene,0,-2,0,1900,4,900,0x3d824b);
+// 外部画像不要の草地色むら。256pxの繰り返し模様でiPhoneの負荷を抑える。
+function makeGrassTexture(){
+ const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
+ const ctx=canvas.getContext('2d'),data=ctx.createImageData(256,256);
+ let seed=43071;
+ function rnd(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
+ for(let i=0;i<data.data.length;i+=4){
+  const d=(rnd()-.5)*38;
+  data.data[i]=Math.round(226+d);data.data[i+1]=Math.round(231+d*.64);
+  data.data[i+2]=Math.round(213+d*.78);data.data[i+3]=255;
+ }
+ ctx.putImageData(data,0,0);
+ const tex=new THREE.CanvasTexture(canvas);
+ tex.wrapS=THREE.RepeatWrapping;tex.wrapT=THREE.RepeatWrapping;tex.colorSpace=THREE.SRGBColorSpace;
+ tex.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ return tex;
+}
+const grassTexture=makeGrassTexture();
+const ground=addBox(scene,0,-2,0,1900,4,900,0x3d824b);
+const groundGrass=grassTexture.clone();groundGrass.needsUpdate=true;
+groundGrass.repeat.set(78,42);ground.material.map=groundGrass;ground.material.needsUpdate=true;
 const infield=addBox(scene,0,.12,0,690,.65,172,0x46954e);
 infield.material.roughness=1;
-const matTurf=new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.98});
+const infieldGrass=grassTexture.clone();infieldGrass.needsUpdate=true;
+infieldGrass.repeat.set(28,7);infield.material.map=infieldGrass;infield.material.needsUpdate=true;
+const matTurf=new THREE.MeshStandardMaterial({map:grassTexture,vertexColors:true,side:THREE.DoubleSide,roughness:.98});
 function ringGeom(innerFn,outerFn){
- const v=[],colors=[],ind=[],rgb=new THREE.Color();
+ const v=[],colors=[],uv=[],ind=[],rgb=new THREE.Color();
  for(let i=0;i<=N;i++){
   const s=LAP*i/N,inner=innerFn(s),outer=outerFn(s);
   for(const [j,p] of [[0,inner],[1,outer]]){
    v.push(p.x,p.y,p.z);
+   uv.push(s/12,j*3.2);
    const stripe=Math.floor(i/8)%2===0;
    rgb.set(stripe?0x409b4b:0x3a9147);
    if(j===1)rgb.multiplyScalar(.95);
@@ -446,6 +468,7 @@ function ringGeom(innerFn,outerFn){
  const g=new THREE.BufferGeometry();
  g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
  g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+ g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
  g.setIndex(ind);g.computeVertexNormals();return g;
 }
 const ring=new THREE.Mesh(ringGeom(
@@ -484,10 +507,10 @@ function makeSandTexture(){
  const ctx=c.getContext('2d'),image=ctx.createImageData(256,256);
  let seed=19426;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
  for(let i=0;i<image.data.length;i+=4){
-  const d=(rand()-.5)*32+(rand()>.978?18:0);
-  image.data[i]=Math.max(0,Math.min(255,196+d));
-  image.data[i+1]=Math.max(0,Math.min(255,166+d*.87));
-  image.data[i+2]=Math.max(0,Math.min(255,128+d*.72));
+  const d=(rand()-.5)*42+(rand()>.978?18:0);
+  image.data[i]=Math.max(0,Math.min(255,160+d));
+  image.data[i+1]=Math.max(0,Math.min(255,130+d*.87));
+  image.data[i+2]=Math.max(0,Math.min(255,95+d*.72));
   image.data[i+3]=255;
  }
  ctx.putImageData(image,0,0);ctx.strokeStyle='rgba(106,79,50,.12)';ctx.lineWidth=.75;
@@ -544,7 +567,7 @@ function sandStripeGeometry(near,far,steps=480){
  g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
  g.setIndex(faces);g.computeVertexNormals();return g;
 }
-const streakMat=new THREE.MeshBasicMaterial({color:0x947451,transparent:true,opacity:.09,depthWrite:false,side:THREE.DoubleSide});
+const streakMat=new THREE.MeshBasicMaterial({color:0x806447,transparent:true,opacity:.17,depthWrite:false,side:THREE.DoubleSide});
 for(const lane of [6.2,11.7,17.1,21.9]){
  scene.add(new THREE.Mesh(sandStripeGeometry(DIRT_OUTER_OFFSET+lane-.48,DIRT_OUTER_OFFSET+lane+.48),streakMat));
 }
@@ -621,7 +644,7 @@ addBox(scene,goalOuter.x,goalOuter.y+7.3,goalOuter.z,1.05,14,1.05,0xffffff);
 addBox(scene,goalOuter.x,goalOuter.y+14.8,goalOuter.z,4.1,2.0,1.2,0xd2bb5a);
 const goalSign=label3D('G｜ゴール',goalOuter.x,goalOuter.y+20,goalOuter.z,14,'#8e7634');
 const dirtLabelPos=dirtPoint(FINISH_DISTANCE-210,DIRT_INNER_OFFSET+15,.1);
-label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+16,dirtLabelPos.z,14,'#755b3d');
+label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+11,dirtLabelPos.z,9.5,'#755b3d');
 
 
  // JRAのゴールから逆方向に、内柵1m外側の測定線に沿って200mごとに設置。
@@ -650,7 +673,7 @@ label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+16,dirtLabelPos
   scene.add(plaque);
   label3D('残り'+remain+'m',place.x,place.y+12.5,place.z,6.5,remain<=600?'#8a3e40':'#24525e');
  }
- label3D('芝 Aコース｜左回り',-5,50,0,27,'#1c665c');
+ label3D('芝 Aコース｜左回り',-5,35,0,16,'#1c665c');
 // 黄色の矢印は馬が走る方向。設置位置は仮コースの中心線に沿う。
 const arrowMaterial=new THREE.MeshBasicMaterial({color:0xffd96c,side:THREE.DoubleSide});
 function addCourseArrow(s){
@@ -702,6 +725,16 @@ function stadiumStand(name,x,len,backZ,height,color,accent){
  for(const y of [height*.35,height*.53,height*.72]){
   addBox(group,0,y,29,len*.94,2.0,.9,0x8baeba,.24);
  }
+ // 窓の区切りを加え、横長の建物が一枚板に見えないようにする。
+ const mullionCount=36;
+ const mullions=new THREE.InstancedMesh(new THREE.BoxGeometry(.32,height*.44,.55),
+  new THREE.MeshStandardMaterial({color:0xd6e2e0,metalness:.12,roughness:.55}),mullionCount);
+ const mullionDummy=new THREE.Object3D();
+ for(let i=0;i<mullionCount;i++){
+  mullionDummy.position.set(-len*.475+i*len*.95/(mullionCount-1),height*.66,30.4);
+  mullionDummy.updateMatrix();mullions.setMatrixAt(i,mullionDummy.matrix);
+ }
+ mullions.instanceMatrix.needsUpdate=true;group.add(mullions);
  const cols=16,step=len/cols;
  const columnGeo=new THREE.BoxGeometry(.55,height*.6,.8),columnMat=new THREE.MeshStandardMaterial({color:0xa2bbc0});
  const instance=new THREE.InstancedMesh(columnGeo,columnMat,cols);
@@ -955,7 +988,7 @@ function setView(which){
   const a=racePointAt(activePlan,travel);
   eye=a.p.clone().addScaledVector(a.t,-18).add(new THREE.Vector3(0,11,0));
   target=a.p.clone().add(new THREE.Vector3(0,2,0));
- }else{eye=new THREE.Vector3(70,780*wide,-1150*wide);target=new THREE.Vector3(0,0,0)}
+ }else{eye=new THREE.Vector3(70,700*wide,-1025*wide);target=new THREE.Vector3(0,0,0)}
  controls.target.copy(target);camera.position.copy(eye);camera.lookAt(target);controls.update();
 }
 document.querySelectorAll('#views button').forEach(button=>button.addEventListener('click',()=>setView(button.dataset.view)));
