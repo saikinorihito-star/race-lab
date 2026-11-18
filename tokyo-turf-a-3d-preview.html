@@ -58,14 +58,32 @@ a{color:#95e8df}
 <button data-view="third">3・4コーナー</button>
 <button data-view="chase">1頭を追走</button>
 </div>
+<div class="tools" id="distanceViews">
+<label>ハロン棒の場所を確認
+<select id="markerFocus">
+<option value="all">全体</option>
+<option value="0">ゴール・決勝線</option>
+<option value="200">2｜残り200m</option>
+<option value="400">4｜残り400m</option>
+<option value="600">6｜残り600m</option>
+<option value="800">8｜残り800m</option>
+<option value="1000">10｜残り1000m</option>
+<option value="1200">12｜残り1200m</option>
+<option value="1400">14｜残り1400m</option>
+<option value="1600">16｜残り1600m</option>
+<option value="1800">18｜残り1800m</option>
+<option value="2000">20｜残り2000m</option>
+</select></label>
+<span class="pill" id="markerInfo">表示は残り距離。発走地点とは別です。</span>
+</div>
 <div class="tools">
 <button id="demo">1頭の周回デモを開始</button>
 <button id="reset">最初に戻す</button>
 <label>デモ速度 <select id="rate"><option value="1">1倍</option><option value="4">4倍</option><option value="8" selected>8倍（確認向け）</option></select></label>
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
 </div>
-<div id="message">芝走路・内外柵・ハロン棒・ゴール板・スタンド2棟・大型スクリーン2基を配置しています。端末内に保存済みのDesign01 GLBがあれば、1頭デモで自動使用します。</div>
-<div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">白：内・外ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">白赤：残り距離標識</span><span class="legend">黄：ゴール</span></div>
+<div id="message">距離の再検証版：芝Aの2,083.1mは内柵の外側1mで計測。ハロン棒「2」は残り200m、「4」は残り400mです。数字の位置を選択して拡大できます。発走地点はまだ未実装です。</div>
+<div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">白：内・外ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span></div>
 <section class="notice">
 <h2>3D制作上の精度区分</h2>
 <strong>JRA公表値：</strong>芝Aの1周2,083.1m、幅員31～41m、最後の直線525.9m、最大高低差2.7m、左回り。<strong>JRA施行規程第64条により1周距離の計測線は内柵の外側1m</strong>。施設名称およびターフビジョンの公表画面寸法（66.4m×11.2m）。<br>
@@ -80,9 +98,9 @@ a{color:#95e8df}
 <tr><td>内柵・外柵</td><td>幅31～41mで周回配置</td><td>公表幅員を基準</td></tr>
 <tr><td>フジビュー・メモリアル60</td><td>低負荷3D建物</td><td>外観・おおよその位置を近似</td></tr>
 <tr><td>ターフビジョン</td><td>表示面66.4m×11.2m</td><td>JRA公表画面寸法</td></tr>
-<tr><td>距離標識</td><td>残り200～2000mを200m刻み</td><td>ゴールから周回距離で配置／外観は簡略</td></tr>
+<tr><td>距離標識</td><td>内柵から1mの基準線に沿い200～2000mを逆算。番号2、4、…20のハロン棒</td><td>JRA施行規程・用語辞典／現地の詳細座標は未確認</td></tr>
 </tbody></table>
-出典：<a href="https://www.jra.go.jp/facilities/race/tokyo/course/index.html" target="_blank" rel="noopener">JRA 東京競馬場コース紹介</a>／<a href="https://www.jra.go.jp/facilities/race/tokyo/rcmap/" target="_blank" rel="noopener">JRA 東京競馬場施設紹介</a>
+出典：<a href="https://www.jra.go.jp/company/about/law/pdf/07.pdf" target="_blank" rel="noopener">JRA 競馬施行規程 第64条</a>／<a href="https://www.jra.go.jp/kouza/yougo/c10090_list.html" target="_blank" rel="noopener">JRA ハロン棒の定義</a>／<a href="https://www.jra.go.jp/facilities/race/tokyo/course/index.html" target="_blank" rel="noopener">JRA 東京競馬場コース紹介</a>／<a href="https://www.jra.go.jp/facilities/race/tokyo/rcmap/" target="_blank" rel="noopener">JRA 東京競馬場施設紹介</a>
 </section>
 </main>
 <script type="module">
@@ -255,17 +273,34 @@ addBox(scene,goalOuter.x,7.3,goalOuter.z,1.05,14,1.05,0xffffff);
 addBox(scene,goalOuter.x,14.8,goalOuter.z,4.1,2.0,1.2,0xd2bb5a);
 const goalSign=label3D('GOAL / ゴール',goalOuter.x,20,goalOuter.z,14,'#8e7634');
 
-// 200m distance signs, calculated in racing direction backward from the finish line.
-const markerColor=new THREE.MeshStandardMaterial({color:0xf1f0e9});
-for(let remain=200;remain<=2000;remain+=200){
- const s=modulo(FINISH_DISTANCE-remain,LAP);
- const place=offsetAt(s,-widthAt(s)/2-4,0);
- addBox(scene,place.x,3.25,place.z,.35,6.2,.35,0xf5f5f1);
- const cap=addBox(scene,place.x,6.6,place.z,1.5,2.5,1.5,remain===400?0xc74b46:0xf6f3ef);
- cap.material.roughness=.72;
- label3D('残り '+remain+'m',place.x,13,place.z,remain<=600?13:10,remain===400?'#8d3036':'#2a5661');
-}
-label3D('芝 Aコース｜左回り',-5,50,0,27,'#1c665c');
+
+ // JRAのゴールから逆方向に、内柵1m外側の測定線に沿って200mごとに設置。
+ const markerRefs=new Map();
+ function markerS(remain){return modulo(FINISH_DISTANCE-remain,LAP)}
+ function remainingAt(s){return modulo(FINISH_DISTANCE-s,LAP)}
+ function regionForS(s){
+  if(s<STRAIGHT)return '正面直線';
+  if(s<STRAIGHT+CURVE_LEN)return '1〜2コーナー';
+  if(s<2*STRAIGHT+CURVE_LEN)return '向正面';
+  return '3〜4コーナー';
+ }
+ for(let remain=200;remain<=2000;remain+=200){
+  const s=markerS(remain);
+  const place=offsetAt(s,MEASURE_OFFSET-widthAt(s)-4,0);
+  markerRefs.set(remain,{s,place,region:regionForS(s)});
+  for(let segment=0;segment<5;segment++){
+   const color=segment%2?0xb82930:0xf1f2e9;
+   addBox(scene,place.x,.55+segment*1.05,place.z,.72,1.04,.72,color);
+  }
+  const plaque=new THREE.Sprite(new THREE.SpriteMaterial({
+   map:makeCanvasTexture([String(remain/100)],'#202a33','#f7f8f1',220,220),
+   transparent:true,depthTest:false
+  }));
+  plaque.position.set(place.x,6.2,place.z);plaque.scale.set(3.3,3.3,1);
+  scene.add(plaque);
+  label3D('残り'+remain+'m',place.x,12.5,place.z,6.5,remain<=600?'#8a3e40':'#24525e');
+ }
+ label3D('芝 Aコース｜左回り',-5,50,0,27,'#1c665c');
 // 黄色の矢印は馬が走る方向。設置位置は仮コースの中心線に沿う。
 const arrowMaterial=new THREE.MeshBasicMaterial({color:0xffd96c,side:THREE.DoubleSide});
 function addCourseArrow(s){
@@ -419,8 +454,26 @@ function positionRunner(){
  }
 }
 let view='all';
+const markerFocus=document.querySelector('#markerFocus');
+const markerInfo=document.querySelector('#markerInfo');
+function inspectMarker(){
+ const remain=markerFocus.value==='all'?-1:Number(markerFocus.value);
+ if(remain<0){setView('all');return}
+ const ss=remain===0?FINISH_DISTANCE:markerS(remain);
+ const point=remain===0?goalOuter:markerRefs.get(remain)?.place;
+ if(!point)return;
+ const tangent=positionAt(ss).t,inside=positionAt(ss).inward;
+ const target=point.clone().add(new THREE.Vector3(0,5,0));
+ const eye=point.clone().addScaledVector(inside,-42).addScaledVector(tangent,-24).add(new THREE.Vector3(0,27,0));
+ view='marker';
+ document.querySelectorAll('#views button').forEach(x=>x.classList.remove('selected'));
+ controls.target.copy(target);camera.position.copy(eye);camera.lookAt(target);controls.update();
+ markerInfo.textContent=remain===0?'決勝線：残り距離の基準点':('ハロン棒「'+remain/100+'」＝残り'+remain+'m ／ '+regionForS(ss)+'（近似）');
+}
+markerFocus.addEventListener('change',inspectMarker);
 function setView(which){
  view=which;
+ if(which!=='marker'){markerFocus.value='all';markerInfo.textContent='表示は残り距離。発走地点とは別です。'}
  document.querySelectorAll('#views button').forEach(b=>b.classList.toggle('selected',b.dataset.view===which));
  const aspect=stage.clientWidth/Math.max(1,stage.clientHeight);
  const wide=Math.max(1,1/aspect);
