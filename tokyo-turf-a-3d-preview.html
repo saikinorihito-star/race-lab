@@ -449,6 +449,109 @@ for(let i=0;i<88;i++){
 }
 treeMesh.instanceMatrix.needsUpdate=true;
 
+// 芝9距離のS→G走行経路。コース外形・専用ポケットの座標は参考図に基づく近似。
+const RACE_DISTANCES=[1400,1600,1800,2000,2300,2400,2500,2600,3400];
+const POCKET_DATA=[
+ {distance:1800,join:958,deltaX:130,deltaZ:-65,label:'1～2コーナー間のポケット'},
+ {distance:2000,join:820,deltaX:150,deltaZ:100,label:'1コーナー奥のポケット'}
+];
+function makePocket(spec){
+ const remaining=modulo(FINISH_DISTANCE-spec.join,LAP);
+ const targetLength=spec.distance-remaining;
+ const end=offsetAt(spec.join,-6,.12),tangent=positionAt(spec.join).t;
+ const direction=new THREE.Vector3(spec.deltaX,0,spec.deltaZ).normalize();
+ function curveFor(scale){
+  const p0=end.clone().addScaledVector(direction,scale);
+  p0.y+=spec.distance===1800?.08:-.10;
+  const p1=p0.clone().addScaledVector(direction,-targetLength*.28);
+  const p2=end.clone().addScaledVector(tangent,-targetLength*.20);
+  const curve=new THREE.CubicBezierCurve3(p0,p1,p2,end);
+  curve.arcLengthDivisions=240;
+  return curve;
+ }
+ let lo=4,hi=530;
+ for(let k=0;k<38;k++){
+  const m=(lo+hi)/2;
+  if(curveFor(m).getLength()<targetLength)lo=m;else hi=m;
+ }
+ const curve=curveFor((lo+hi)/2),length=curve.getLength();
+ const vertices=[],colors=[],indices=[];
+ const w=spec.distance===1800?24:28;
+ for(let i=0;i<=100;i++){
+  const u=i/100,p=curve.getPointAt(u),t=curve.getTangentAt(u).normalize();
+  const side=new THREE.Vector3(t.z,0,-t.x).normalize();
+  for(const dir of [-1,1]){
+   const point=p.clone().addScaledVector(side,dir*w/2);point.y+=.09;
+   vertices.push(point.x,point.y,point.z);
+   const c=new THREE.Color(Math.floor(i/8)%2===0?0x3c9949:0x388e45);
+   colors.push(c.r,c.g,c.b);
+  }
+  if(i<100){const k=i*2;indices.push(k,k+1,k+2,k+1,k+3,k+2)}
+ }
+ const geom=new THREE.BufferGeometry();
+ geom.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+ geom.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+ geom.setIndex(indices);geom.computeVertexNormals();
+ const turf=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.95}));
+ scene.add(turf);
+ const yellow=new THREE.Mesh(new THREE.TubeGeometry(curve,120,.23,5,false),
+  new THREE.MeshBasicMaterial({color:0xf1d36d}));
+ scene.add(yellow);
+ return {...spec,curve,length,remaining,start:curve.getPointAt(0)};
+}
+const POCKETS=new Map(POCKET_DATA.map(x=>[x.distance,makePocket(x)]));
+function racePlan(distance){
+ const pocket=POCKETS.get(distance)||null;
+ return {distance,pocket,startStation:pocket?pocket.join:modulo(FINISH_DISTANCE-distance,LAP)};
+}
+function racePointAt(plan,distance){
+ const d=Math.max(0,Math.min(plan.distance,distance));
+ if(plan.pocket&&d<=plan.pocket.length){
+  const u=Math.min(1,d/plan.pocket.length);
+  return {p:plan.pocket.curve.getPointAt(u),t:plan.pocket.curve.getTangentAt(u).normalize()};
+ }
+ const remainder=d-(plan.pocket?plan.pocket.length:0);
+ const station=plan.startStation+Math.max(0,remainder);
+ return {p:offsetAt(station,-6,.12),t:positionAt(station).t};
+}
+const routeVisual=new THREE.Group();scene.add(routeVisual);
+const startCanvas=makeCanvasTexture(['S'],'#122530','#ffffff',256,256);
+const startPin=new THREE.Sprite(new THREE.SpriteMaterial({map:startCanvas,transparent:true,depthTest:false}));
+startPin.scale.set(18,18,1);scene.add(startPin);
+const startName=label3D('S地点',0,10,0,11,'#1c5d65');
+let activePlan=null,activeDistance=1400;
+function clearRoute(){
+ routeVisual.traverse(obj=>{
+  if(obj.geometry)obj.geometry.dispose();
+  if(obj.material)obj.material.dispose();
+ });
+ routeVisual.clear();
+}
+function highlightRace(plan){
+ clearRoute();
+ const samples=Math.ceil(plan.distance/11),points=[];
+ for(let i=0;i<=samples;i++){
+  const p=racePointAt(plan,plan.distance*i/samples).p.clone();
+  p.y+=.27;points.push(p);
+ }
+ routeVisual.add(new THREE.Mesh(
+  new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),Math.max(150,samples*2),.31,4,false),
+  new THREE.MeshBasicMaterial({color:0xffd467,transparent:true,opacity:.95})
+ ));
+ const first=racePointAt(plan,0);
+ const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.9,plan.pocket?26:widthAt(plan.startStation)),
+  new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}));
+ stripe.rotation.x=-Math.PI/2;stripe.rotation.z=-Math.atan2(first.t.z,first.t.x);
+ stripe.position.copy(first.p).add(new THREE.Vector3(0,.19,0));routeVisual.add(stripe);
+ addBox(routeVisual,first.p.x,first.p.y+3.2,first.p.z,.6,6,.6,0xffffff);
+ startPin.position.copy(first.p).add(new THREE.Vector3(0,15,0));
+ startName.position.copy(first.p).add(new THREE.Vector3(0,25,0));
+ const next=makeCanvasTexture([activeDistance+'m S'],'#effffb','#194f5d',512,120);
+ const old=startName.material.map;
+ startName.material.map=next;startName.material.needsUpdate=true;
+ if(old)old.dispose();
+}
+
 let runner,runnerMixer=null,travel=0,playing=false,usedStoredGLB=false;
 function fallbackHorse(){
  const g=new THREE.Group();
