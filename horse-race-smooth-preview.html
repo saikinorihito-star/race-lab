@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Race Lab｜18頭 なめらか追い抜きテスト</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#101720;color:#eef4fb}header{padding:13px 16px 9px;background:#172333;border-bottom:1px solid #354456}h1{font-size:19px;margin:0 0 3px}p{margin:0}.sub{color:#a9bed4;font-size:12px}
+main{max-width:1140px;margin:auto}.toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;background:#162230;align-items:center}
+button,.upload{border:1px solid #546983;background:#293e55;color:#fff;border-radius:10px;padding:10px 13px;font-size:14px;font-weight:600}
+button.selected,.upload{background:#287b71;border-color:#5dc9b6}
+input[type=file]{width:100%;font-size:14px;padding:8px;color:#ccd9eb}
+select{border:1px solid #546983;border-radius:10px;padding:9px 8px;background:#263a4d;color:white;font-size:14px}
+#stage{position:relative;background:linear-gradient(#425468,#283544);height:51svh;min-height:330px;overflow:hidden;touch-action:none}
+#stage canvas{display:block}.center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:25px;text-align:center;pointer-events:none;color:#eafaff;font-size:14px}
+#msg{background:#233142;border-top:1px solid #394f65;color:#d4e6f9;padding:10px 14px;font-size:13px;line-height:1.5}
+.controls{padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#roster{padding:0 12px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:6px}
+.horse{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:8px 7px;border:1px solid #435365;border-radius:9px;font-size:12px;background:#202e3e}.horsehead{display:flex;align-items:center;gap:5px;min-height:18px}.horse select{font-size:13px;max-width:100%;padding:6px 3px}.hairlabel{font-size:11px;color:#acbdd1}.horse .face-select{border-color:#65aaa8;color:#ffffff}
+
+.dot{width:13px;height:13px;border-radius:50%;border:1px solid #8a96a9;flex-shrink:0}
+small{font-size:11px;color:#aab9cb}#perf{position:absolute;z-index:2;top:10px;left:10px;padding:7px 10px;border-radius:9px;background:#142436d9;border:1px solid #4a667f;font-size:13px;font-weight:650;pointer-events:none;font-variant-numeric:tabular-nums}.racepanel{margin:2px 12px 10px;background:#182838;border:1px solid #43596c;border-radius:12px;padding:12px 12px 10px;display:flex;flex-direction:column;gap:9px}
+.racehead,.ranktop{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap;font-size:13px}
+.racehead label{display:flex;align-items:center;gap:7px}
+.racehead select{padding:6px;font-size:13px}
+#racePhase{font-weight:700;color:#bfe8fa}
+#raceClock{font-variant-numeric:tabular-nums}
+.meter{height:8px;background:#091622;border-radius:8px;overflow:hidden}
+#raceProgress{height:100%;background:linear-gradient(90deg,#388faa,#72e1b0);transition:width .15s linear}
+#raceLeader{font-size:15px}#raceRemaining{font-variant-numeric:tabular-nums;color:#d7dfe8}
+.rankrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:6px;font-size:12px}
+.rankrow>span{padding:6px 7px;border:1px solid #4b6177;border-radius:8px;background:#25394c;font-variant-numeric:tabular-nums}
+.explain{font-size:11px;color:#aab9cc;line-height:1.5}
+details.stats{border-top:1px solid #395066;margin-top:9px;padding-top:8px}
+details.stats summary{font-weight:700;color:#f3e7b2;cursor:pointer}
+details.stats label{display:flex;align-items:center;justify-content:space-between;gap:5px;font-size:11px;margin-top:7px}
+details.stats input[type=range]{width:100%;accent-color:#64d8c3}
+details.stats select{width:100%;margin:6px 0}
+#fine{padding:3px 12px 24px;font-size:11px;line-height:1.7;color:#bbc9d9}strong{color:#fff}
+details.silks{border-top:1px solid #395066;margin-top:9px;padding-top:8px} details.silks summary{cursor:pointer;font-weight:700;color:#d6f1ff;margin-bottom:8px}details.silks select{margin-bottom:7px;width:100%}
+.cachebar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:8px 12px;margin:0 12px 10px;background:#183044;border:1px solid #44647a;border-radius:10px;font-size:12px;color:#bfe5f4}.cachebar button{font-size:12px;padding:8px 10px;min-height:34px}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script>
+</head><body>
+<header><h1>Race Lab｜18頭 なめらか追い抜きテスト</h1><p class="sub">前方の馬を予測して早めに進路を選択し、前後の速度と横移動を連続的に制御します。全体カメラ・能力値・GLB自動読み込みは維持。Race Lab本体は変更しません。</p></header>
+<main>
+<div class="toolbar">
+<label style="flex:1;min-width:210px"><span class="sub">① 初回だけUVfixed.glbを選択（次回から自動）</span><input type="file" id="upload" accept=".glb,model/gltf-binary"></label>
+<label><span class="sub">② 出走頭数</span><select id="count"><option value="3">3頭</option><option value="6">6頭</option><option value="9">9頭</option><option value="12">12頭</option><option value="16">16頭</option><option value="18" selected>18頭</option></select></label>
+</div>
+<div class="cachebar"><span id="cacheState" aria-live="polite">この端末の保存済みモデルを確認しています…</span><button type="button" id="clearModelCache">端末のモデル保存を削除</button></div>
+<div id="stage"><div id="perf">FPS ― / 0頭</div><div class="center" id="placeholder">3Dモデルを確認中…<br>保存済みなら自動で表示されます。初回だけ上の「ファイルを選択」からGLBを選んでください。</div></div>
+<div class="controls">
+<button id="play" disabled>レース開始</button>
+<button id="cam0" class="selected">全体</button><button id="cam1">横</button><button id="cam2">正面</button><button id="cam3">追走</button><label><small>拡大表示</small><select id="focus"><option value="all">馬群全体</option><option value="0">先頭付近</option><option value="1">中団付近</option><option value="2">後方付近</option></select></label>
+<label><small>追走対象</small><select id="followHorse"><option value="-1">馬群全体</option></select></label><label><small>速さ</small><select id="speed"><option value="0.5">0.5倍</option><option value="1" selected>通常</option><option value="1.5">1.5倍</option></select></label>
+</div>
+<div class="controls" style="padding-top:0"><button id="resetRace">レースをリセット</button><button id="labels" class="selected">馬番表示 ON</button><button id="recommended">おすすめ18頭を再設定</button><label><small>描画テクスチャ</small><select id="quality"><option value="512" selected>軽量（iPhone向け）</option><option value="1024">標準（高画質）</option></select></label></div>
+<div class="racepanel">
+<div class="racehead">
+  <label>レース距離 <select id="raceDistance"><option value="1200">1200m</option><option value="1600" selected>1600m</option><option value="2000">2000m</option></select></label>
+  <span id="racePhase">GLBを読み込み中</span><span id="raceClock">0.0秒</span>
+</div>
+<div class="meter"><div id="raceProgress" style="width:0%"></div></div>
+<div class="ranktop"><strong id="raceLeader">順位：レース開始前</strong><span id="raceRemaining">残り 1600m</span></div>
+<div id="ranking" class="rankrow">出走準備中</div>
+<div class="explain">「レース開始」でスタート。各馬カードの「能力・脚質」を開くと数値を変更できます。設定変更は次のリセット時から反映されます。</div>
+</div>
+<div id="msg">新しい滑らか版では、前方の馬に接近する前に減速・進路選択し、横移動中の目標車線を固定します。<strong>急な停止や蛇行を抑える</strong>仕組みを試しています。</div>
+<div id="roster"></div>
+<div id="fine">※ 3D上の接近・追い抜きは予測型の簡易進路変更と滑らかな速度追従で制御します。表示位置の回避は順位の計算とは別処理のため、見た目と順位表示に差が出る場合があります。実際の接触・斜行・進路制限を完全に再現したものではありません。<br>※ この版の速度・疲労・脚質・順位は簡略化した仮のアルゴリズムです。実際のレース結果や競走馬の能力を推定するものではなく、進路取り・斜行・接触等の厳密な再現もしていません。画面上の再生時間と走行距離は加速表示です。<br>※ FPSはこのページ内で計測した参考値です。端末・通信状態や発熱によって変動します。初期設定は軽量512pxで、6頭単位の拡大表示も可能です。個別設定は現在のページでのみ保持します。帽子色はこのUVfixedモデル専用のテクスチャ領域で変更しています。ゼッケンは引き続き試験的な加工です。<br>※ 左右ドラッグで回転・2本指で拡大縮小できます。帽子・馬番・ゼッケンの色は元テクスチャを部分的に着色した試験版です。毛色は鹿毛・黒鹿毛・栗毛・青鹿毛・芦毛の5種類。顔模様は白なし・星・細流星・標準・太流星・鼻先までの6種類。白ソックスは5種類。たてがみ・尻尾は標準／濃い茶／明るい茶／赤み茶の4種類。毛の色の変化は控えめにしています。特に首筋、額、尻尾の周囲に色のはみ出しがないか確認してください。勝負服は試験的なUV部分塗り分け（無地・縦縞・横帯・たすき・ダイヤ・袖色違い）です。色が隣接部分へはみ出す可能性があります。枠色はJRA方式で割り当てますが実際の出走表とは未連動です。18頭ではiPhoneの性能次第で重くなる場合があります。</div>
+</main>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {clone as cloneSkinned} from 'three/addons/utils/SkeletonUtils.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+const stage=document.getElementById('stage'),placeholder=document.getElementById('placeholder'),status=document.getElementById('msg'),roster=document.getElementById('roster');
+const cacheState=document.getElementById('cacheState'),clearModelCacheBtn=document.getElementById('clearModelCache');
+const cacheDB='race-lab-3d-model-local-cache',cacheStore='glb',cacheKey='design01-uvfixed-v1';
+let loadingNonce=0;
+function idbOpen(){
+ return new Promise((resolve,reject)=>{
+  if(!('indexedDB' in window)){reject(new Error('IndexedDBを利用できません'));return}
+  const req=indexedDB.open(cacheDB,1);
+  req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(cacheStore))db.createObjectStore(cacheStore)};
+  req.onsuccess=()=>resolve(req.result);
+  req.onerror=()=>reject(req.error||new Error('保存領域を開けません'));
+  req.onblocked=()=>reject(new Error('別タブで保存領域が利用中です'));
+ });
+}
+async function getCache(){
+ const db=await idbOpen();
+ try{return await new Promise((resolve,reject)=>{
+  const tx=db.transaction(cacheStore,'readonly');
+  const req=tx.objectStore(cacheStore).get(cacheKey);
+  req.onsuccess=()=>resolve(req.result||null);
+  req.onerror=()=>reject(req.error||new Error('読み込みエラー'));
+ })}finally{db.close()}
+}
+async function storeCache(buffer,filename){
+ const db=await idbOpen();
+ try{
+  await new Promise((resolve,reject)=>{
+   const tx=db.transaction(cacheStore,'readwrite');
+   tx.objectStore(cacheStore).put({
+    blob:new Blob([buffer],{type:'model/gltf-binary'}),
+    filename,bytes:buffer.byteLength,savedAt:Date.now()
+   },cacheKey);
+   tx.oncomplete=resolve;
+   tx.onerror=()=>reject(tx.error||new Error('保存エラー'));
+   tx.onabort=()=>reject(tx.error||new Error('保存を中断しました'));
+  })
+ }finally{db.close()}
+}
+async function deleteCache(){
+ const db=await idbOpen();
+ try{
+  await new Promise((resolve,reject)=>{
+   const tx=db.transaction(cacheStore,'readwrite');
+   tx.objectStore(cacheStore).delete(cacheKey);
+   tx.oncomplete=resolve;
+   tx.onerror=()=>reject(tx.error||new Error('削除エラー'));
+   tx.onabort=()=>reject(tx.error||new Error('削除を中断しました'));
+  })
+ }finally{db.close()}
+}
+function checkGLB(buffer){
+ if(!(buffer instanceof ArrayBuffer)||buffer.byteLength<20)throw new Error('GLBファイルのサイズが不正です');
+ const data=new DataView(buffer);
+ if(data.getUint32(0,true)!==0x46546c67||data.getUint32(4,true)!==2||data.getUint32(8,true)!==buffer.byteLength)
+  throw new Error('glTF 2.0形式のGLBではありません');
+ if(buffer.byteLength>30*1024*1024)throw new Error('30MBを超えるファイルは登録できません');
+}
+async function loadGLBBuffer(buffer,filename,nonce){
+ checkGLB(buffer);
+ placeholder.style.display='';
+ placeholder.textContent='3Dモデルを読み込み中…';
+ status.textContent='読み込み中：'+filename;
+ btn.disabled=true;
+ const loader=new GLTFLoader();
+ const parsed=await new Promise((ok,ng)=>loader.parse(buffer,'',ok,ng));
+ if(nonce!==loadingNonce)return false;
+ gltf=parsed;
+ setupColorMasks();
+ placeholder.style.display='none';
+ loaded=true;
+ buildHorses();
+ return true;
+}
+async function autoRestoreGLB(){
+ const nonce=++loadingNonce;
+ try{
+  const saved=await getCache();
+  if(nonce!==loadingNonce)return;
+  if(!saved?.blob){cacheState.textContent='未登録：最初の1回だけGLBを選んでください。次回から自動表示します。';placeholder.textContent='初回のみGLBファイルを選択してください';return}
+  cacheState.textContent='保存済みGLBを自動読み込み中…';
+  const buffer=await saved.blob.arrayBuffer();
+  if(nonce!==loadingNonce)return;
+  const ok=await loadGLBBuffer(buffer,saved.filename||'保存済みUVfixed.glb',nonce);
+  if(ok)cacheState.textContent='自動読み込み完了：保存済みGLB（'+(buffer.byteLength/1048576).toFixed(1)+' MB）を使用中。';
+ }catch(err){
+  if(nonce!==loadingNonce)return;
+  console.warn('GLB自動読み込み:',err);
+  cacheState.textContent='保存済みモデルを利用できません。GLBをもう一度選択してください。';
+  if(!loaded)placeholder.textContent='GLBを選択してください';
+ }
+}
+clearModelCacheBtn.addEventListener('click',async()=>{
+ try{
+  await deleteCache();
+  cacheState.textContent='この端末のGLB保存を削除しました。再登録する場合はGLBを選択してください。';
+ }catch(err){cacheState.textContent='削除できませんでした：'+(err.message||err)}
+});
+
+const sel=document.getElementById('count'),btn=document.getElementById('play'),speed=document.getElementById('speed');
+const COLORS=['#ffffff','#222222','#e83e42','#226be5','#ffdd26','#32a65c','#f28c20','#f28cb9'];
+const NAMES=['白','黒','赤','青','黄','緑','橙','桃'];
+const FRAME_RGB=[[240,240,238],[30,30,37],[219,53,60],[31,100,219],[248,213,40],[44,159,78],[236,139,38],[241,148,184]];
+const COATS=[
+{label:'鹿毛',rgb:[108,68,60]},
+{label:'黒鹿毛',rgb:[61,47,44]},
+{label:'栗毛',rgb:[159,86,55]},
+{label:'青鹿毛',rgb:[45,44,49]},
+{label:'芦毛',rgb:[162,154,149]}
+];
+const BEST_COAT=[0,1,2,0,3,4,2,0,1,4,0,2,3,0,1,2,4,0];
+const coatPrefs=[...BEST_COAT];
+const FACE_NAMES=['白なし','小さな星','細い流星','標準の流星','幅広い流星','鼻先まで'];
+const BEST_FACE=[0,1,2,3,4,5,1,3,0,2,5,4,1,2,3,5,0,4];
+const facePrefs=[...BEST_FACE];
+const SOCK_NAMES=['白なし','前脚だけ白','後脚だけ白','4本とも白','対角2本（左前＋右後）'];
+const BEST_SOCK=[0,2,4,1,3,0,1,4,2,3,1,2,0,4,3,2,1,0];
+const sockPrefs=[...BEST_SOCK];
+const HAIR_NAMES=['標準（元の色）','濃い茶','明るい茶','赤みのある茶'];
+const BEST_HAIR=[0,1,3,2,0,2,1,3,2,0,3,1,1,2,0,3,2,1];
+const hairPrefs=[...BEST_HAIR];
+const SILK_PALETTE=[
+{label:'白',rgb:[244,244,242]},{label:'黒',rgb:[30,34,44]},
+{label:'赤',rgb:[220,52,65]},{label:'青',rgb:[37,98,221]},
+{label:'黄',rgb:[244,209,52]},{label:'緑',rgb:[48,160,96]},
+{label:'橙',rgb:[241,141,44]},{label:'桃',rgb:[239,139,175]},
+{label:'水色',rgb:[99,192,225]},{label:'紺',rgb:[36,55,114]}
+];
+const SILK_PATTERNS=['無地','縦縞','横帯','たすき','ダイヤ柄','袖色違い'];
+// 18頭全員に異なる色と柄を割り当てる。後から各馬で変更可能。
+const BEST_SILKS=[
+[0,1,0],[1,0,5],[2,0,1],[3,0,2],[4,1,3],[5,0,4],
+[6,0,0],[7,0,1],[4,3,2],[8,2,5],[5,4,3],[8,0,0],
+[6,1,2],[9,4,1],[7,1,4],[0,2,3],[1,7,2],[9,0,5]
+];
+const silkPrefs=BEST_SILKS.map(a=>a.slice());
+
+let originalMap=null,textureMasks=null;
+let gltf=null,horseHeight=1.6,horseLong=1.6,active=[],mixers=[],playing=false,view=0,loaded=false,cameraRadius=10;
+const focus=document.getElementById('focus'),quality=document.getElementById('quality'),perf=document.getElementById('perf'),followHorse=document.getElementById('followHorse');
+let fpsWindowStart=0,fpsCounter=0,measuredFPS=0;
+let raceTime=0,trackTravel=0,showLabels=true;
+const visualStates=[];let lastVisualTime=0;
+const CAMERA_MARGIN=1.20;
+const raceDistanceSelect=document.getElementById('raceDistance');
+const phaseEl=document.getElementById('racePhase'),clockEl=document.getElementById('raceClock'),progressEl=document.getElementById('raceProgress'),rankEl=document.getElementById('ranking'),remainingEl=document.getElementById('raceRemaining'),leaderEl=document.getElementById('raceLeader');
+const WORLD_PER_METER=.115,DISPLAY_TIME_SCALE=2.0;
+const STYLES=['逃げ','先行','差し','追込'];
+const BEST_STATS=Array.from({length:18},(_,i)=>({
+  speed: [78,84,76,89,83,81,91,78,87,82,75,90,79,85,88,80,77,86][i],
+  stamina:[82,78,89,72,86,80,74,93,76,87,95,75,84,79,77,88,90,81][i],
+  accel:[72,83,79,90,74,85,88,75,81,90,76,84,92,80,86,87,73,89][i],
+  style:i%4
+}));
+const statPrefs=BEST_STATS.map(x=>({...x}));
+let raceStates=[],activeStats=[],lastHud=0,finishOrder=[];
+function clamp(v,min,max){return Math.min(max,Math.max(min,v))}
+function raceMeters(){return Number(raceDistanceSelect.value)||1600}
+function newRaceState(i){
+ const p=statPrefs[i];
+ return {number:i+1,distance:0,velocity:13.1+(p.accel-50)*.01,reserve:1.0,finishTime:null};
+}
+function orderedRunners(){
+ return raceStates.map((s,i)=>({i,...s}))
+   .sort((a,b)=>{
+     if(a.finishTime!==null&&b.finishTime!==null)return a.finishTime-b.finishTime;
+     if(a.finishTime!==null)return -1;
+     if(b.finishTime!==null)return 1;
+     return b.distance-a.distance||a.number-b.number;
+   });
+}
+function racePhase(p){return p<.26?'序盤':p<.72?'中盤':p<.91?'終盤':'ラストスパート'}
+function styleVelocityBonus(style,p){
+ if(style===0)return p<.42?.90:p<.78?.24:-.20;
+ if(style===1)return p<.46?.51:p<.78?.17:.09;
+ if(style===2)return p<.47?-.35:p<.73?.16:1.00;
+ return p<.52?-.72:p<.75?.20:1.38;
+}
+function simulateTick(seconds){
+ const length=raceMeters();
+ const before=raceTime;
+ raceTime+=seconds;
+ for(let i=0;i<raceStates.length;i++){
+   const r=raceStates[i],attr=activeStats[i];
+   if(r.finishTime!==null)continue;
+   const prog=clamp(r.distance/length,0,1);
+   const styleBonus=styleVelocityBonus(attr.style,prog);
+   const sprint=prog>.79?(.14+.68*(attr.accel/100))*clamp((prog-.79)/.14,0,1):0;
+   const targetBase=14.0+attr.speed*.035+styleBonus+sprint;
+   const exertion=clamp((targetBase-15.2)/3,0,1);
+   const consumption=seconds*(.00375+exertion*.00155+
+     (attr.style===0&&prog<.65?.00065:0))*(79/attr.stamina);
+   r.reserve=clamp(r.reserve-consumption,0,1);
+   // スタミナは疲労の蓄積量に加え、特に中盤以降の速度維持力へ影響する。
+   const fatigue=clamp((.67-r.reserve)/.67,0,1);
+   const late=clamp((prog-.37)/.53,0,1);
+   const enduranceBonus=(attr.stamina-75)*.012*late;
+   const target=clamp(targetBase+enduranceBonus-fatigue*(2.35-attr.stamina*.009),11.7,19.0);
+   const maxDelta=seconds*(.37+attr.accel*.012);
+   r.velocity+=clamp(target-r.velocity,-maxDelta,maxDelta);
+   const step=r.velocity*seconds;
+   const distanceBefore=r.distance;
+   r.distance=Math.min(length,r.distance+step);
+   if(r.distance>=length){
+     const fraction=clamp((length-distanceBefore)/Math.max(.0001,step),0,1);
+     r.finishTime=before+seconds*fraction;
+     finishOrder.push({number:i+1,time:r.finishTime});
+   }
+ }
+}
+function updateRaceHud(){
+ if(!raceStates.length)return;
+ const length=raceMeters(),leaders=orderedRunners();
+ const first=leaders[0],completed=finishOrder.length===raceStates.length;
+ const meters=first.distance;
+ progressEl.style.width=(clamp(meters/length,0,1)*100).toFixed(2)+'%';
+ clockEl.textContent='経過 '+raceTime.toFixed(1)+'秒';
+ remainingEl.textContent=completed?'全馬ゴール':('残り '+Math.max(0,Math.ceil(length-meters))+'m');
+ phaseEl.textContent=completed?'レース終了':racePhase(meters/length)+(playing?'・走行中':'・待機');
+ leaderEl.textContent=(completed?'確定順位':'現在順位')+'：'+first.number+'番馬 '+STYLES[activeStats[first.i].style];
+ rankEl.replaceChildren();
+ for(const [pos,r] of leaders.entries()){
+  if(!completed&&pos>=6)break;
+  const tile=document.createElement('span');
+  const gap=r.finishTime!==null?'ゴール':(pos===0?'先頭':(Math.max(0,first.distance-r.distance)).toFixed(1)+'m差');
+  tile.textContent=(pos+1)+'位｜'+r.number+'番 '+STYLES[activeStats[r.i].style]+'｜'+gap;
+  rankEl.appendChild(tile);
+ }
+}
+
+const formations=[];
+// バインドポーズ座標を維持したまま、長手方向z+が進行方向。
+const PACK_SLOTS=[
+[.20,3.40],[-1.45,3.07],[1.65,2.85],[-2.80,2.50],
+[-.55,1.87],[1.15,1.18],[2.90,.90],[-2.10,.92],
+[.22,-.04],[-3.08,-.35],[2.05,-.90],[-1.24,-1.45],
+[.95,-2.15],[-2.55,-2.50],[2.55,-2.85],[-.42,-3.45],
+[1.55,-4.10],[-1.88,-4.45]];
+
+const cameraButtons=[...['cam0','cam1','cam2','cam3'].map(id=>document.getElementById(id))];
+const scene=new THREE.Scene();scene.background=new THREE.Color('#344252');
+const camera=new THREE.PerspectiveCamera(44,1,.03,400);
+const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.4));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.25;
+renderer.setSize(stage.clientWidth,stage.clientHeight);
+stage.appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.08;controls.maxPolarAngle=Math.PI*.90;controls.target.set(0,.6,0);
+scene.add(new THREE.HemisphereLight(0xe6efff,0x56534c,2.4));
+const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(-5,12,6);scene.add(sun);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(2000,2000),new THREE.MeshBasicMaterial({color:0x334b51}));ground.rotation.x=-Math.PI/2;ground.position.y=-.045;scene.add(ground);
+const lineMat=new THREE.MeshBasicMaterial({color:0x648a91,transparent:true,opacity:.33});
+const courseMarkings=new THREE.Group();scene.add(courseMarkings);
+for(let i=-18;i<=18;i++){const l=new THREE.Mesh(new THREE.PlaneGeometry(25,.015),lineMat);l.rotation.x=-Math.PI/2;l.position.set(0,-.035,i*1.7);courseMarkings.add(l)}
+const railMaterial=new THREE.MeshBasicMaterial({color:0xe0e5e6,transparent:true,opacity:.75});
+for(let side of [-1,1]){const rail=new THREE.Mesh(new THREE.BoxGeometry(.07,.05,160),railMaterial);rail.position.set(side*18.5,.12,0);courseMarkings.add(rail)}
+function frameNumbers(n){const counts=Array(8).fill(0);if(n<=8){for(let i=0;i<n;i++)counts[i]=1}else{counts.fill(1);let rest=n-8;while(rest>0){for(let i=7;i>=0&&rest>0;i--){counts[i]++;rest--}}}const frames=[];for(let i=0;i<8;i++)for(let k=0;k<counts[i];k++)frames.push(i);return frames}
+function labelTexture(number,frame){const cvs=document.createElement('canvas');cvs.width=256;cvs.height=256;const c=cvs.getContext('2d');
+c.fillStyle=COLORS[frame];c.beginPath();c.roundRect(13,13,230,230,42);c.fill();
+c.strokeStyle='#ffffff';c.lineWidth=7;c.stroke();
+c.font='bold 120px -apple-system,Arial';c.textAlign='center';c.textBaseline='middle';c.fillStyle=frame===0||frame===4?'#18232a':'#ffffff';c.fillText(String(number),128,136);
+const t=new THREE.CanvasTexture(cvs);t.colorSpace=THREE.SRGBColorSpace;return t}
+function updateRoster(n,frames){roster.replaceChildren();for(let i=0;i<n;i++){
+const el=document.createElement('div');el.className='horse';
+const head=document.createElement('div');head.className='horsehead';
+const dot=document.createElement('span');dot.className='dot';dot.style.background=COLORS[frames[i]];
+const txt=document.createElement('span');txt.textContent=String(i+1)+'番・'+String(frames[i]+1)+'枠';head.append(dot,txt);
+const name=document.createElement('span');name.className='hairlabel';name.textContent='毛色';
+const choice=document.createElement('select');choice.setAttribute('aria-label',(i+1)+'番馬の毛色');
+COATS.forEach((c,k)=>{const o=document.createElement('option');o.value=String(k);o.textContent=c.label;choice.append(o)});
+choice.value=String(coatPrefs[i]);
+choice.addEventListener('change',()=>{coatPrefs[i]=Number(choice.value);repaintHorse(i,frames[i])});
+const faceTitle=document.createElement('span');faceTitle.className='hairlabel';faceTitle.textContent='顔の白模様';
+const faceSel=document.createElement('select');faceSel.className='face-select';faceSel.setAttribute('aria-label',(i+1)+'番馬の顔模様');
+FACE_NAMES.forEach((label,k)=>{const o=document.createElement('option');o.value=String(k);o.textContent=label;faceSel.append(o)});
+faceSel.value=String(facePrefs[i]);faceSel.addEventListener('change',()=>{facePrefs[i]=Number(faceSel.value);repaintHorse(i,frames[i])});
+const socksTitle=document.createElement('span');socksTitle.className='hairlabel';socksTitle.textContent='脚の白ソックス';
+const socksSel=document.createElement('select');socksSel.className='face-select';socksSel.setAttribute('aria-label',(i+1)+'番馬の脚の白ソックス');
+SOCK_NAMES.forEach((label,k)=>{const o=document.createElement('option');o.value=String(k);o.textContent=label;socksSel.append(o)});
+socksSel.value=String(sockPrefs[i]);
+socksSel.addEventListener('change',()=>{sockPrefs[i]=Number(socksSel.value);repaintHorse(i,frames[i])});
+const hairTitle=document.createElement('span');hairTitle.className='hairlabel';hairTitle.textContent='たてがみ・尻尾';
+const hairSel=document.createElement('select');hairSel.className='face-select';hairSel.setAttribute('aria-label',(i+1)+'番馬のたてがみと尻尾の色');
+HAIR_NAMES.forEach((label,k)=>{const o=document.createElement('option');o.value=String(k);o.textContent=label;hairSel.append(o)});
+hairSel.value=String(hairPrefs[i]);
+hairSel.addEventListener('change',()=>{hairPrefs[i]=Number(hairSel.value);repaintHorse(i,frames[i])});
+const silks=document.createElement('details');silks.className='silks';
+const silksSummary=document.createElement('summary');silksSummary.textContent='勝負服の設定';silks.append(silksSummary);
+const silkSelect=(caption,idx,options)=>{
+ const label=document.createElement('label');label.className='hairlabel';label.textContent=caption;
+ const select=document.createElement('select');select.setAttribute('aria-label',(i+1)+'番馬の'+caption);
+ options.forEach((txt,k)=>{const option=document.createElement('option');option.value=String(k);option.textContent=txt;select.append(option)});
+ select.value=String(silkPrefs[i][idx]);select.addEventListener('change',()=>{silkPrefs[i][idx]=Number(select.value);repaintHorse(i,frames[i])});
+ silks.append(label,select);
+};
+silkSelect('服色',0,SILK_PALETTE.map(p=>p.label));
+silkSelect('袖色',1,SILK_PALETTE.map(p=>p.label));
+silkSelect('模様',2,SILK_PATTERNS);
+const stats=document.createElement('details');stats.className='stats';
+const summary=document.createElement('summary');summary.textContent='能力・脚質';stats.append(summary);
+const styleLabel=document.createElement('label');styleLabel.textContent='脚質';
+const styleSelect=document.createElement('select');styleSelect.setAttribute('aria-label',(i+1)+'番馬の脚質');
+STYLES.forEach((name,k)=>{const o=document.createElement('option');o.value=String(k);o.textContent=name;styleSelect.append(o)});
+styleSelect.value=String(statPrefs[i].style);styleSelect.addEventListener('change',()=>{statPrefs[i].style=Number(styleSelect.value);if(!playing)resetRace()});
+stats.append(styleLabel,styleSelect);
+for(const [key,caption] of [['speed','スピード'],['stamina','スタミナ'],['accel','加速力']]){
+  const lab=document.createElement('label');
+  const val=document.createElement('b');val.textContent=String(statPrefs[i][key]);
+  lab.append(document.createTextNode(caption),val);
+  const inp=document.createElement('input');inp.type='range';inp.min='40';inp.max='100';inp.step='1';inp.value=String(statPrefs[i][key]);
+  inp.setAttribute('aria-label',(i+1)+'番馬の'+caption);
+  inp.addEventListener('input',()=>{val.textContent=inp.value});
+  inp.addEventListener('change',()=>{statPrefs[i][key]=Number(inp.value);if(!playing)resetRace()});
+  stats.append(lab,inp);
+}
+el.append(head,name,choice,faceTitle,faceSel,socksTitle,socksSel,hairTitle,hairSel,silks,stats);roster.append(el)
+}}
+
+function maskFromGeometry(geometry,w,h,part){
+ const c=document.createElement('canvas');c.width=w;c.height=h;
+ const ctx=c.getContext('2d',{willReadFrequently:true});
+ ctx.fillStyle='#fff';
+ const pos=geometry.getAttribute('position'),uv=geometry.getAttribute('uv'),idx=geometry.index;
+ if(!pos||!uv)return new Uint8ClampedArray(w*h*4);
+ const faces=idx?idx.count/3:pos.count/3;
+ for(let f=0;f<faces;f++){
+ const a=idx?idx.getX(3*f):3*f,b=idx?idx.getX(3*f+1):3*f+1,d=idx?idx.getX(3*f+2):3*f+2;
+ const y=(pos.getY(a)+pos.getY(b)+pos.getY(d))/3;
+ const z=(pos.getZ(a)+pos.getZ(b)+pos.getZ(d))/3;
+ if(part==='helmet' ? !(y>.47&&z>-.04&&z<.48) : !(y<.405))continue;
+ const ua=uv.getX(a),ub=uv.getX(b),ud=uv.getX(d);
+ const va=uv.getY(a),vb=uv.getY(b),vd=uv.getY(d);
+ if(Math.max(ua,ub,ud)-Math.min(ua,ub,ud)>.22||Math.max(va,vb,vd)-Math.min(va,vb,vd)>.22)continue;
+ ctx.beginPath();ctx.moveTo(ua*w,(1-va)*h);ctx.lineTo(ub*w,(1-vb)*h);ctx.lineTo(ud*w,(1-vd)*h);ctx.closePath();ctx.fill();
+ }
+ return ctx.getImageData(0,0,w,h).data;
+}
+// ヘルメットの一部のUV島だけが着色されるのを防ぐため、
+ // 幾何マスクに接する青色テクスチャ領域をUV島単位で補完。
+ function completeHelmetMask(image,w,h,rawMask){
+ const src=document.createElement('canvas');src.width=w;src.height=h;
+ const c=src.getContext('2d',{willReadFrequently:true});c.drawImage(image,0,0,w,h);
+ const rgba=c.getImageData(0,0,w,h).data,N=w*h,seen=new Uint8Array(N);
+ const result=new Uint8ClampedArray(rawMask.length);
+ const queue=new Uint32Array(N);
+ const isBlue=(j)=>{const p=j*4,r=rgba[p],g=rgba[p+1],b=rgba[p+2];return b>r*1.14&&b>g*1.08&&b>80};
+ for(let start=0;start<N;start++){
+ if(seen[start]||!isBlue(start)){seen[start]=1;continue}
+ let head=0,tail=1,seed=0;queue[0]=start;seen[start]=1;
+ while(head<tail){
+ const j=queue[head++],y=(j/w)|0,x=j-y*w;
+ if(rawMask[j*4+3]>0)seed++;
+ const neighbors=[x>0?j-1:-1,x+1<w?j+1:-1,y>0?j-w:-1,y+1<h?j+w:-1];
+ for(const k of neighbors){if(k>=0&&!seen[k]){seen[k]=1;if(isBlue(k))queue[tail++]=k}}
+ }
+ // 姿勢が同じUV島のみ採用。シャツ等へ色が広がる大型島を除く
+ if(tail>=100&&seed>=40&&seed/tail>.29){
+ for(let i=0;i<tail;i++)result[queue[i]*4+3]=255;
+ }
+ }
+ return result;
+}
+function setupColorMasks(){
+ let mesh;gltf.scene.traverse(o=>{if(!mesh&&o.isMesh&&o.material?.map)mesh=o});
+ if(!mesh)throw new Error('テクスチャ付きメッシュがありません');
+ originalMap=mesh.material.map;
+ const im=originalMap.image;
+ if(!im||!im.width||!im.height)throw new Error('テクスチャ画像が読み込まれていません');
+ const w=im.width,h=im.height;
+ textureMasks={w,h,coat:null}; // 帽子は実UVアトラスの島を直接抽出する
+}
+// Design01_UVfixed専用。元の青帽子はアトラス上で5つの独立した島に展開されている。
+ // 切り抜いた領域の青画素だけを再着色する（白の中央ラインと勝負服は保護）。
+const HELMET_UV_RECTS=[
+ [104,105,224,210],
+ [145,329,228,440],
+ [357,73,435,186],
+ [828,649,941,790],
+ [718,779,795,889]
+];
+function isHelmetTexel(x,y,w,h){
+ const xx=x*1024/w,yy=y*1024/h;
+ for(const [x0,y0,x1,y1] of HELMET_UV_RECTS){
+  if(xx>=x0&&xx<x1&&yy>=y0&&yy<y1)return true;
+ }
+ return false;
+}
+
+ // GLBのUVアトラスで確認した騎手の上着・袖の主な展開領域。
+ // 服の青・白画素だけを置き換え、白いズボン・馬具・馬体を保護する。
+ const SILK_UV_AREAS=[
+  [193,166,368,338,false],
+  [696,126,902,358,false],
+  [328,385,592,526,true],
+  [847,810,1024,1024,true],
+  [886,329,1024,407,true]
+ ];
+ function silkTexelInfo(x,y,w,h){
+ const xx=x*1024/w,yy=y*1024/h;
+ for(const [x0,y0,x1,y1,sleeve] of SILK_UV_AREAS){
+  if(xx>=x0&&xx<x1&&yy>=y0&&yy<y1)return {sleeve,u:(xx-x0)/(x1-x0),v:(yy-y0)/(y1-y0)};
+ }
+ return null;
+ }
+ function getSilkColor(u,v,pattern,base,accent,sleeve){
+ // UV座標上で柄を生成する。模様はアトラスの継ぎ目で非連続になり得る。
+ if(pattern===0)return sleeve?accent:base;
+ if(pattern===1)return Math.floor(u*7)%2?accent:base;
+ if(pattern===2)return Math.floor(v*5)%2?accent:base;
+ if(pattern===3)return Math.abs(u-v)<.21?accent:base;
+ if(pattern===4)return (Math.floor((u+v)*6)%2)===0?accent:base;
+ return sleeve?accent:base;
+ }
+
+function customizedTexture(number,frame,coat){
+ const img=originalMap.image,w=textureMasks.w,h=textureMasks.h;
+ const cv=document.createElement('canvas');cv.width=w;cv.height=h;const cx=cv.getContext('2d',{willReadFrequently:true});
+ cx.drawImage(img,0,0,w,h);
+ const pic=cx.getImageData(0,0,w,h),px=pic.data;
+ const target=COATS[coat].rgb,fc=FRAME_RGB[frame];
+ const silk=silkPrefs[number-1]||BEST_SILKS[0];const silkBase=SILK_PALETTE[silk[0]].rgb,silkAccent=SILK_PALETTE[silk[1]].rgb;
+ const W=w/600,H=h/600;
+ const inBox=(x,y,x0,y0,x1,y1)=>x>=x0*W&&x<x1*W&&y>=y0*H&&y<y1*H;
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+ const p=(y*w+x)*4;let r=px[p],g=px[p+1],b=px[p+2];
+ // 3D空間の馬体領域だけを再着色。青い馬具、勝負服、白斑、目は保護する。
+ // 毛色はUV島の部分判定ではなく、元画像の暖色成分を連続量として変換。
+ // 画像上の濃淡を残しつつ、暗い部分だけ元の茶色になる「まだら」を防止。
+ const warm1=Math.max(0,Math.min(1,(r-g-2.5)/8));
+ const warm2=Math.max(0,Math.min(1,(r-b-3)/7));
+ const skin=Math.max(0,Math.min(1,(r-132)/30))*Math.max(0,Math.min(1,(g-88)/30));
+ const strength=warm1*warm2*(1-skin);
+ if(coat!==0&&strength>0){
+ const brightness=Math.max(.2,Math.min(2.1,(r*.32+g*.50+b*.18)/77));
+ const inv=1-strength;
+ px[p]=Math.max(0,Math.min(255,Math.round(r*inv+target[0]*brightness*strength)));
+ px[p+1]=Math.max(0,Math.min(255,Math.round(g*inv+target[1]*brightness*strength)));
+ px[p+2]=Math.max(0,Math.min(255,Math.round(b*inv+target[2]*brightness*strength)));
+ }
+ // 帽子の青を枠色に置換。白い中心ラインは残す。
+ const blue=b>r*1.14&&b>g*1.08&&b>80;
+ if(isHelmetTexel(x,y,w,h)&&blue){
+ const k=Math.max(.32,Math.min(1.20,(r*.16+g*.34+b*.50)/151));
+ px[p]=Math.min(255,Math.round(fc[0]*k));
+ px[p+1]=Math.min(255,Math.round(fc[1]*k));
+ px[p+2]=Math.min(255,Math.round(fc[2]*k));
+ }
+
+ // 勝負服の色・柄を既存アトラスの騎手の上着・袖部分だけに合成する。
+ // 背景が白いズボンや頭絡はUV領域と色判定の両方で保護する。
+ const silkInfo=silkTexelInfo(x,y,w,h);
+ if(silkInfo&&!isHelmetTexel(x,y,w,h)){
+  const clothBlue=b>r*1.13&&b>g*1.06&&b>86;
+  const clothWhite=r>155&&g>155&&b>158&&(Math.max(r,g,b)-Math.min(r,g,b))<46;
+  if(clothBlue||clothWhite){
+   const color=getSilkColor(silkInfo.u,silkInfo.v,silk[2],silkBase,silkAccent,silkInfo.sleeve);
+   const shade=Math.min(1.10,Math.max(.65,Math.max(r,g,b)/229));
+   px[p]=Math.min(255,Math.round(color[0]*shade));
+   px[p+1]=Math.min(255,Math.round(color[1]*shade));
+   px[p+2]=Math.min(255,Math.round(color[2]*shade));
+  }
+ }
+
+ // ゼッケン布の青部分のみ枠色に変更
+ if(inBox(x,y,139,198,215,281)||inBox(x,y,3,429,88,502)){
+ if(b>r*1.20&&b>g*1.12&&b>85){
+ const k=Math.max(.45,Math.min(1.23,(r*.16+g*.34+b*.5)/151));
+ px[p]=Math.min(255,Math.round(fc[0]*k));
+ px[p+1]=Math.min(255,Math.round(fc[1]*k));
+ px[p+2]=Math.min(255,Math.round(fc[2]*k));
+ }
+ }
+ // テクスチャに焼き付いた「4」の白い画素を消去
+ const inNum=inBox(x,y,169,225,205,267)||inBox(x,y,44,450,77,487);
+ if(inNum&&r>120&&g>125&&b>120&&Math.max(r,g,b)-Math.min(r,g,b)<75){
+ px[p]=fc[0];px[p+1]=fc[1];px[p+2]=fc[2];
+ }
+ }
+ cx.putImageData(pic,0,0);
+ // 裏面・表面の両方に新しい馬番をスタンプする
+ const numberColor=(fc[0]*.299+fc[1]*.587+fc[2]*.114)>166?'#15212c':'#ffffff';
+ const stamp=(x,y,rot,maxWidth)=>{
+ cx.save();cx.translate(x*W,y*H);cx.rotate(rot);
+ cx.fillStyle=numberColor;cx.textAlign='center';cx.textBaseline='middle';
+ cx.font='900 '+Math.round((number>9?29:43)*H)+'px Arial,sans-serif';
+ cx.fillText(String(number),0,0,maxWidth*W);cx.restore();
+ };
+ stamp(184,246,Math.PI,40);stamp(59,467,0,34);
+ // 18頭時は各馬に別テクスチャを用意するため、GPU転送サイズを抑える。
+ const q=Number(quality.value);
+ let imgForGPU=cv;
+ if(w>q||h>q){
+ const scale=Math.min(1,q/Math.max(w,h));
+ const small=document.createElement('canvas');small.width=Math.max(1,Math.round(w*scale));small.height=Math.max(1,Math.round(h*scale));
+ const sc=small.getContext('2d');sc.imageSmoothingEnabled=true;sc.imageSmoothingQuality='high';sc.drawImage(cv,0,0,small.width,small.height);imgForGPU=small;
+ }
+ const tex=new THREE.CanvasTexture(imgForGPU);
+ tex.colorSpace=originalMap.colorSpace;
+ tex.flipY=originalMap.flipY;
+ tex.wrapS=originalMap.wrapS;tex.wrapT=originalMap.wrapT;
+ tex.minFilter=THREE.LinearMipmapLinearFilter;tex.magFilter=THREE.LinearFilter;
+ tex.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ tex.needsUpdate=true;return tex;
+}
+function enableFacePattern(material,coat,kind,sockStyle,hairStyle){
+ const rgb=COATS[coat].rgb;
+ const hex=(v)=>Math.round(v).toString(16).padStart(2,'0');
+ const faceBase=new THREE.Color('#'+rgb.map(hex).join(''));
+ // 標準の流星でもソックス用のシェーダーは適用する。
+ material.onBeforeCompile=(sh)=>{
+ sh.uniforms.faceMarkType={value:kind};
+ sh.uniforms.sockStyle={value:sockStyle};
+ sh.uniforms.hairStyle={value:hairStyle};
+ sh.uniforms.faceBaseCoat={value:faceBase};
+ sh.vertexShader=sh.vertexShader.replace('#include <common>',
+ '#include <common>\nvarying vec3 vFaceRestPosition;\nvarying vec3 vFaceRestNormal;');
+ sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>',
+ '#include <begin_vertex>\nvFaceRestPosition=position;\nvFaceRestNormal=normal;');
+ sh.fragmentShader=sh.fragmentShader.replace('#include <common>',
+ '#include <common>\nvarying vec3 vFaceRestPosition;\nvarying vec3 vFaceRestNormal;\nuniform float faceMarkType;\nuniform float sockStyle;\nuniform float hairStyle;\nuniform vec3 faceBaseCoat;');
+ sh.fragmentShader=sh.fragmentShader.replace('#include <color_fragment>',`
+#include <color_fragment>
+{
+ vec3 f=vFaceRestPosition;
+ float headRegion=smoothstep(0.57,0.65,f.z)
+                 *(1.0-smoothstep(0.43,0.46,f.y))
+                 *smoothstep(0.075,0.11,f.y)
+                 *(1.0-smoothstep(0.088,0.115,abs(f.x)))
+                 *smoothstep(0.07,0.38,vFaceRestNormal.z);
+ if(faceMarkType != 3.0 && headRegion>0.005){
+   float minC=min(diffuseColor.r,min(diffuseColor.g,diffuseColor.b));
+   float maxC=max(diffuseColor.r,max(diffuseColor.g,diffuseColor.b));
+   float oldWhite=smoothstep(0.41,0.62,minC)
+        *(1.0-smoothstep(0.10,0.21,maxC-minC));
+   diffuseColor.rgb=mix(diffuseColor.rgb,faceBaseCoat,headRegion*oldWhite*0.95);
+   float m=0.0;
+   float xx=f.x;
+   if(faceMarkType<0.5){
+     m=0.0;
+   } else if(faceMarkType<1.5){
+     float phi=atan(f.y-0.327,xx);
+     float radius=length(vec2(xx/0.024,(f.y-0.327)/0.029));
+     m=1.0-smoothstep(0.66,0.92,radius+0.21*cos(phi*5.0));
+   } else if(faceMarkType<2.5){
+     float lengthMask=smoothstep(0.17,0.205,f.y)*(1.0-smoothstep(0.363,0.395,f.y));
+     float center=0.005*sin((f.y-0.2)*22.0);
+     m=lengthMask*(1.0-smoothstep(0.009,0.017,abs(xx-center)));
+   } else if(faceMarkType<4.5){
+     float lengthMask=smoothstep(0.135,0.17,f.y)*(1.0-smoothstep(0.384,0.425,f.y));
+     float width=0.040+0.008*sin(f.y*40.0);
+     m=lengthMask*(1.0-smoothstep(width,width+0.013,abs(xx)));
+   } else {
+     float lengthMask=smoothstep(0.075,0.103,f.y)*(1.0-smoothstep(0.40,0.435,f.y));
+     float width=0.021+0.012*smoothstep(0.19,0.34,f.y);
+     m=lengthMask*(1.0-smoothstep(width,width+0.011,abs(xx)));
+   }
+   diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.88),clamp(m*headRegion,0.0,0.96));
+ }
+ // SkinnedMeshのバインドポーズ座標から各脚だけを特定する。
+ // モデルの長手方向 z+:前脚 / z-:後脚、x+:左側 / x-:右側。
+ float frontLeg=smoothstep(0.13,0.18,f.z)*(1.0-smoothstep(0.46,0.52,f.z));
+ float rearLeg=(1.0-smoothstep(-0.29,-0.23,f.z))*smoothstep(-0.61,-0.54,f.z);
+ float sideLeg=smoothstep(0.07,0.103,abs(f.x));
+ // 蹄そのものを残して、蹄の少し上の「球節〜管」を着色する。
+ float ankleBand=smoothstep(-0.635,-0.603,f.y)*(1.0-smoothstep(-0.475,-0.428,f.y));
+ float region=clamp(max(frontLeg,rearLeg)*sideLeg*ankleBand,0.0,1.0);
+ if(region>0.001){
+   // もともと全脚にある白いソックスを毛色に戻す。
+   float cmin=min(diffuseColor.r,min(diffuseColor.g,diffuseColor.b));
+   float cmax=max(diffuseColor.r,max(diffuseColor.g,diffuseColor.b));
+   float originalWhite=smoothstep(0.37,0.63,cmin)*(1.0-smoothstep(0.10,0.24,cmax-cmin));
+   diffuseColor.rgb=mix(diffuseColor.rgb,faceBaseCoat*0.77,region*originalWhite*0.96);
+   // 出走馬ごとに選んだ脚だけ白くする。
+   float selected=0.0;
+   if(sockStyle<0.5)selected=0.0;
+   else if(sockStyle<1.5)selected=frontLeg;
+   else if(sockStyle<2.5)selected=rearLeg;
+   else if(sockStyle<3.5)selected=1.0;
+   else {
+     float leftSide=smoothstep(-0.018,0.018,f.x);
+     selected=frontLeg*leftSide+rearLeg*(1.0-leftSide);
+   }
+   // GLSLの色指定は線形RGB。ライティングは元の3D素材を引き継ぐ。
+   diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.85,0.84,0.81),clamp(region*selected*0.97,0.0,0.97));
+ }
+ // 馬のたてがみは首の上縁、尻尾は後方にある。
+ // 元テクスチャの茶色い毛だけを緩やかに補正し、青い頭絡や騎手の服を保護する。
+ if(hairStyle>0.5){
+   float maneArea=smoothstep(0.26,0.34,f.z)
+     *(1.0-smoothstep(0.77,0.85,f.z))
+     *smoothstep(0.315,0.36,f.y)
+     *(1.0-smoothstep(0.50,0.545,f.y));
+   float tailArea=(1.0-smoothstep(-0.70,-0.59,f.z))
+     *smoothstep(-0.45,-0.38,f.y)
+     *(1.0-smoothstep(0.115,0.18,f.y));
+   float hairArea=clamp(max(maneArea,tailArea),0.0,1.0);
+   vec3 c=diffuseColor.rgb;
+   float warmA=smoothstep(0.012,0.07,c.r-c.g);
+   float warmB=smoothstep(-0.008,0.04,c.g-c.b);
+   float avoidWhite=1.0-smoothstep(0.48,0.82,min(c.r,min(c.g,c.b)));
+   float strength=clamp(hairArea*warmA*warmB*avoidWhite,0.0,0.88);
+   if(strength>0.001){
+     vec3 altered=c;
+     if(hairStyle<1.5)altered=c*vec3(0.71,0.70,0.69);
+     else if(hairStyle<2.5)altered=c*vec3(1.28,1.24,1.19)+vec3(0.018,0.010,0.004);
+     else altered=c*vec3(1.17,0.87,0.78);
+     diffuseColor.rgb=mix(c,clamp(altered,0.0,1.0),strength);
+   }
+ }
+}
+`);
+ };
+ material.customProgramCacheKey=()=> 'race-lab-hair-variant-v3';
+ material.needsUpdate=true;
+}
+function repaintHorse(i,frame){
+ const root=active[i];if(!root||!originalMap)return;
+ root.traverse(obj=>{
+ if(!obj.isMesh||!obj.userData.baseMaterial)return;
+ if(obj.userData.variantTexture)obj.userData.variantTexture.dispose();
+ if(obj.material!==obj.userData.baseMaterial)obj.material.dispose();
+ const mat=obj.userData.baseMaterial.clone();
+ const tex=customizedTexture(i+1,frame,coatPrefs[i]);
+ mat.map=tex;enableFacePattern(mat,coatPrefs[i],facePrefs[i],sockPrefs[i],hairPrefs[i]);mat.needsUpdate=true;obj.material=mat;obj.userData.variantTexture=tex;
+ });
+}
+
+
+
+function formationFor(i,n){
+ // 横に余裕を設けた8車線スタート。実寸はGLBの包囲範囲から決める。
+ const lanes=n>12?8:n>6?6:Math.min(n,4),lane=i%lanes,row=Math.floor(i/lanes);
+ const width=Math.max(1.12,horseLong*.61),spacing=Math.max(2.62,horseLong*1.40);
+ const x=(lane-(lanes-1)*.5)*width;
+ const z=-row*spacing+[.04,-.04,.07,-.06,.03,-.07,.05,-.02][i%8];
+ return {x,z,lane,lanes,width,phase:i*.93};
+}
+function smoothstep01(x){const k=clamp(x,0,1);return k*k*(3-2*k)}
+function initVisualStates(){
+ visualStates.length=0;lastVisualTime=0;
+ formations.forEach((f,i)=>visualStates.push({
+  x:f.x,z:f.z,forwardSpeed:raceStates[i]?.velocity*WORLD_PER_METER||1.8,
+  lane:f.lane,targetLane:f.lane,fromX:f.x,progress:1,planCooldown:0
+ }));
+}
+function positionsAtTime(t){
+ const n=Math.min(raceStates.length,visualStates.length);
+ if(!n)return 0;
+ const dt=clamp(t-lastVisualTime,0,.13);lastVisualTime=t;
+ if(dt<.000001)return visualStates.reduce((a,v)=>a+v.z,0)/n;
+ const laneW=formations[0].width,lanes=formations[0].lanes;
+ const laneX=i=>(i-(lanes-1)*.5)*laneW;
+ const safeX=Math.max(.87,horseLong*.47),safeZ=Math.max(2.13,horseLong*1.14);
+ const marginAhead=safeZ+3.3;
+ const before=visualStates.map(v=>({...v}));
+ // 進路変更の目標は車線移動が完了するまで固定。フレームごとの左右反転を防ぐ。
+ for(let i=0;i<n;i++){
+  const v=visualStates[i],r=raceStates[i];
+  if(v.progress<1||t<v.planCooldown)continue;
+  const desiredSpeed=r.velocity*WORLD_PER_METER;
+  const blocker=before.find((o,j)=>j!==i&&Math.abs(o.x-v.x)<safeX
+    &&o.z>v.z&&o.z-v.z<marginAhead&&desiredSpeed>o.forwardSpeed+.08);
+  if(!blocker)continue;
+  const options=[v.lane+(i%2?1:-1),v.lane+(i%2?-1:1)].filter(k=>k>=0&&k<lanes);
+  for(const k of options){
+   const target=laneX(k),futureZ=v.z+Math.max(0,v.forwardSpeed)*1.5;
+   const targetLaneClear=before.every((o,j)=>{
+    if(j===i)return true;
+    if(Math.abs(o.x-target)>=safeX*1.10)return true;
+    const zFuture=o.z+o.forwardSpeed*1.5;
+    return zFuture<futureZ-(safeZ+1.2)||zFuture>futureZ+(safeZ+1.6);
+   });
+   if(targetLaneClear){
+    v.fromX=v.x;v.targetLane=k;v.progress=0;v.planCooldown=t+1.9;
+    break;
+   }
+  }
+  if(v.progress===1)v.planCooldown=t+.65;
+ }
+ // Smoothstep曲線で横移動を加速→減速する。進路内に馬がいれば安全側に停止。
+ for(let i=0;i<n;i++){
+  const v=visualStates[i];
+  if(v.progress>=1)continue;
+  const nextProgress=clamp(v.progress+dt/1.80,0,1);
+  const nextX=v.fromX+(laneX(v.targetLane)-v.fromX)*smoothstep01(nextProgress);
+  let safety=true;
+  for(let j=0;j<n;j++){
+   if(i===j)continue;
+   const o=before[j];
+   if(Math.abs(o.z-v.z)>=safeZ+.12)continue;
+   if(o.x>Math.min(before[i].x,nextX)-safeX&&o.x<Math.max(before[i].x,nextX)+safeX){
+    safety=false;break;
+   }
+  }
+  if(safety){v.x=nextX;v.progress=nextProgress}
+  if(v.progress>=1){v.x=laneX(v.targetLane);v.lane=v.targetLane;v.fromX=v.x}
+ }
+ // 前進は能力に基づく速度を目標に連続加速・減速。前走馬へ接近する前に速度を合わせる。
+ const order=Array.from({length:n},(_,i)=>i).sort((a,b)=>visualStates[b].z-visualStates[a].z);
+ for(const i of order){
+  const v=visualStates[i],r=raceStates[i],f=formations[i];
+  const finishExtra=r.finishTime!==null?Math.max(0,t-r.finishTime)*r.velocity:0;
+  const plannedZ=(r.distance+finishExtra)*WORLD_PER_METER
+    +f.z*Math.max(0,1-r.distance/330);
+  const baseSpeed=r.velocity*WORLD_PER_METER;
+  let wanted=clamp(baseSpeed+clamp((plannedZ-v.z)*.22,-.35,.42),0,baseSpeed+.46);
+  for(const j of order){
+   if(j===i)continue;
+   const o=visualStates[j];
+   if(o.z<v.z||Math.abs(o.x-v.x)>=safeX*1.12)continue;
+   const gap=o.z-v.z;
+   if(gap<safeZ+3.3){
+    const permitted=o.forwardSpeed+Math.max(0,gap-safeZ)*.70;
+    wanted=Math.min(wanted,Math.max(0,permitted));
+   }
+  }
+  v.forwardSpeed=Math.max(0,v.forwardSpeed+clamp(wanted-v.forwardSpeed,-2.8*dt,1.65*dt));
+  let nextZ=v.z+v.forwardSpeed*dt;
+  // 極端なフレーム時間や急な減速時だけ最終間隔を補正。
+  for(const j of order){
+   if(j===i)continue;
+   const o=visualStates[j];
+   if(o.z<v.z)continue;
+   if(Math.abs(o.x-v.x)<safeX&&nextZ>o.z-safeZ){
+    nextZ=Math.max(v.z,o.z-safeZ);
+    v.forwardSpeed=Math.min(v.forwardSpeed,Math.max(0,(nextZ-v.z)/dt));
+   }
+  }
+  v.z=nextZ;
+  active[i].position.set(v.x,0,v.z);
+  const dx=v.x-before[i].x,dz=v.z-before[i].z;
+  const targetYaw=clamp(-Math.atan2(dx,Math.max(.05,dz))*.35,-.13,.13);
+  active[i].rotation.y+=(targetYaw-active[i].rotation.y)*Math.min(1,dt*4);
+ }
+ return visualStates.reduce((a,v)=>a+v.z,0)/n;
+}
+function cameraOffsetForMode(radius){
+ if(view===1)return new THREE.Vector3(radius*.93,radius*.30,radius*.12);
+ if(view===2)return new THREE.Vector3(radius*.03,radius*.32,radius*.90);
+ if(view===3)return new THREE.Vector3(radius*.06,radius*.29,-radius*.90);
+ return new THREE.Vector3(radius*.42,radius*.71,radius*.56);
+}
+function updateCameraButtons(){cameraButtons.forEach((b,i)=>b.classList.toggle('selected',view===i))}
+function resetRace(){
+ playing=false;btn.textContent='レース開始';
+ raceTime=0;trackTravel=0;lastVisualTime=0;finishOrder=[];lastHud=0;
+ initVisualStates();
+ for(const h of active)h.rotation.y=0;
+ activeStats=statPrefs.slice(0,active.length).map(x=>({...x}));
+ raceStates=Array.from({length:active.length},(_,i)=>newRaceState(i));
+ if(active.length){positionsAtTime(0);courseMarkings.position.z=0;updateCamera()}
+ for(let i=0;i<mixers.length;i++)mixers[i].setTime((i%7)*.13);
+ updateRaceHud();
+}
+function resetHorses(){for(const h of active){scene.remove(h);h.traverse(o=>{if(o.isSprite){o.material.map.dispose();o.material.dispose()}else if(o.isMesh&&o.userData.variantTexture){o.userData.variantTexture.dispose();o.material.dispose()}})}active=[];for(const m of mixers)m.stopAllAction();mixers=[]}
+function visibleRaceBounds(){
+ let xMin=Infinity,xMax=-Infinity,zMin=Infinity,zMax=-Infinity;
+ for(const h of active){
+  xMin=Math.min(xMin,h.position.x);xMax=Math.max(xMax,h.position.x);
+  zMin=Math.min(zMin,h.position.z);zMax=Math.max(zMax,h.position.z);
+ }
+ const halfX=Math.max(.42,horseLong*.27),halfZ=Math.max(1.0,horseLong*.54);
+ return {xMin:xMin-halfX,xMax:xMax+halfX,zMin:zMin-halfZ,zMax:zMax+halfZ,yMin:0,yMax:horseHeight+1.10};
+}
+function computeWholeFieldFraming(direction){
+ const b=visibleRaceBounds(),dir=direction.clone().normalize();
+ const center=new THREE.Vector3((b.xMin+b.xMax)/2,(b.yMin+b.yMax)/2,(b.zMin+b.zMax)/2);
+ const right=new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0),dir).normalize();
+ if(right.lengthSq()<.001)right.set(1,0,0);
+ const up=new THREE.Vector3().crossVectors(dir,right).normalize();
+ const tanV=Math.tan(THREE.MathUtils.degToRad(camera.fov)*.5),tanH=tanV*Math.max(.45,camera.aspect);
+ let distance=5.2;
+ for(const x of [b.xMin,b.xMax])
+ for(const y of [b.yMin,b.yMax])
+ for(const z of [b.zMin,b.zMax]){
+  const v=new THREE.Vector3(x-center.x,y-center.y,z-center.z);
+  const depth=v.dot(dir);
+  distance=Math.max(distance,depth+Math.abs(v.dot(right))/tanH,depth+Math.abs(v.dot(up))/tanV);
+ }
+ return {center,distance:Math.min(320,distance*CAMERA_MARGIN+1.4)};
+}
+function keepAllHorsesInFrame(dt,immediate=false){
+ if(!active.length)return;
+ const direction=camera.position.clone().sub(controls.target);
+ if(direction.lengthSq()<.001)direction.set(.4,.65,.6);
+ direction.normalize();
+ const framing=computeWholeFieldFraming(direction),current=camera.position.distanceTo(controls.target);
+ const blend=immediate?1:1-Math.exp(-Math.max(.001,dt)*(framing.distance>current?11:4));
+ const center=controls.target.clone().lerp(framing.center,blend);
+ const distance=current+(framing.distance-current)*blend;
+ controls.target.copy(center);
+ camera.position.copy(center).addScaledVector(direction,distance);
+ camera.lookAt(center);
+}
+function updateCamera(){
+ if(!active.length)return;
+ if(view===0){
+  // 全体表示ではフィルターを無視し、必ず全頭を対象にする。
+  const direction=cameraOffsetForMode(1).normalize();
+  const framing=computeWholeFieldFraming(direction);
+  controls.target.copy(framing.center);
+  camera.position.copy(framing.center).addScaledVector(direction,framing.distance);
+  camera.lookAt(controls.target);controls.update();updateCameraButtons();return;
+ }
+ const rows=active.map((root,i)=>({i,x:root.position.x,z:root.position.z})).sort((a,b)=>b.z-a.z);
+ let shown=rows;
+ if(focus.value!=='all'){
+  const start=Number(focus.value)*Math.min(6,rows.length);
+  shown=rows.slice(start,start+6);
+  if(!shown.length)shown=rows;
+ }
+ const followed=view===3?Number(followHorse.value):-1;
+ if(followed>=0&&active[followed])shown=[{x:active[followed].position.x,z:active[followed].position.z}];
+ const xx=shown.map(v=>v.x),zz=shown.map(v=>v.z);
+ const xMin=Math.min(...xx),xMax=Math.max(...xx),zMin=Math.min(...zz),zMax=Math.max(...zz);
+ const width=Math.max(.95,xMax-xMin+horseLong*.46),depth=Math.max(1.9,zMax-zMin+horseLong);
+ const aim=new THREE.Vector3((xMin+xMax)/2,horseHeight*.67,(zMin+zMax)/2);
+ const isSingle=followed>=0&&view===3;
+ cameraRadius=isSingle?Math.max(4.6,horseLong*3.2):Math.max(5.9,width*(view===1?1.85:1.42),depth*(view===1?1.04:.96));
+ cameraRadius=Math.min(130,cameraRadius);
+ controls.target.copy(aim);
+ camera.position.copy(aim).add(cameraOffsetForMode(cameraRadius));
+ camera.lookAt(controls.target);controls.update();updateCameraButtons();
+}
+function buildHorses(){const n=Number(sel.value),frames=frameNumbers(n);updateRoster(n,frames);resetHorses();if(!gltf)return;
+followHorse.replaceChildren();
+const first=document.createElement('option');first.value='-1';first.textContent='馬群全体';followHorse.append(first);
+for(let id=0;id<n;id++){const opt=document.createElement('option');opt.value=String(id);opt.textContent=(id+1)+'番馬';followHorse.append(opt)}
+const box=new THREE.Box3().setFromObject(gltf.scene),size=new THREE.Vector3();box.getSize(size);const center=new THREE.Vector3();box.getCenter(center);
+horseHeight=Math.max(.9,size.y);horseLong=Math.max(size.x,size.z,1);
+formations.length=0;
+for(let i=0;i<n;i++){
+const root=new THREE.Group();const model=cloneSkinned(gltf.scene);model.position.sub(center);model.position.y+=horseHeight*.50;root.add(model);
+model.traverse(o=>{if(o.isMesh&&o.material?.map)o.userData.baseMaterial=o.material});
+const formation=formationFor(i,n);formations.push(formation);
+root.position.set(formation.x,0,formation.z);
+const label=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture(i+1,frames[i]),depthTest:false,transparent:true}));
+label.position.set(0,horseHeight+0.48+(i%3)*.06,0);label.scale.set(.40,.40,1);root.add(label);
+scene.add(root);active.push(root);label.visible=showLabels;repaintHorse(i,frames[i]);
+if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);const action=mixer.clipAction(gltf.animations[0]);action.setLoop(THREE.LoopRepeat,Infinity);action.play();mixer.setTime((i%6)*.07);mixers.push(mixer)}
+}
+resetRace();perf.textContent='FPS 計測中 / '+n+'頭';fpsWindowStart=0;fpsCounter=0;status.innerHTML='表示中：<strong>'+n+'頭</strong> / ギャロップV2 '+(gltf.animations.length?'再生可能':'アニメーションなし')+'。<strong>馬番・帽子色・ゼッケン色を自動設定</strong>。<strong>おすすめの18頭を自動割当</strong>。毛色5・顔模様6・白ソックス5・たてがみと尻尾4種類・勝負服6柄を下で変更できます。帽子を各枠色に変更し、自然な前後左右の位置取りと個別追走を試せます。FPSが低い場合は6頭へ切り替えてください。';btn.disabled=false;btn.textContent='レース開始'}
+document.getElementById('upload').addEventListener('change',async e=>{
+ const file=e.target.files&&e.target.files[0];if(!file)return;
+ const nonce=++loadingNonce;
+ try{
+  const buffer=await file.arrayBuffer();
+  if(nonce!==loadingNonce)return;
+  const ok=await loadGLBBuffer(buffer,file.name,nonce);
+  if(!ok)return;
+  cacheState.textContent='端末へGLBを保存中…';
+  try{
+   await storeCache(buffer,file.name);
+   cacheState.textContent='端末へ保存しました。次回からGLBの選択は不要です。';
+  }catch(saveErr){
+   console.warn('GLBの端末内保存:',saveErr);
+   cacheState.textContent='表示できましたが保存できません。Safariで開いて再度選択してください。';
+  }
+ }catch(err){
+  console.error(err);
+  status.textContent='GLBの読み込みエラー：'+(err.message||err);
+  cacheState.textContent='モデルを保存できませんでした。正しいUVfixed.glbを選択してください。';
+  if(!loaded)placeholder.textContent='GLB読み込みエラー';
+ }
+});
+autoRestoreGLB();
+sel.addEventListener('change',()=>{focus.value='all';buildHorses()});
+focus.addEventListener('change',updateCamera);
+followHorse.addEventListener('change',()=>{view=3;updateCamera()});
+quality.addEventListener('change',()=>{if(gltf){const frames=frameNumbers(Number(sel.value));for(let i=0;i<active.length;i++)repaintHorse(i,frames[i])}});
+document.getElementById('recommended').addEventListener('click',()=>{
+ for(let i=0;i<18;i++){coatPrefs[i]=BEST_COAT[i];facePrefs[i]=BEST_FACE[i];sockPrefs[i]=BEST_SOCK[i];hairPrefs[i]=BEST_HAIR[i];silkPrefs[i]=BEST_SILKS[i].slice();statPrefs[i]={...BEST_STATS[i]}}
+ buildHorses();
+});
+btn.addEventListener('click',()=>{
+ if(!loaded)return;
+ if(finishOrder.length===active.length)resetRace();
+ playing=!playing;
+ btn.textContent=playing?'一時停止':raceTime>0?'再開':'レース開始';
+ updateRaceHud();
+});
+raceDistanceSelect.addEventListener('change',()=>{if(loaded)resetRace();else remainingEl.textContent='残り '+raceMeters()+'m'});
+document.getElementById('cam0').onclick=()=>{view=0;focus.value='all';updateCamera()};
+document.getElementById('cam1').onclick=()=>{view=1;updateCamera()};
+document.getElementById('cam2').onclick=()=>{view=2;updateCamera()};
+document.getElementById('cam3').onclick=()=>{view=3;updateCamera()};
+document.getElementById('resetRace').onclick=()=>resetRace();
+document.getElementById('labels').onclick=()=>{
+ showLabels=!showLabels;
+ for(const root of active)root.traverse(o=>{if(o.isSprite)o.visible=showLabels});
+ const b=document.getElementById('labels');b.textContent='馬番表示 '+(showLabels?'ON':'OFF');b.classList.toggle('selected',showLabels);
+};
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);if(loaded&&view===0)keepAllHorsesInFrame(0,true)}
+window.addEventListener('resize',resize);resize();updateRoster(Number(sel.value),frameNumbers(Number(sel.value)));updateCamera();
+const clock=new THREE.Clock();
+function animate(t){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),.06);
+ if(playing&&loaded){
+ const visualDt=dt*Number(speed.value);
+ const simDt=visualDt*DISPLAY_TIME_SCALE;
+ const oldTravel=trackTravel;
+ simulateTick(simDt);
+ trackTravel=positionsAtTime(raceTime);
+ for(let i=0;i<mixers.length;i++){
+   const pace=raceStates[i]?.velocity||16.0;
+   mixers[i].update(visualDt*clamp(pace/16,0.72,1.20));
+ }
+ const dz=trackTravel-oldTravel;
+ if(view===0){
+  // レース中の馬群の広がりに対応してカメラを自動追従・ズームアウトする。
+  keepAllHorsesInFrame(dt);
+ }else{
+  camera.position.z+=dz;controls.target.z+=dz;
+  const chosen=view===3?Number(followHorse.value):-1;
+  if(chosen>=0&&active[chosen]){
+   const followX=active[chosen].position.x,followZ=active[chosen].position.z;
+   const blend=Math.min(1,visualDt*2.5);
+   const dx=(followX-controls.target.x)*blend,ddz=(followZ-controls.target.z)*blend;
+   camera.position.x+=dx;controls.target.x+=dx;
+   camera.position.z+=ddz;controls.target.z+=ddz;
+  }
+ }
+ courseMarkings.position.z=Math.round(trackTravel/35)*35;
+ if(raceTime-lastHud>.5||finishOrder.length===raceStates.length){
+  lastHud=raceTime;updateRaceHud();
+ }
+ if(finishOrder.length===raceStates.length){
+  playing=false;btn.textContent='もう一度走る';
+  status.innerHTML='レース終了：<strong>全'+raceStates.length+'頭がゴール</strong>。順位は仮の能力シミュレーションによる結果です。能力を変えて再実行できます。';
+ }
+ }
+ controls.update();renderer.render(scene,camera);
+ if(loaded){
+   if(!fpsWindowStart)fpsWindowStart=t;
+   fpsCounter++;
+   if(t-fpsWindowStart>=1500){
+     measuredFPS=fpsCounter*1000/Math.max(1,t-fpsWindowStart);
+     const count=active.length;
+     perf.textContent='FPS '+measuredFPS.toFixed(0)+' / '+count+'頭';
+     perf.style.color=measuredFPS>=25?'#c8f8ee':measuredFPS>=16?'#ffe5a3':'#ffc3be';
+     fpsCounter=0;fpsWindowStart=t;
+   }
+ }
+}animate();
+</script></body></html>
