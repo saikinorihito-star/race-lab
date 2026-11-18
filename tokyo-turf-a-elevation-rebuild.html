@@ -1157,7 +1157,8 @@ function stepRace(tick){
   for(let j=0;j<previous.length;j++){
    if(i===j||previous[j].finished)continue;
    const ahead=previous[j].distance-a.distance;
-   if(ahead>=0&&ahead<6.5&&Math.abs(previous[j].lane-lane)<RACE_CLEARANCE){
+   // 同距離の並走馬は「前方」と見なさない。両馬が互いに停止させるデッドロックを防止。
+   if(ahead>1e-6&&ahead<6.5&&Math.abs(previous[j].lane-lane)<RACE_CLEARANCE){
     maximumDistance=Math.min(maximumDistance,
       previous[j].distance-RACE_FRONT_GAP+Math.min(previous[j].speed*tick, .5));
    }
