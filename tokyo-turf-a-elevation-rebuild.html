@@ -116,7 +116,7 @@ a{color:#95e8df}
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
 <div id="raceOrder" aria-live="polite">18頭の順位とレース展開を準備しています。</div>
-<div id="message">18頭の能力差・加速・隊列・進路変更・前方馬との間隔調整を追加しました。能力・着順は架空のテスト値で、JRA実績の再現ではありません。「18頭同時走行」を選ぶと従来の等速テストも使えます。芝・ダートの外観と発馬機は維持しています。</div>
+<div id="message">スタートボタンと同時に馬群カメラへ切り替え、先頭から最後尾まで画角を調整します。能力差ありのモードでは外枠馬が直進加速後に安全な間隔を確保しながら内側へ寄ります。前が塞がる場合は強引に横切りません。コースと発馬機の形状はそのままです。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -1059,8 +1059,10 @@ function initRaceHorses(){
  const width=activePlan?fieldCenterAt(activePlan,0).width:31;
  raceHorses=Array.from({length:FIELD_COUNT},(_,i)=>({
   number:i+1,idx:i,distance:0,postDistance:0,speed:0,finished:false,finishTime:null,
+  startLane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
   lane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
   targetLane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
+  innerTendency:6.4+(i%4)*.9,
   pace:16.2+((i*7+3)%18)*.087,
   acceleration:2.5+((i*5+1)%9)*.11,
   stamina:.89+((i*11+2)%17)*.008,
@@ -1135,6 +1137,19 @@ function stepRace(tick){
    const gap=previous[j].distance-a.distance;
    if(gap>0&&gap<frontGap&&Math.abs(previous[j].lane-lane)<1.34){
     nearest=j;frontGap=gap;
+   }
+  }
+  // 外枠は発馬後の20mほど直進してから安全な空間へ徐々に内寄せする。
+  // 近くに他馬がいる場合はそのまま進み、無理に内へ割り込まない。
+  if(h.distance>20&&h.moveCooldown===0){
+   const settle=Math.min(1,(h.distance-20)/310);
+   const desired=Math.min(at.width/2-1.25,
+    h.startLane+(h.number-1)/17*h.innerTendency*settle);
+   if(desired>lane+.48){
+    const innerStep=Math.min(1.15,desired-lane);
+    if(canChangeLane(h,lane+innerStep,raceHorses)){
+     h.targetLane=lane+innerStep;h.moveCooldown=1.65;
+    }
    }
   }
   if(nearest>=0&&frontGap<8.8&&h.moveCooldown===0){
@@ -1428,6 +1443,25 @@ function inspectMarker(){
  markerInfo.textContent=remain===0?'決勝線：残り距離の基準点':('ハロン棒「'+remain/100+'」＝残り'+remain+'m ／ '+regionForS(ss)+'（近似）');
 }
 markerFocus.addEventListener('change',inspectMarker);
+// 発走直後から全頭を追うカメラ。進行方向の前方から馬群を捉える。
+function fieldCameraShot(){
+ const sorted=fieldMode.value==='race18'&&raceHorses.length===FIELD_COUNT?racePositions():null;
+ const leader=sorted?sorted[0].distance:travel;
+ const tail=sorted?sorted[FIELD_COUNT-1].distance:travel;
+ const packLength=Math.max(0,leader-tail);
+ const middle=(leader+tail)/2;
+ const a=fieldCenterAt(activePlan,middle),side=new THREE.Vector3(a.t.z,0,-a.t.x);
+ const aspect=Math.max(.45,stage.clientWidth/Math.max(1,stage.clientHeight));
+ const portrait=aspect<.9?(0.9/aspect-1)*26:0;
+ // 横幅と先頭～最後尾の距離に応じてカメラを引き、縦画面でも馬群を見失いにくくする。
+ const ahead=Math.max(59,packLength/2+43)+portrait;
+ const outside=Math.max(23,a.width/2+12);
+ const height=29+Math.min(26,packLength*.14)+portrait*.33;
+ const eye=a.p.clone().addScaledVector(a.t,ahead).addScaledVector(side,-outside)
+  .add(new THREE.Vector3(0,height,0));
+ const target=a.p.clone().add(new THREE.Vector3(0,2.0,0));
+ return {eye,target};
+}
 function setView(which){
  view=which;
  if(which!=='marker'){markerFocus.value='all';markerInfo.textContent='表示は残り距離。発走地点とは別です。'}
@@ -1468,9 +1502,7 @@ function setView(which){
   target=gateAt.clone().addScaledVector(a.t,2).add(new THREE.Vector3(0,2.0,0));
  }
  else if(which==='field'&&activePlan){
-  const a=fieldCenterAt(activePlan,travel),side=new THREE.Vector3(a.t.z,0,-a.t.x);
-  eye=a.p.clone().addScaledVector(a.t,-68).addScaledVector(side,-10).add(new THREE.Vector3(0,28,0));
-  target=a.p.clone().addScaledVector(a.t,14).add(new THREE.Vector3(0,2,0));
+  ({eye,target}=fieldCameraShot());
  }
  else if(which==='start'&&activePlan){
   const a=racePointAt(activePlan,0);
@@ -1529,7 +1561,8 @@ demoBtn.addEventListener('click',()=>{
  playing=!playing;
  demoBtn.textContent=playing?'一時停止':'再開';
  if(playing&&fieldMode.value==='single'&&view==='start')setView('chase');
- if(playing&&fieldMode.value!=='single'&&!['start','field'].includes(view))setView('start');
+ // ボタンを押した時点で馬群を追い始める。85mまで待たない。
+ if(playing&&fieldMode.value!=='single'&&view!=='field')setView('field');
 });
 document.querySelector('#reset').addEventListener('click',()=>{resetDemo();drawElevationProfile()});
 // 看板類は標準非表示。俯瞰でだけ任意に表示し、近景でコースを隠さない。
@@ -1556,7 +1589,7 @@ let lastTime=0,fpsCount=0,fps=0;
 function resize(){
  const w=stage.clientWidth,h=stage.clientHeight;
  camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();renderer.setSize(w,h,false);
- if(view==='all'||view==='top'||view==='start')setView(view);
+ if(view==='all'||view==='top'||view==='start'||view==='field')setView(view);
  drawElevationProfile();
 }
 window.addEventListener('resize',resize);
@@ -1581,14 +1614,9 @@ function animate(time){
  positionRunner();positionFieldHorses();
  if(fieldMode.value!=='single'){
   gateOpening=travel>0?Math.min(1,gateOpening+dt*4):0;updateGateDoors();
-  if(playing&&view==='start'&&travel>85)setView('field');
   if(view==='field'&&activePlan){
-   const followDistance=fieldMode.value==='race18'?
-    (racePositions()[0].distance+racePositions()[FIELD_COUNT-1].distance)/2:travel;
-   const a=fieldCenterAt(activePlan,followDistance),side=new THREE.Vector3(a.t.z,0,-a.t.x);
-   const eye=a.p.clone().addScaledVector(a.t,-77).addScaledVector(side,-19).add(new THREE.Vector3(0,40,0));
-   const target=a.p.clone().addScaledVector(a.t,11).add(new THREE.Vector3(0,3,0));
-   camera.position.lerp(eye,.12);controls.target.lerp(target,.12);
+   const shot=fieldCameraShot();
+   camera.position.lerp(shot.eye,.18);controls.target.lerp(shot.target,.18);
   }
  }
  controls.update();
