@@ -106,9 +106,10 @@ a{color:#95e8df}
 <label>デモ速度 <select id="rate"><option value="1">1倍</option><option value="4">4倍</option><option value="8" selected>8倍（確認向け）</option></select></label>
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
 <label><input type="checkbox" id="courseSigns"/>大きな案内看板（全景用）</label>
+<label><input type="checkbox" id="showStands" checked/>スタンド建物を表示</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
-<div id="message">スタンド側のカメラを芝直線が中心になる角度に修正しました。観覧席・屋根の過剰な張り出しを縮小し、カメラが建物内に入り込む場合も模型を一時非表示にします。画角を戻すには同じ視点ボタンを押してください。</div>
+<div id="message">コースを隠していた階段状の仮観覧席は撤去しました。スタンドは外壁・ガラス面・屋根のみを残し、「スタンド建物を表示」で切り替えられます。芝・ダート・坂・柵・1頭走行の機能はそのままです。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -150,6 +151,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
 const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate'),checkLabels=document.querySelector('#labels');
 const courseSigns=document.querySelector('#courseSigns');
+const showStands=document.querySelector('#showStands');
 const LAP=2083.1,STRAIGHT=560,BACK_STRAIGHT=542,RIGHT_TURN_LEN=449,MEASURE_OFFSET=1;
 const LEFT_TURN_LEN=LAP-STRAIGHT-BACK_STRAIGHT-RIGHT_TURN_LEN;
 const TURN_RADIUS=RIGHT_TURN_LEN/Math.PI,CURVE_LEN=RIGHT_TURN_LEN,FINISH_DISTANCE=525.9;
@@ -754,12 +756,9 @@ function stadiumStand(name,x,len,backZ,height,color,accent){
   dummy.updateMatrix();instance.setMatrixAt(i,dummy.matrix);
  }
  instance.instanceMatrix.needsUpdate=true;group.add(instance);
- // 張り出し過ぎていた観覧席を建物側へ収め、芝走路に重ならないようにする。
- for(let i=0;i<7;i++){
-  const depth=3.5,z=15+i*3.1,y=1.2+i*2.5;
-  addBox(group,0,y,z,len*.90,.55,depth,i%2?0x8b9b9c:0x9fadad);
-  addBox(group,0,y+.72,z+1.0,len*.88,.42,.74,0x4d7771);
- }
+ // 旧版の7段の水平な観覧席模型は、カメラから巨大な棚のように見え、
+ // 走路を遮っていたため撤去。ここではガラス面・細い窓枠だけを残す。
+ // 観客席を詳細に造形する場合はBlender製のGLBに置換する。
  label3D(name,x,height+28,backZ,18,'#244d62');
 }
 const standBack=TURN_RADIUS+105;
@@ -1080,7 +1079,7 @@ function animate(time){
   const insideX=Math.abs(camera.position.x-item.x)<item.len/2+16;
   const insideZ=Math.abs(camera.position.z-item.backZ)<75;
   const insideY=camera.position.y>0&&camera.position.y<item.height+18;
-  item.group.visible=!(insideX&&insideZ&&insideY);
+  item.group.visible=showStands.checked&&!(insideX&&insideZ&&insideY);
  }
  renderer.render(scene,camera);
  fpsCount++;
