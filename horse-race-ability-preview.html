@@ -225,7 +225,7 @@ const BEST_STATS=Array.from({length:18},(_,i)=>({
   style:i%4
 }));
 const statPrefs=BEST_STATS.map(x=>({...x}));
-let raceStates=[],lastHud=0,finishOrder=[];
+let raceStates=[],activeStats=[],lastHud=0,finishOrder=[];
 function clamp(v,min,max){return Math.min(max,Math.max(min,v))}
 function raceMeters(){return Number(raceDistanceSelect.value)||1600}
 function newRaceState(i){
@@ -253,7 +253,7 @@ function simulateTick(seconds){
  const before=raceTime;
  raceTime+=seconds;
  for(let i=0;i<raceStates.length;i++){
-   const r=raceStates[i],attr=statPrefs[i];
+   const r=raceStates[i],attr=activeStats[i];
    if(r.finishTime!==null)continue;
    const prog=clamp(r.distance/length,0,1);
    const styleBonus=styleVelocityBonus(attr.style,prog);
@@ -263,8 +263,11 @@ function simulateTick(seconds){
    const consumption=seconds*(.00375+exertion*.00155+
      (attr.style===0&&prog<.65?.00065:0))*(79/attr.stamina);
    r.reserve=clamp(r.reserve-consumption,0,1);
-   const fatigue=clamp((.44-r.reserve)/.44,0,1);
-   const target=clamp(targetBase-fatigue*(2.9-attr.stamina*.010),11.7,19.0);
+   // スタミナは疲労の蓄積量に加え、特に中盤以降の速度維持力へ影響する。
+   const fatigue=clamp((.67-r.reserve)/.67,0,1);
+   const late=clamp((prog-.37)/.53,0,1);
+   const enduranceBonus=(attr.stamina-75)*.012*late;
+   const target=clamp(targetBase+enduranceBonus-fatigue*(2.35-attr.stamina*.009),11.7,19.0);
    const maxDelta=seconds*(.37+attr.accel*.012);
    r.velocity+=clamp(target-r.velocity,-maxDelta,maxDelta);
    const step=r.velocity*seconds;
@@ -286,13 +289,13 @@ function updateRaceHud(){
  clockEl.textContent='経過 '+raceTime.toFixed(1)+'秒';
  remainingEl.textContent=completed?'全馬ゴール':('残り '+Math.max(0,Math.ceil(length-meters))+'m');
  phaseEl.textContent=completed?'レース終了':racePhase(meters/length)+(playing?'・走行中':'・待機');
- leaderEl.textContent=(completed?'確定順位':'現在順位')+'：'+first.number+'番馬 '+STYLES[statPrefs[first.i].style];
+ leaderEl.textContent=(completed?'確定順位':'現在順位')+'：'+first.number+'番馬 '+STYLES[activeStats[first.i].style];
  rankEl.replaceChildren();
  for(const [pos,r] of leaders.entries()){
   if(!completed&&pos>=6)break;
   const tile=document.createElement('span');
   const gap=r.finishTime!==null?'ゴール':(pos===0?'先頭':(Math.max(0,first.distance-r.distance)).toFixed(1)+'m差');
-  tile.textContent=(pos+1)+'位｜'+r.number+'番 '+STYLES[statPrefs[r.i].style]+'｜'+gap;
+  tile.textContent=(pos+1)+'位｜'+r.number+'番 '+STYLES[activeStats[r.i].style]+'｜'+gap;
   rankEl.appendChild(tile);
  }
 }
@@ -737,6 +740,7 @@ function updateCameraButtons(){cameraButtons.forEach((b,i)=>b.classList.toggle('
 function resetRace(){
  playing=false;btn.textContent='レース開始';
  raceTime=0;trackTravel=0;finishOrder=[];lastHud=0;
+ activeStats=statPrefs.slice(0,active.length).map(x=>({...x}));
  raceStates=Array.from({length:active.length},(_,i)=>newRaceState(i));
  if(active.length){positionsAtTime(0);courseMarkings.position.z=0;updateCamera()}
  for(let i=0;i<mixers.length;i++)mixers[i].setTime((i%7)*.13);
