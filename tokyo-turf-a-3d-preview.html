@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="theme-color" content="#101f26"/>
-<title>Race Lab｜東京芝A 距離標識・計測基準修正版</title>
+<title>Race Lab｜東京芝A 全9距離S位置検証</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color-scheme:dark}
 *{box-sizing:border-box}
@@ -40,8 +40,8 @@ a{color:#95e8df}
 </head>
 <body>
 <header>
-<h1>東京芝A｜距離標識・計測線修正版</h1>
-<div class="subtitle">JRA規程に基づき「内柵から外側1m」の計測線を周回距離の基準に変更しました。距離標識を再配置した検証モデルです。</div>
+<h1>東京芝A｜9距離のスタート位置S</h1>
+<div class="subtitle">JRA-VANのコース図に合わせ、9種類のスタート位置（S）と専用ポケットを近似再現し、SからGまでを走るテスト版です。</div>
 </header>
 <main>
 <div class="pillrow"><span class="pill">芝A｜1周 2,083.1m</span><span class="pill">直線 525.9m</span><span class="pill">高低差 2.7m</span><span class="pill">幅員 31～41m</span><span class="pill">左回り（反時計回り）</span></div>
@@ -57,6 +57,22 @@ a{color:#95e8df}
 <button data-view="first">1・2コーナー</button>
 <button data-view="third">3・4コーナー</button>
 <button data-view="chase">1頭を追走</button>
+</div>
+<div class="tools" id="raceStarts">
+<label>レースの距離（S）
+<select id="raceDistance">
+<option value="1400" selected>芝1400m</option>
+<option value="1600">芝1600m</option>
+<option value="1800">芝1800m（専用ポケット）</option>
+<option value="2000">芝2000m（専用ポケット）</option>
+<option value="2300">芝2300m</option>
+<option value="2400">芝2400m</option>
+<option value="2500">芝2500m</option>
+<option value="2600">芝2600m（仮配置）</option>
+<option value="3400">芝3400m</option>
+</select></label>
+<button id="startView">S地点を拡大</button>
+<span class="pill" id="startInfo">Sはスタート位置、Gはゴール</span>
 </div>
 <div class="tools" id="distanceViews">
 <label>ハロン棒の場所を確認
@@ -77,18 +93,18 @@ a{color:#95e8df}
 <span class="pill" id="markerInfo">表示は残り距離。発走地点とは別です。</span>
 </div>
 <div class="tools">
-<button id="demo">1頭の周回デモを開始</button>
+<button id="demo">SからGへ走らせる</button>
 <button id="reset">最初に戻す</button>
 <label>デモ速度 <select id="rate"><option value="1">1倍</option><option value="4">4倍</option><option value="8" selected>8倍（確認向け）</option></select></label>
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
 </div>
-<div id="message">距離の再検証版：芝Aの2,083.1mは内柵の外側1mで計測。ハロン棒「2」は残り200m、「4」は残り400mです。数字の位置を選択して拡大できます。発走地点はまだ未実装です。</div>
-<div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">白：内・外ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span></div>
+<div id="message">Sはスタート地点、Gはゴール地点です。距離を選択して専用のルートを確認できます。1800m・2000mでは専用ポケットから本線に合流します。</div>
+<div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">白：内・外ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="notice">
 <h2>3D制作上の精度区分</h2>
 <strong>JRA公表値：</strong>芝Aの1周2,083.1m、幅員31～41m、最後の直線525.9m、最大高低差2.7m、左回り。<strong>JRA施行規程第64条により1周距離の計測線は内柵の外側1m</strong>。施設名称およびターフビジョンの公表画面寸法（66.4m×11.2m）。<br>
-<strong>近似・演出：</strong>コーナー半径・中心線の詳細座標・道路脇の建物位置・スタンド高さ／外形・観客席の段数・高低差の細かな勾配。コースの長さを満たすスタジアム形状から作った初期3D模型で、測量図の完全複製ではありません。<br>
-<strong>この段階に含めないもの：</strong>B／C／Dへの内柵切替、芝1800m・2000mの引き込み線、距離別の正確な発馬位置、全18頭のコーナー走行、実際のレース展開。これらは次工程で追加します。今回の1頭は「1周の経路確認」用で、公式の発走距離ではありません。
+<strong>近似・演出：</strong>コーナー半径・中心線の詳細座標・道路脇の建物位置・スタンド高さ／外形・観客席の段数・高低差の細かな勾配。公式図・コース説明に近づけた近似曲線から作った3D模型で、測量図の完全複製ではありません。<br>
+<strong>この段階に含めないもの：</strong>B／C／Dへの内柵切替、全18頭のコーナー走行、実際のレース展開。距離別のS地点はJRA-VANの図に基づく近似です。2600mは今回の参考画像にないため4コーナー側に仮配置します。
 <table>
 <thead><tr><th>対象</th><th>今回</th><th>基準</th></tr></thead>
 <tbody>
@@ -309,7 +325,7 @@ scene.add(finishStripe);
 const goalOuter=offsetAt(FINISH_DISTANCE,MEASURE_OFFSET-courseW-4,0);
 addBox(scene,goalOuter.x,goalOuter.y+7.3,goalOuter.z,1.05,14,1.05,0xffffff);
 addBox(scene,goalOuter.x,goalOuter.y+14.8,goalOuter.z,4.1,2.0,1.2,0xd2bb5a);
-const goalSign=label3D('GOAL / ゴール',goalOuter.x,goalOuter.y+20,goalOuter.z,14,'#8e7634');
+const goalSign=label3D('G｜ゴール',goalOuter.x,goalOuter.y+20,goalOuter.z,14,'#8e7634');
 
 
  // JRAのゴールから逆方向に、内柵1m外側の測定線に沿って200mごとに設置。
