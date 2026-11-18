@@ -1283,8 +1283,10 @@ function setView(which){
   }
   else if(which==='start'&&activePlan&&fieldMode.value==='field18'){
   const a=fieldCenterAt(activePlan,0),side=new THREE.Vector3(a.t.z,0,-a.t.x);
-  eye=a.p.clone().addScaledVector(a.t,76).addScaledVector(side,-12).add(new THREE.Vector3(0,27,0));
-  target=a.p.clone().addScaledVector(a.t,3).add(new THREE.Vector3(0,2,0));
+  // コース中央ではなく、余白調整した18連の発馬機そのものを画面の中心にする。
+  const gateAt=a.p.clone().addScaledVector(side,fieldGateCenterShift(a.width));
+  eye=gateAt.clone().addScaledVector(a.t,76).addScaledVector(side,-8).add(new THREE.Vector3(0,25,0));
+  target=gateAt.clone().addScaledVector(a.t,2).add(new THREE.Vector3(0,2.0,0));
  }
  else if(which==='field'&&activePlan){
   const a=fieldCenterAt(activePlan,travel),side=new THREE.Vector3(a.t.z,0,-a.t.x);
