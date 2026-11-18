@@ -116,7 +116,7 @@ a{color:#95e8df}
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
 <div id="raceOrder" aria-live="polite">18頭の順位とレース展開を準備しています。</div>
-<div id="message">スタートボタンと同時に馬群カメラへ切り替え、先頭から最後尾まで画角を調整します。能力差ありのモードでは外枠馬が直進加速後に安全な間隔を確保しながら内側へ寄ります。前が塞がる場合は強引に横切りません。コースと発馬機の形状はそのままです。</div>
+<div id="message">発走後約3mから外枠馬が内側の空きを探し始め、序盤約115mで進路を絞り込みます。移動中は馬体の向きも進路に連動し、前が塞がれば無理には内へ切り込みません。カメラ、コース、発馬機の構造は変更していません。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -1062,7 +1062,7 @@ function initRaceHorses(){
   startLane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
   lane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
   targetLane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
-  innerTendency:6.4+(i%4)*.9,
+  innerTendency:11.4+(i%4)*.9,
   pace:16.2+((i*7+3)%18)*.087,
   acceleration:2.5+((i*5+1)%9)*.11,
   stamina:.89+((i*11+2)%17)*.008,
@@ -1139,16 +1139,16 @@ function stepRace(tick){
     nearest=j;frontGap=gap;
    }
   }
-  // 外枠は発馬後の20mほど直進してから安全な空間へ徐々に内寄せする。
-  // 近くに他馬がいる場合はそのまま進み、無理に内へ割り込まない。
-  if(h.distance>20&&h.moveCooldown===0){
-   const settle=Math.min(1,(h.distance-20)/310);
+  // 約3mで最初の加速を終えたら、外枠ほど積極的に内の空きスペースを探す。
+  // 進路目標は序盤115mで絞り込み、前が詰まるときは一時的に外を走る。
+  if(h.distance>3&&h.moveCooldown===0){
+   const settle=Math.min(1,(h.distance-3)/115);
    const desired=Math.min(at.width/2-1.25,
     h.startLane+(h.number-1)/17*h.innerTendency*settle);
    if(desired>lane+.48){
-    const innerStep=Math.min(1.15,desired-lane);
+    const innerStep=Math.min(1.6,desired-lane);
     if(canChangeLane(h,lane+innerStep,raceHorses)){
-     h.targetLane=lane+innerStep;h.moveCooldown=1.65;
+     h.targetLane=lane+innerStep;h.moveCooldown=.23;
     }
    }
   }
@@ -1162,7 +1162,8 @@ function stepRace(tick){
     }
    }
   }
-  const move=Math.max(-1.5*tick,Math.min(1.5*tick,h.targetLane-lane));
+  // 進路変更速度は3m/sまで。内側が詰まっている場合は既存の接触回避を優先。
+  const move=Math.max(-3*tick,Math.min(3*tick,h.targetLane-lane));
   const targetLane=lane+move;
   if(canChangeLane(h,targetLane,raceHorses))lane=targetLane;
   else h.targetLane=lane;
@@ -1220,6 +1221,11 @@ function stepRace(tick){
   }
   if(!corrected)break;
  }
+ // 横方向速度を各馬に保持し、馬体も進行方向へ少し向ける。
+ for(let i=0;i<FIELD_COUNT;i++){
+  const horse=raceHorses[i];
+  horse.sideSpeed=horse.finished?0:(horse.lane-previous[i].lane)/tick;
+ }
  // 終了した馬の順位は初回のゴール時刻で固定。同時刻なら枠番号で安定化。
 }
 function updateRace(dt){
@@ -1251,7 +1257,8 @@ function positionFieldHorses(){
   const horseDistance=state?state.distance:travel;
   const phase=horseDistance*.67+i*.22,motion=Math.min(1,horseDistance/5);
   horse.position.copy(a.p);horse.position.y+=.05*motion*Math.sin(phase*2);
-  horse.rotation.y=Math.atan2(a.t.x,a.t.z);
+  const lateralYaw=state?Math.atan2(state.sideSpeed||0,Math.max(3,state.speed||0)):0;
+  horse.rotation.y=Math.atan2(a.t.x,a.t.z)+lateralYaw;
   horse.userData.legs.forEach((leg,j)=>{leg.rotation.x=motion*.35*Math.sin(phase+(j%2?Math.PI:0)+(j>1?Math.PI:0))});
  }
 }
