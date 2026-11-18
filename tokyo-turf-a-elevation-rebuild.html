@@ -972,7 +972,7 @@ function racePointAt(plan,distance){
  }
  const remainder=d-(plan.pocket?plan.pocket.length:0);
  const station=plan.startStation+Math.max(0,remainder);
- return {p:offsetAt(station,-6,.12),t:positionAt(station).t};
+ return {p:offsetAt(station,plan.pocket?MEASURE_OFFSET-widthAt(station)/2:-6,.12),t:positionAt(station).t};
 }
 const routeVisual=new THREE.Group();scene.add(routeVisual);
 const startCanvas=makeCanvasTexture(['S'],'#122530','#ffffff',256,256);
@@ -1278,7 +1278,10 @@ function resetDemo(){
 }
 demoBtn.addEventListener('click',()=>{
  if(!activePlan)return;
- if(travel>=activePlan.distance)travel=0;
+ if(travel>=activePlan.distance){
+  travel=0;gateOpening=0;updateGateDoors();positionFieldHorses();
+  if(fieldMode.value==='field18')setView('start');
+ }
  playing=!playing;
  demoBtn.textContent=playing?'一時停止':'再開';
  if(playing&&fieldMode.value==='single'&&view==='start')setView('chase');
