@@ -16,10 +16,10 @@ main{max-width:1320px;margin:0 auto}
 .pillrow{padding:9px 12px;display:flex;gap:7px;flex-wrap:wrap}
 .pill{font-size:11px;color:#b7e5d4;background:#234b44;border:1px solid #37796d;border-radius:16px;padding:5px 9px}
 #views button[hidden],#distanceViews[hidden],#broadcastCameraLabel[hidden]{display:none!important}
-#broadcastCameraLabel{position:absolute;z-index:3;top:10px;right:10px;
- padding:7px 11px;border-radius:9px;background:#12334acb;
+#broadcastCameraLabel{position:absolute;z-index:4;bottom:178px;left:10px;right:auto;top:auto;
+ max-width:calc(100% - 20px);padding:7px 11px;border-radius:9px;background:#12334ae8;
  border:1px solid #7cb6b6;color:#e9fff8;font-size:12px;
- font-weight:750;pointer-events:none}
+ font-weight:750;pointer-events:none;line-height:1.5}
 #stage{height:min(69svh,720px);min-height:370px;position:relative;background:linear-gradient(#a2d1da,#cce5da);overflow:hidden;touch-action:none}
 #stage canvas{display:block}
 #telemetry{position:absolute;left:10px;top:10px;z-index:3;padding:8px 10px;border-radius:9px;background:#112736e8;color:#ecfff9;font-size:12px;line-height:1.55;border:1px solid #456b79;pointer-events:none}
@@ -592,8 +592,8 @@ const renderer=new THREE.WebGLRenderer({antialias:!(isOfficialEightTest||isOffic
 // Higher internal raster resolution cures 4-horse background blur without
 // modifying the approved 3D horse or textures. A visible quality switch lets
 // iPhone users choose a faster render if the frame interval grows.
-const renderDprLevels={sharp:1.35,standard:1.05,light:.90};
-const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?1.35:
+const renderDprLevels=isOfficialEighteenTest?{sharp:1.80,standard:1.35,light:1.05}:{sharp:1.35,standard:1.05,light:.90};
+const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?1.65:
  renderDprLevels[renderQuality.value]||1.05):1.4;
 renderer.setPixelRatio(Math.min(initialDpr,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
@@ -613,15 +613,15 @@ function applyRenderQuality(){
   renderDprLevels[renderQuality.value]||1.05,window.devicePixelRatio||1));
  renderer.setSize(stage.clientWidth,stage.clientHeight,false);
 }
-let auto18Dpr=1.35,auto18ObservedFps=0;
+let auto18Dpr=1.65,auto18ObservedFps=0;
 renderQuality.addEventListener('change',()=>{
- auto18Dpr=1.35;
+ auto18Dpr=1.65;
  applyRenderQuality();
 });
 function autoTune18HorseResolution(fps){
  // Safari can flash when setPixelRatio()/setSize() reallocates the WebGL
  // drawing buffer in the middle of a race. Keep 18-horse default
- // high-detail resolution fixed at 1.35; only a user quality change may resize.
+ // high-detail resolution fixed at 1.65; only a user quality change may resize.
  if(isOfficialEighteenTest&&renderQuality.value==='auto')
   auto18ObservedFps=fps;
 }
@@ -655,8 +655,9 @@ function label3D(text,x,y,z,size=22,background='#154b53',kind='major'){
 }
 // 外部画像不要の草地色むら。256pxの繰り返し模様でiPhoneの負荷を抑える。
 function makeGrassTexture(){
- const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
- const ctx=canvas.getContext('2d'),data=ctx.createImageData(256,256);
+ const texSize=isOfficialEighteenTest?512:256;
+ const canvas=document.createElement('canvas');canvas.width=texSize;canvas.height=texSize;
+ const ctx=canvas.getContext('2d'),data=ctx.createImageData(texSize,texSize);
  let seed=43071;
  function rnd(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
  for(let i=0;i<data.data.length;i+=4){
@@ -667,7 +668,7 @@ function makeGrassTexture(){
  ctx.putImageData(data,0,0);
  const tex=new THREE.CanvasTexture(canvas);
  tex.wrapS=THREE.RepeatWrapping;tex.wrapT=THREE.RepeatWrapping;tex.colorSpace=THREE.SRGBColorSpace;
- tex.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ tex.anisotropy=Math.min(isOfficialEighteenTest?8:4,renderer.capabilities.getMaxAnisotropy());
  return tex;
 }
 const grassTexture=makeGrassTexture();
@@ -732,8 +733,9 @@ slopedGround(s=>dirtPoint(s,DIRT_INNER_OFFSET,.01),s=>{
 },0x508c49);
 // 著作権フリーの手続き的な砂粒・ブラシ跡。外部画像読み込み不要。
 function makeSandTexture(){
- const c=document.createElement('canvas');c.width=256;c.height=256;
- const ctx=c.getContext('2d'),image=ctx.createImageData(256,256);
+ const texSize=isOfficialEighteenTest?512:256;
+ const c=document.createElement('canvas');c.width=texSize;c.height=texSize;
+ const ctx=c.getContext('2d'),image=ctx.createImageData(texSize,texSize);
  let seed=19426;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
  for(let i=0;i<image.data.length;i+=4){
   const d=(rand()-.5)*42+(rand()>.978?18:0);
@@ -750,7 +752,7 @@ function makeSandTexture(){
  const texture=new THREE.CanvasTexture(c);
  texture.wrapS=THREE.RepeatWrapping;texture.wrapT=THREE.RepeatWrapping;
  texture.colorSpace=THREE.SRGBColorSpace;
- texture.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ texture.anisotropy=Math.min(isOfficialEighteenTest?8:4,renderer.capabilities.getMaxAnisotropy());
  return texture;
 }
 const SAND_LENGTH_STEPS=720,SAND_WIDTH_STEPS=6;
@@ -2851,56 +2853,56 @@ function officialBroadcastStage(remaining,progress){
  return {id:'finish',label:'ゴール・決勝線',fov:32};
 }
 function officialBroadcastCameraShot(context){
+ // Three deliberately different TV edits: a leading-three close-up,
+ // runners around third place, and an occasional wider field shot.
+ // 205m holds a shot long enough to identify runners at 2x/4x.
  const {leadDistance,tailDistance,meanLane,lead,gap}=context;
  const remaining=activePlan.distance-leadDistance;
  const stageShot=officialBroadcastStage(remaining,leadDistance);
- const trackDistance=stageShot.id==='finish'||stageShot.id==='closing'?
-  THREE.MathUtils.lerp((leadDistance+tailDistance)/2,leadDistance,.8):
-  (leadDistance+tailDistance)/2;
+ const ranked=(context.horses||[lead]).map((h,i)=>({...h,number:h.number??i+1}))
+  .sort((a,b)=>(b.distance+(b.postDistance||0))-(a.distance+(a.postDistance||0))||a.number-b.number);
+ const leader=ranked[0]||lead;
+ const third=ranked[Math.min(2,ranked.length-1)]||leader;
+ const fifth=ranked[Math.min(4,ranked.length-1)]||third;
+ const distanceOf=h=>h.distance+(h.postDistance||0);
+ const cycle=Math.floor(Math.max(0,leadDistance-36)/205)%3;
+ const focusType=stageShot.id==='gate'?'gate':
+  remaining<=55?'lead':['lead','third','wide'][cycle];
+ const trackDistance=focusType==='lead'?(distanceOf(leader)+distanceOf(third))/2:
+  focusType==='third'?(distanceOf(third)+distanceOf(fifth))/2:
+  focusType==='gate'?Math.min(25,leadDistance*.65):(leadDistance+tailDistance)/2;
+ const focusLane=focusType==='lead'?(leader.lane+third.lane)/2:
+  focusType==='third'?(third.lane+fifth.lane)/2:meanLane;
  const at=fieldCenterAt(activePlan,Math.max(0,trackDistance));
  const along=at.t.clone().normalize();
  const inward=new THREE.Vector3(at.t.z,0,-at.t.x).normalize();
- const target=at.p.clone().addScaledVector(inward,
-  stageShot.id==='finish'?lead.lane:meanLane)
-  .add(new THREE.Vector3(0,2.5,0));
- let eye;
- if(stageShot.id==='gate'){
-  const gate=fieldCenterAt(activePlan,0);
-  const outside=new THREE.Vector3(gate.t.z,0,-gate.t.x).normalize();
-  eye=gate.p.clone().addScaledVector(outside,-85)
-   .addScaledVector(gate.t,-16).add(new THREE.Vector3(0,18,0));
- }else if(stageShot.id==='early'||stageShot.id==='back'){
-  // Main high stand-like pan: retain the field rather than zoom onto one.
-  const sideDistance=stageShot.id==='early'?130:105;
-  const height=stageShot.id==='early'?48:29;
-  eye=at.p.clone().addScaledVector(inward,-sideDistance)
-   .addScaledVector(along,stageShot.id==='early'?32:-20)
-   .add(new THREE.Vector3(0,height,0));
+ const target=at.p.clone().addScaledVector(inward,focusLane)
+  .add(new THREE.Vector3(0,focusType==='wide'?2.8:2.1,0));
+ let outside,height,ahead,fov;
+ if(focusType==='gate'){
+  outside=65;height=15;ahead=18;fov=44;
+ }else if(focusType==='wide'){
+  outside=THREE.MathUtils.clamp(67+gap*.25,67,100);
+  height=THREE.MathUtils.clamp(20+gap*.075,20,32);
+  ahead=10;fov=THREE.MathUtils.clamp(44+Math.max(0,gap-45)*.028,44,47);
+ }else if(focusType==='lead'){
+  const separation=distanceOf(leader)-distanceOf(third);
+  outside=THREE.MathUtils.clamp(33+separation*.23,33,47);
+  height=10;ahead=16;fov=THREE.MathUtils.clamp(39+separation*.11,39,44);
  }else{
-  // Static trackside camera positions; pan to follow the moving pack.
-  // The current phase ends before the pack leaves this camera's arc.
-  const siteRemain=stageShot.id==='third'?860:
-   stageShot.id==='fourth'?630:stageShot.id==='stretch'?295:
-   stageShot.id==='closing'?138:0;
-  const site=positionAt(FINISH_DISTANCE-siteRemain);
-  const side=site.inward.clone().normalize();
-  const external=stageShot.id==='third'?126:
-   stageShot.id==='fourth'?94:stageShot.id==='stretch'?135:
-   stageShot.id==='closing'?100:72;
-  const height=stageShot.id==='third'?25:
-   stageShot.id==='fourth'?19:stageShot.id==='stretch'?31:
-   stageShot.id==='closing'?16:13;
-  eye=site.p.clone().addScaledVector(side,-external)
-   .addScaledVector(site.t,stageShot.id==='finish'?13:-8)
-   .add(new THREE.Vector3(0,height,0));
+  const separation=distanceOf(third)-distanceOf(fifth);
+  outside=THREE.MathUtils.clamp(30+separation*.24,30,45);
+  height=9;ahead=12;fov=THREE.MathUtils.clamp(40+separation*.10,40,45);
  }
- // Adjust optical field of view to hold multiple runners while preserving
- // broadcast-like compressed perspective from an outside-track camera.
- const dynamicFov=THREE.MathUtils.clamp(
-  stageShot.fov+Math.max(0,gap-35)*.05,25,47);
- return {eye,target,gap,focusedOnLead:remaining<230,
-  fov:dynamicFov,broadcastShotId:stageShot.id,
-  broadcastLabel:stageShot.label};
+ const eye=at.p.clone().addScaledVector(inward,-outside)
+  .addScaledVector(along,ahead).add(new THREE.Vector3(0,height,0));
+ const caption=focusType==='gate'?'ゲート・発走':
+  focusType==='lead'?'先頭3頭を拡大':
+  focusType==='third'?'3番手付近を拡大':'馬群全景';
+ const rankCaption='先頭 '+leader.number+'番 ／ 3番手 '+third.number+'番';
+ return {eye,target,gap,focusedOnLead:focusType==='lead',
+  fov,broadcastShotId:stageShot.id+'-'+focusType,
+  broadcastLabel:caption+'｜'+rankCaption};
 }
 function officialEighteenCameraShot(which,context){
  if(which==='broadcast')return officialBroadcastCameraShot(context);
@@ -2950,7 +2952,7 @@ function officialEighteenCameraShot(which,context){
  return {eye,target,gap,focusedOnLead:blend>=.8};
 }
 function officialPairCameraShot(which='field'){
- const horses=Array.from({length:OFFICIAL_TEST_COUNT},(_,i)=>officialPairVisualState(i));
+ const horses=Array.from({length:OFFICIAL_TEST_COUNT},(_,i)=>{const h=officialPairVisualState(i);return h?{...h,number:i+1}:null});
  if(!activePlan||horses.some(h=>!h))return fieldCameraShot();
  let lead=horses[0],leadDistance=-Infinity,tailDistance=Infinity,meanLane=0;
  for(const h of horses){
