@@ -184,7 +184,7 @@ test('4-horse clone count and safe independent animation loop use test count',()
 
 test('manual camera direction and zoom change the tracking eye but preserve its target',()=>{
  const ctx={THREE:fakeThree,stage:{clientWidth:430,clientHeight:800},
-  OFFICIAL_TEST_COUNT:4,isOfficialFourTest:true,isOfficialMultiTest:true,isOfficialPairTest:true,
+  OFFICIAL_TEST_COUNT:4,isOfficialFourTest:true,isOfficialMultiTest:true,isOfficialEightTest:false,isOfficialPairTest:true,
   raceHorses:Array.from({length:4},(_,i)=>({distance:200-i*2,postDistance:0,lane:12.3-i*3.35})),
   raceAccumulator:0,RACE_TICK:1/60,playing:false,activePlan:{distance:1400},
   groupCameraOffset:{yaw:0,pitch:0,zoom:1},pairRailLane:lane,
