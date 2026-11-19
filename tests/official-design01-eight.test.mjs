@@ -33,7 +33,8 @@ test('8 starting horses fit both the narrow 24m turf pocket and the standard tur
 test('official eight uses original full-detail GLB with independent bones, its own camera and GPU settings',()=>{
  assert.match(html,/const isOfficialEightTest=isDesign01Review&&qs\.get\('group'\)==='8'/);
  assert.match(html,/const OFFICIAL_TEST_COUNT=isOfficialEighteenTest\?18:isOfficialEightTest\?8:isOfficialFourTest\?4:2/);
- assert.match(html,/renderQuality\.value=isOfficialEighteenTest\?'light':isOfficialEightTest\?'standard'/);
+ assert.match(html,/renderQuality\.value='auto'/);
+ assert.match(html,/renderQuality\.value=isOfficialEightTest\?'standard'/);
  assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:!\(isOfficialEightTest\|\|isOfficialEighteenTest\),/);
  assert.match(extract('initializeOfficialPair'),/cloneSkeleton\(source\)/);
  assert.match(extract('initializeOfficialPair'),/for\(let i=0;i<OFFICIAL_TEST_COUNT;i\+\+\)/);
