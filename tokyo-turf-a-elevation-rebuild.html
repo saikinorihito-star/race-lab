@@ -1165,6 +1165,16 @@ const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35;
 function pairRailLane(width,index){
  return width/2-PAIR_RAIL_CENTER_CLEARANCE-index*PAIR_LANE_SPACING;
 }
+// 4頭だけ外寄りから内ラチへ一度だけ寄る。既に確認済みの2頭は変更しない。
+// 8mの横移動を発走後160mで完了。滑らかに減速して柵との距離は最低3.7m。
+const FOUR_START_OUTSIDE_OFFSET=8.0,FOUR_INWARD_SETTLE_DISTANCE=160;
+function officialReviewLane(width,index,distance){
+ const inside=pairRailLane(width,index);
+ if(!isOfficialFourTest)return inside;
+ const t=THREE.MathUtils.clamp(distance/FOUR_INWARD_SETTLE_DISTANCE,0,1);
+ const eased=t*t*(3-2*t);
+ return inside-FOUR_START_OUTSIDE_OFFSET*(1-eased);
+}
 console.assert([24,28,31,36,41].every(w=>
  Array.from({length:OFFICIAL_TEST_COUNT},(_,i)=>i).every(i=>
  w/2-pairRailLane(w,i)>=PAIR_RAIL_CENTER_CLEARANCE-.001 &&
@@ -1186,9 +1196,9 @@ function initRaceHorses(){
   moveCooldown:0
  }));
  if(isOfficialPairTest){
-  // 2頭だけ最初から安全な内ラチ沿いの並走レーンへ配置。
+  // 4頭はまず外寄りから並び、発走後に内側へ入る。2頭は従来位置。
   for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
-   const h=raceHorses[i],lane=pairRailLane(width,i);
+   const h=raceHorses[i],lane=officialReviewLane(width,i,0);
    h.startLane=lane;h.lane=lane;h.targetLane=lane;h.sideSpeed=0;
    h.prevDistance=h.distance;h.prevPostDistance=h.postDistance;
   }
@@ -1204,7 +1214,7 @@ function officialPairVisualState(index){
  const postDistance=THREE.MathUtils.lerp(
   h.prevPostDistance??(h.postDistance||0),h.postDistance||0,alpha);
  const width=fieldCenterAt(activePlan,distance+postDistance).width;
- return {distance,postDistance,lane:pairRailLane(width,index),
+ return {distance,postDistance,lane:officialReviewLane(width,index,distance),
   speed:h.speed,sideSpeed:0,alpha};
 }
 function raceHorsePosition(horse){
@@ -1407,8 +1417,9 @@ function stepOfficialPair(tick){
   h.speed=Math.min(targetSpeed,h.speed+3*tick);
   h.distance=Math.min(activePlan.distance,h.distance+h.speed*tick);
   const width=fieldCenterAt(activePlan,h.distance).width;
-  const lane=pairRailLane(width,i);
-  h.lane=lane;h.targetLane=lane;h.sideSpeed=0;
+  const lane=officialReviewLane(width,i,h.distance);
+  h.sideSpeed=(lane-h.lane)/tick;
+  h.lane=lane;h.targetLane=lane;
   if(h.distance>=activePlan.distance){
    h.finished=true;h.finishTime=raceElapsed;h.postDistance=0;
    raceFinished.push(h.number);
