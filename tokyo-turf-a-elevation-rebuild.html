@@ -1398,7 +1398,7 @@ function gallopPhase(distance,index,velocity){
 function gallopFootTarget(leg,phi,strength,bounce,leadLeft){
  const hip=leg.hip;
  if(strength<.01)return [hip[0],-.056,hip[2]];
- // 転がるような4拍子: 後脚2→後脚3→前脚0→前脚1（左右の手前で入替）。
+ // 4拍子の順番は左手前なら後脚3→後脚2→前脚1→前脚0。右手前では左右を入れ替える。
  const footfalls=leadLeft?[.56,.40,.23,.08]:[.40,.56,.08,.23];
  const local=frac(phi-footfalls[leg.i]);
  const frontReach=leg.front?.39:.31,backReach=leg.front?.33:.41;
