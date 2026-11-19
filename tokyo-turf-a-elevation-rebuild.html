@@ -1642,6 +1642,7 @@ let installedDesign01=false,installedScene=null,horseLoaderGeneration=0;
 function setDesign01Status(message){design01Status.textContent=message}
 function updateDesign01Panel(){
  design01Loader.hidden=fieldMode.value!=='single';
+ demoBtn.disabled=fieldMode.value==='single'&&isDesign01Review&&!installedDesign01;
  if(fieldMode.value==='single'){
   if(installedDesign01)setDesign01Status('承認済みDesign 01・ギャロップV2を読み込み済み。1頭走行を確認できます。');
   else setDesign01Status('Design 01・ギャロップV2未読込。下のGLBを選ぶと、この端末に保存します。');
@@ -1662,6 +1663,8 @@ async function loadApprovedHorse(buffer){
   throw Error('有効なGLBファイルではありません');
  const gltf=await new Promise((resolve,reject)=>new GLTFLoader().parse(buffer,'',resolve,reject));
  if(!gltf.scene||!gltf.animations?.length)throw Error('アニメーション付きのGLBではありません');
+ if(!gltf.animations.some(a=>a.name==='Design01_RightLead_TransverseGallop_v2'))
+  throw Error('承認済みDesign 01・ギャロップV2のGLBを選択してください');
  const horse=gltf.scene;
  const bounds=new THREE.Box3().setFromObject(horse),size=new THREE.Vector3();
  bounds.getSize(size);
@@ -1677,6 +1680,7 @@ async function loadApprovedHorse(buffer){
  const action=runnerMixer.clipAction(gltf.animations[0]);
  action.setLoop(THREE.LoopRepeat,Infinity);action.play();
  installedDesign01=true;usedStoredGLB=true;
+ if(fieldMode.value==='single'&&isDesign01Review)demoBtn.disabled=false;
  setDesign01Status('Design 01・ギャロップV2 読込完了。コース上で1頭を確認できます。');
  if(fieldMode.value==='single')setView('chase');
 }
@@ -1704,6 +1708,7 @@ design01File.addEventListener('change',async()=>{
  const file=design01File.files?.[0];if(!file)return;
  const generation=++horseLoaderGeneration;
  setDesign01Status('GLBを読み込み中…');
+ if(isDesign01Review)demoBtn.disabled=true;
  try{
   const buf=await file.arrayBuffer();
   if(generation!==horseLoaderGeneration)return;
@@ -1723,6 +1728,7 @@ design01File.addEventListener('change',async()=>{
  }catch(err){
   console.error('GLB読込失敗',err);
   setDesign01Status('読み込みに失敗しました: '+String(err?.message||err));
+  updateDesign01Panel();
  }
 });
 maybeLoadStoredHorse();
