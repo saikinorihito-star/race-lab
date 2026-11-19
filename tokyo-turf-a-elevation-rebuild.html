@@ -2610,6 +2610,7 @@ function fieldCameraShot(){
 }
 function setView(which){
  view=which;
+ if(isOfficialEighteenTest)syncCamera18Controls();
  if(which!=='marker'){markerFocus.value='all';markerInfo.textContent='表示は残り距離。発走地点とは別です。'}
  document.querySelectorAll('#views button').forEach(b=>b.classList.toggle('selected',b.dataset.view===which));
  const aspect=stage.clientWidth/Math.max(1,stage.clientHeight);
