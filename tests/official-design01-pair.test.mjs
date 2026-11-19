@@ -167,7 +167,7 @@ test('render-time 4-horse inward movement is smoothly interpolated',()=>{
 
 test('4-horse render defaults to sharp antialiasing with adjustable fallback',()=>{
  assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:!\(isOfficialEightTest\|\|isOfficialEighteenTest\),/);
- assert.match(html,/const renderDprLevels=\{sharp:1\.35,standard:1\.05,light:\.90\}/);
+ assert.match(html,/const renderDprLevels=isOfficialEighteenTest\?\{sharp:1\.80,standard:1\.35,light:1\.05\}:\{sharp:1\.35,standard:1\.05,light:\.90\}/);
  assert.match(html,/renderQuality\.addEventListener\('change',\(\)=>\{/);
  assert.match(html,/cloneSkeleton\(source\)/);
  assert.match(html,/h\.mixer\.setTime\(gaitTime\)/);
