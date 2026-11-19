@@ -2820,7 +2820,75 @@ function pairTrackingView(which){return ['field','broadcast','side','insideSide'
 // The full field is followed in the local track coordinate system.
 // For side/insideSide presets, the camera is exactly perpendicular to the
 // running tangent and the eye/target have identical Y coordinates.
+// Broadcast-style cut list based on the publicly documented role of
+// Tokyo Racecourse cameras: starting gate, main stand cameras, back straight,
+// 3rd turn exterior, 4th turn exterior, home straight, head-on finish.
+// These are ORIGINAL simulated 3D views, not copied JRA footage or measured
+// JRA camera transforms. The positions adapt across 1400–3400m.
+function officialBroadcastStage(remaining,progress){
+ if(progress<36)return {id:'gate',label:'ゲート・発走',fov:43};
+ if(remaining>1600)return {id:'early',label:'序盤・馬群全景',fov:39};
+ if(remaining>1050)return {id:'back',label:'向正面',fov:35};
+ if(remaining>790)return {id:'third',label:'3コーナー・正面寄り',fov:36};
+ if(remaining>525.9)return {id:'fourth',label:'4コーナー・外側',fov:34};
+ if(remaining>230)return {id:'stretch',label:'直線・スタンド側',fov:31};
+ if(remaining>55)return {id:'closing',label:'ゴール前・追い比べ',fov:30};
+ return {id:'finish',label:'ゴール・決勝線',fov:32};
+}
+function officialBroadcastCameraShot(context){
+ const {leadDistance,tailDistance,meanLane,lead,gap}=context;
+ const remaining=activePlan.distance-leadDistance;
+ const stageShot=officialBroadcastStage(remaining,leadDistance);
+ const trackDistance=stageShot.id==='finish'||stageShot.id==='closing'?
+  THREE.MathUtils.lerp((leadDistance+tailDistance)/2,leadDistance,.8):
+  (leadDistance+tailDistance)/2;
+ const at=fieldCenterAt(activePlan,Math.max(0,trackDistance));
+ const along=at.t.clone().normalize();
+ const inward=new THREE.Vector3(at.t.z,0,-at.t.x).normalize();
+ const target=at.p.clone().addScaledVector(inward,
+  stageShot.id==='finish'?lead.lane:meanLane)
+  .add(new THREE.Vector3(0,2.5,0));
+ let eye;
+ if(stageShot.id==='gate'){
+  const gate=fieldCenterAt(activePlan,0);
+  const outside=new THREE.Vector3(gate.t.z,0,-gate.t.x).normalize();
+  eye=gate.p.clone().addScaledVector(outside,-85)
+   .addScaledVector(gate.t,-16).add(new THREE.Vector3(0,18,0));
+ }else if(stageShot.id==='early'||stageShot.id==='back'){
+  // Main high stand-like pan: retain the field rather than zoom onto one.
+  const sideDistance=stageShot.id==='early'?130:105;
+  const height=stageShot.id==='early'?48:29;
+  eye=at.p.clone().addScaledVector(inward,-sideDistance)
+   .addScaledVector(along,stageShot.id==='early'?32:-20)
+   .add(new THREE.Vector3(0,height,0));
+ }else{
+  // Static trackside camera positions; pan to follow the moving pack.
+  // The current phase ends before the pack leaves this camera's arc.
+  const siteRemain=stageShot.id==='third'?860:
+   stageShot.id==='fourth'?630:stageShot.id==='stretch'?295:
+   stageShot.id==='closing'?138:0;
+  const site=positionAt(FINISH_DISTANCE-siteRemain);
+  const side=site.inward.clone().normalize();
+  const external=stageShot.id==='third'?126:
+   stageShot.id==='fourth'?94:stageShot.id==='stretch'?135:
+   stageShot.id==='closing'?100:72;
+  const height=stageShot.id==='third'?25:
+   stageShot.id==='fourth'?19:stageShot.id==='stretch'?31:
+   stageShot.id==='closing'?16:13;
+  eye=site.p.clone().addScaledVector(side,-external)
+   .addScaledVector(site.t,stageShot.id==='finish'?13:-8)
+   .add(new THREE.Vector3(0,height,0));
+ }
+ // Adjust optical field of view to hold multiple runners while preserving
+ // broadcast-like compressed perspective from an outside-track camera.
+ const dynamicFov=THREE.MathUtils.clamp(
+  stageShot.fov+Math.max(0,gap-35)*.05,25,47);
+ return {eye,target,gap,focusedOnLead:remaining<230,
+  fov:dynamicFov,broadcastShotId:stageShot.id,
+  broadcastLabel:stageShot.label};
+}
 function officialEighteenCameraShot(which,context){
+ if(which==='broadcast')return officialBroadcastCameraShot(context);
  const {horses,lead,leadDistance,tailDistance,meanLane,gap,blend}=context;
  const choice=camera18Follow.value;
  let distance=THREE.MathUtils.lerp((leadDistance+tailDistance)/2,leadDistance-5,blend);
@@ -2946,6 +3014,9 @@ function setView(which){
   syncCamera18Controls();
   broadcastCameraLabel.hidden=which!=='broadcast';
   lastBroadcastShotId=null;
+  if(which!=='broadcast'&&camera.fov!==43){
+   camera.fov=43;camera.updateProjectionMatrix();
+  }
  }
  if(which!=='marker'){markerFocus.value='all';markerInfo.textContent='表示は残り距離。発走地点とは別です。'}
  document.querySelectorAll('#views button').forEach(b=>b.classList.toggle('selected',b.dataset.view===which));
@@ -3191,10 +3262,28 @@ function animate(time){
   if(isOfficialEighteenTest)gateRoot.visible=travel<105;
   if(isOfficialPairTest&&installedDesign01&&activePlan&&pairTrackingView(view)){
    const shot=officialPairCameraShot(view);
-   // FPS変動に依存しない追尾。すべての2頭用ビューで毎フレーム更新する。
+   const onBroadcast=isOfficialEighteenTest&&view==='broadcast';
+   const cut=onBroadcast&&shot.broadcastShotId!==lastBroadcastShotId;
+   if(onBroadcast){
+    broadcastCameraLabel.textContent='📺 中継：'+shot.broadcastLabel;
+    if(cut){
+     lastBroadcastShotId=shot.broadcastShotId;
+     camera.fov=shot.fov;
+     camera.updateProjectionMatrix();
+    }
+   }else if(isOfficialEighteenTest&&camera.fov!==43){
+    camera.fov=43;camera.updateProjectionMatrix();
+   }
+   // Official-style camera switching uses hard cuts between stations,
+   // but smooth motor-like panning within each camera's own shot.
    const alpha=1-Math.exp(-Math.min(.05,dt)*12);
-   camera.position.lerp(shot.eye,alpha);
-   controls.target.lerp(shot.target,alpha);
+   if(cut){
+    camera.position.copy(shot.eye);
+    controls.target.copy(shot.target);
+   }else{
+    camera.position.lerp(shot.eye,alpha);
+    controls.target.lerp(shot.target,alpha);
+   }
    camera.lookAt(controls.target);
    pairTracking=true;
   }else if(view==='field'&&activePlan){
