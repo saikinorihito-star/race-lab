@@ -214,3 +214,24 @@ test('persistent in-video run control reflects play, pause, resume and completio
  assert.match(html,/stageStartBtn\.addEventListener\('click'/);
  assert.match(html,/if\(isOfficialPairTest\?raceFinished\.length>=OFFICIAL_TEST_COUNT:/);
 });
+
+test('4-horse inward heading is gradual, bounded and returns to tangent after merging',()=>{
+ const slope=runInNewContext('('+extract('fourHorseInwardSlope')+')',{
+  isOfficialFourTest:true,FOUR_START_OUTSIDE_OFFSET:8,
+  FOUR_INWARD_SETTLE_DISTANCE:160
+ });
+ const oldSlope=runInNewContext('('+extract('fourHorseInwardSlope')+')',{
+  isOfficialFourTest:false,FOUR_START_OUTSIDE_OFFSET:8,
+  FOUR_INWARD_SETTLE_DISTANCE:160
+ });
+ assert.ok(Math.abs(slope(0))<1e-10);
+ assert.ok(Math.abs(slope(160))<1e-10);
+ assert.ok(Math.abs(slope(500))<1e-10);
+ assert.ok(Math.abs(slope(80)-.075)<1e-10);
+ for(let d=0;d<=160;d+=5){
+  assert.ok(slope(d)>=0,'Do not turn outward');
+  assert.ok(slope(d)<=.07500001,'Natural inward heading angle');
+  assert.equal(oldSlope(d),0,'Preserve accepted two-horse heading');
+ }
+ assert.match(extract('updateOfficialPair'),/fourHorseInwardSlope\(state\.distance\)/);
+});
