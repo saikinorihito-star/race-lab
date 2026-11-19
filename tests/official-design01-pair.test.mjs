@@ -21,7 +21,7 @@ const fourInnerLane=runInNewContext('('+extract('fourHorseInnerLane')+')',{
 });
 function makeReviewLane(four){
  return runInNewContext('('+extract('officialReviewLane')+')',{
-  pairRailLane:lane,fourHorseInnerLane:fourInnerLane,isOfficialFourTest:four,
+  pairRailLane:lane,fourHorseInnerLane:fourInnerLane,PAIR_LANE_SPACING:SEP,isOfficialFourTest:four,
   FOUR_START_OUTSIDE_OFFSET:8.0,FOUR_INWARD_SETTLE_DISTANCE:160,
   THREE:{MathUtils:{clamp:(x,min,max)=>Math.max(min,Math.min(max,x))}}
  });
