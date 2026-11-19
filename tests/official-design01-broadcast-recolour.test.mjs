@@ -152,3 +152,41 @@ test('helmet has expanded frame-colour region and shades the entire cap, not onl
  assert.match(shader,/float clothMask=/);
  assert.match(shader,/float skinGuard=/);
 });
+
+test('TV editor alternates first-three close-up, third-place pack and wider field',()=>{
+ const camera=makeShot(1400);
+ const horses=Array.from({length:18},(_,i)=>({
+  number:i+1,distance:550-i*3,lane:4+(i%4)*2,postDistance:0
+ }));
+ const at=progress=>{
+  const delta=progress-550;
+  const current=horses.map(h=>({...h,distance:h.distance+delta}));
+  const leadDistance=progress,tailDistance=progress-51;
+  return camera({horses:current,lead:current[0],leadDistance,tailDistance,
+   meanLane:7,gap:51});
+ };
+ const first=at(90),third=at(300),wide=at(520);
+ assert.match(first.broadcastShotId,/-lead$/);
+ assert.match(third.broadcastShotId,/-third$/);
+ assert.match(wide.broadcastShotId,/-wide$/);
+ assert.match(first.broadcastLabel,/先頭3頭を拡大/);
+ assert.match(third.broadcastLabel,/3番手付近を拡大/);
+ assert.match(wide.broadcastLabel,/馬群全景/);
+ for(const shot of [first,third,wide]){
+  assert.match(shot.broadcastLabel,/先頭 1番 ／ 3番手 3番/);
+  assert.ok(shot.fov>=25&&shot.fov<=47);
+ }
+ const dist=shot=>Math.hypot(shot.eye.x-shot.target.x,shot.eye.y-shot.target.y,shot.eye.z-shot.target.z);
+ assert.ok(dist(first)<dist(wide)*.75,'Leading pack should be much closer than overview');
+ assert.ok(dist(third)<dist(wide)*.75,'Third-place pack should be much closer than overview');
+});
+test('18-runner sharpness improvements preserve non-race modes and fixed framebuffer',()=>{
+ assert.match(html,/isOfficialEighteenTest\?\{sharp:1\.80,standard:1\.35,light:1\.05\}/);
+ assert.match(html,/renderQuality\.value==='auto'\?1\.65/);
+ assert.match(html,/let auto18Dpr=1\.65,auto18ObservedFps=0/);
+ assert.match(html,/isOfficialEighteenTest\?512:256/g);
+ assert.match(html,/isOfficialEighteenTest\?8:4/);
+ const auto=fn('autoTune18HorseResolution');
+ assert.ok(!auto.includes('renderer.setPixelRatio('));
+ assert.ok(!auto.includes('renderer.setSize('));
+});
