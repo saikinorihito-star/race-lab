@@ -388,7 +388,7 @@ if(isOfficialEighteenTest){
 if(isOfficialPairTest){
  stageDock.hidden=false;
  if(isOfficialEighteenTest){
-  renderQuality.add(new Option('高精細・固定（18頭推奨）','auto'),0);
+  renderQuality.add(new Option('高精細・FPS自動調整（18頭推奨）','auto'),0);
   renderQuality.value='auto';
  }else renderQuality.value=isOfficialEightTest?'standard':isOfficialFourTest?'sharp':'standard';
 }
@@ -669,8 +669,8 @@ const renderer=new THREE.WebGLRenderer({antialias:!(isOfficialEightTest||isOffic
 // Higher internal raster resolution cures 4-horse background blur without
 // modifying the approved 3D horse or textures. A visible quality switch lets
 // iPhone users choose a faster render if the frame interval grows.
-const renderDprLevels=isOfficialEighteenTest?{sharp:1.80,standard:1.35,light:1.05}:{sharp:1.35,standard:1.05,light:.90};
-const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?1.65:
+const renderDprLevels=isOfficialEighteenTest?{sharp:1.85,standard:1.45,light:1.10}:{sharp:1.35,standard:1.05,light:.90};
+const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?1.75:
  renderDprLevels[renderQuality.value]||1.05):1.4;
 renderer.setPixelRatio(Math.min(initialDpr,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
@@ -690,17 +690,28 @@ function applyRenderQuality(){
   renderDprLevels[renderQuality.value]||1.05,window.devicePixelRatio||1));
  renderer.setSize(stage.clientWidth,stage.clientHeight,false);
 }
-let auto18Dpr=1.65,auto18ObservedFps=0;
+let auto18Dpr=1.75,auto18ObservedFps=0;
+let auto18LastAdjustment=0,auto18LowSamples=0,auto18HighSamples=0;
 renderQuality.addEventListener('change',()=>{
- auto18Dpr=1.65;
+ auto18Dpr=1.75;auto18LowSamples=0;auto18HighSamples=0;
  applyRenderQuality();
 });
 function autoTune18HorseResolution(fps){
- // Safari can flash when setPixelRatio()/setSize() reallocates the WebGL
- // drawing buffer in the middle of a race. Keep 18-horse default
- // high-detail resolution fixed at 1.65; only a user quality change may resize.
- if(isOfficialEighteenTest&&renderQuality.value==='auto')
-  auto18ObservedFps=fps;
+ // Throttle iPhone Safari drawing-buffer reallocations to avoid flicker.
+ if(!isOfficialEighteenTest||renderQuality.value!=='auto')return;
+ auto18ObservedFps=fps;
+ if(fps<27){auto18LowSamples++;auto18HighSamples=0}
+ else if(fps>48){auto18HighSamples++;auto18LowSamples=0}
+ else{auto18LowSamples=0;auto18HighSamples=0}
+ const now=performance.now();
+ if(now-auto18LastAdjustment<16000)return;
+ const old=auto18Dpr;
+ if(auto18LowSamples>=3)auto18Dpr=Math.max(1.15,Math.round((auto18Dpr-.16)*100)/100);
+ else if(auto18HighSamples>=8)auto18Dpr=Math.min(1.75,Math.round((auto18Dpr+.12)*100)/100);
+ if(auto18Dpr!==old){
+  auto18LastAdjustment=now;auto18LowSamples=0;auto18HighSamples=0;
+  applyRenderQuality();
+ }
 }
 scene.add(new THREE.HemisphereLight(0xeaf7ff,0x4e6450,1.42));
 const sun=new THREE.DirectionalLight(0xfff4e6,1.95);
@@ -743,9 +754,17 @@ function makeGrassTexture(){
   data.data[i+2]=Math.round(213+d*.78);data.data[i+3]=255;
  }
  ctx.putImageData(data,0,0);
+ // Bake fine grass blades into the existing texture, with no added draw calls.
+ if(isOfficialEighteenTest){
+  ctx.strokeStyle='rgba(33,79,32,.17)';ctx.lineWidth=.65;
+  for(let i=0;i<5000;i++){
+   const x=rnd()*texSize,y=rnd()*texSize;
+   ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+1.3,y-2.4);ctx.stroke();
+  }
+ }
  const tex=new THREE.CanvasTexture(canvas);
  tex.wrapS=THREE.RepeatWrapping;tex.wrapT=THREE.RepeatWrapping;tex.colorSpace=THREE.SRGBColorSpace;
- tex.anisotropy=Math.min(isOfficialEighteenTest?8:4,renderer.capabilities.getMaxAnisotropy());
+ tex.anisotropy=Math.min(isOfficialEighteenTest?16:4,renderer.capabilities.getMaxAnisotropy());
  return tex;
 }
 const grassTexture=makeGrassTexture();
@@ -829,7 +848,7 @@ function makeSandTexture(){
  const texture=new THREE.CanvasTexture(c);
  texture.wrapS=THREE.RepeatWrapping;texture.wrapT=THREE.RepeatWrapping;
  texture.colorSpace=THREE.SRGBColorSpace;
- texture.anisotropy=Math.min(isOfficialEighteenTest?8:4,renderer.capabilities.getMaxAnisotropy());
+ texture.anisotropy=Math.min(isOfficialEighteenTest?16:4,renderer.capabilities.getMaxAnisotropy());
  return texture;
 }
 const SAND_LENGTH_STEPS=720,SAND_WIDTH_STEPS=6;
@@ -1072,21 +1091,23 @@ function turfVision(x,z,caption){
  const baseY=2.5;
  const group=new THREE.Group();scene.add(group);turfVisionGroups.push(group);
  group.position.set(x,baseY,z);
- // 幅66.4m×高さ11.2mはJRAの公表値。支柱などの寸法は近似。
+ // Image faces the grandstand at +Z; intentionally enlarged for visibility.
+ group.scale.set(1.34,1.34,1);
+ // 幅66.4m×高さ11.2mはJRAの公表値。支柱などの寸法は近似.
  addBox(group,0,13,-.05,68.1,13.1,1.42,0x1a252f,.28);
- addBox(group,0,6.35,2.5,67.8,1.35,3.7,0x5a7179,.15);
+ addBox(group,0,6.35,-2.5,67.8,1.35,3.7,0x5a7179,.15);
  for(const px of [-28,-14,0,14,28]){
-  addBox(group,px,5.35,2.6,1.10,10.5,1.5,0x65757b,.28);
-  addBox(group,px,11.5,1.4,.43,2.25,1.25,0x9eafb5,.23);
+  addBox(group,px,5.35,-2.6,1.10,10.5,1.5,0x65757b,.28);
+  addBox(group,px,11.5,-1.4,.43,2.25,1.25,0x9eafb5,.23);
  }
- addBox(group,0,13,-.86,67.1,12.05,.20,0x60757c,.19);
+ addBox(group,0,13,.72,67.1,12.05,.20,0x60757c,.19);
  const screen=new THREE.Mesh(new THREE.PlaneGeometry(66.4,11.2),
-  new THREE.MeshBasicMaterial({map:raceMonitorTexture,side:THREE.DoubleSide}));
- screen.position.set(0,13,-1.04);group.add(screen);
- // 分割パネルの継ぎ目と金属外枠
- for(const px of [-11.05,11.05])addBox(group,px,13,-1.10,.09,11.2,.09,0x1c2833,.24);
+  new THREE.MeshBasicMaterial({map:raceMonitorTexture,side:THREE.FrontSide}));
+ screen.position.set(0,13,.91);group.add(screen);
+ // Stand-facing image is in front of its housing, not obscured by the slab.
+ for(const px of [-11.05,11.05])addBox(group,px,13,.96,.09,11.2,.09,0x1c2833,.24);
  addBox(group,0,19.9,-.1,69,.65,1.9,0x778d94,.2);
- addBox(group,0,6.1,-.55,68.0,.55,1.0,0x647883,.18);
+ addBox(group,0,6.1,.4,68.0,.55,1.0,0x647883,.18);
 }
 turfVision(-225,9,'西側ターフビジョン');
 turfVision(210,22,'東側ターフビジョン');
@@ -3479,6 +3500,20 @@ function animate(time){
  // 追尾中の自動カメラの姿勢をOrbitControlsで上書きしない。
  if(!pairTracking)controls.update();
  updateRunnerNameLabels(time);
+ // In broadcast mode, screen furniture must not hide the race pack.
+ if(isOfficialEighteenTest&&view==='broadcast'){
+  camera.updateMatrixWorld();
+  const focusDistance=camera.position.distanceTo(controls.target);
+  for(const group of turfVisionGroups){
+   const center=new THREE.Vector3(group.position.x,
+    group.position.y+13*group.scale.y,group.position.z);
+   const screenDistance=camera.position.distanceTo(center);
+   const ndc=center.clone().project(camera);
+   const obstructs=screenDistance<focusDistance&&screenDistance>2&&
+    ndc.z>-1&&ndc.z<1&&Math.abs(ndc.x)<.94&&Math.abs(ndc.y)<.9;
+   group.visible=!obstructs;
+  }
+ }
  // ピンチ操作で屋根や床の内部に入ったときは、障害物の模型だけ一時的に隠す。
  for(const item of stadiumGroups){
   const insideX=Math.abs(camera.position.x-item.x)<item.len/2+16;
