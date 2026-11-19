@@ -167,7 +167,8 @@ test('4-horse render defaults to sharp antialiasing with adjustable fallback',()
  assert.match(html,/const renderDprLevels=\{sharp:1\.35,standard:1\.05,light:\.90\}/);
  assert.match(html,/renderQuality\.addEventListener\('change',applyRenderQuality\)/);
  assert.match(html,/cloneSkeleton\(source\)/);
- assert.match(html,/h\.mixer\.setTime\(shownTime\*Math\.min\(2,Number\(rate\.value\)\)\+i\*\.07\)/);
+ assert.match(html,/h\.mixer\.setTime\(gaitTime\)/);
+ assert.match(html,/const gaitTime=isOfficialFourTest\?/);
 });
 
 test('4-horse clone count and safe independent animation loop use test count',()=>{
@@ -234,7 +235,8 @@ test('4-horse inward heading follows the actual lateral speed without allowing e
   assert.ok(slope(d)<=.07500001,'Natural inward heading angle');
   assert.equal(oldSlope(d),0,'Preserve accepted two-horse heading');
  }
- assert.match(extract('updateOfficialPair'),/state\.sideSpeed\/Math\.max\(4,state\.speed\)/);
+ assert.match(extract('updateOfficialPair'),/state\.sideSpeed\/Math\.max\(\.5,state\.speed\)/);
+ assert.match(extract('updateOfficialPair'),/,-\.30,\.30/);
  assert.match(extract('updateOfficialPair'),/isOfficialFourTest\?/);
 });
 
@@ -248,7 +250,7 @@ function runActualFourHorseSimulation(distance){
  const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35,
  FOUR_START_OUTSIDE_OFFSET=8,FOUR_INWARD_SETTLE_DISTANCE=160,
  FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=3.05,
- FOUR_INWARD_RATE=4.4,
+ FOUR_INWARD_RATE=4.4,FOUR_MAX_LATERAL_PER_FORWARD=.30,
  isOfficialFourTest=true,OFFICIAL_TEST_COUNT=4;
  ${profiles}
  ${code}
@@ -262,11 +264,23 @@ function runActualFourHorseSimulation(distance){
  }));
  const snapshots={},mark=[100,200,400,800];
  let minActiveCenterDistance=Infinity,minRailClearance=Infinity,
-  maxLateralSpeed=0,stackedFrames=0,outwardSlotChanges=0,maxFrontGap=0;
+  maxLateralSpeed=0,stackedFrames=0,outwardSlotChanges=0,maxFrontGap=0,
+  maxInwardToForwardRatio=0,sidewaysWhileStopped=0;
  const lastSlots=[0,1,2,3];
  for(let t=0;t<24000&&raceFinished.length<4;t++){
+  const before=raceHorses.map(h=>({distance:h.distance,lane:h.lane,finished:h.finished}));
   stepOfficialPair(1/60);
   const leader=Math.max(...raceHorses.map(h=>h.distance));
+  for(const [i,h] of raceHorses.entries()){
+   if(before[i].finished||h.finished)continue;
+   const forward=h.distance-before[i].distance;
+   const inward=Math.max(0,h.lane-before[i].lane);
+   if(inward>1e-7){
+    maxInwardToForwardRatio=Math.max(maxInwardToForwardRatio,
+     inward/Math.max(1e-7,forward));
+    if(forward<1e-7)sidewaysWhileStopped++;
+   }
+  }
   for(const m of mark)if(!snapshots[m]&&leader>=m)
    snapshots[m]=raceHorses.map(h=>({d:h.distance,lane:h.lane,slot:h.slot}));
   for(const h of raceHorses){
@@ -286,6 +300,7 @@ function runActualFourHorseSimulation(distance){
  }
  return {finished:raceFinished.length,minActiveCenterDistance,
   minRailClearance,maxLateralSpeed,stackedFrames,outwardSlotChanges,
+  maxInwardToForwardRatio,sidewaysWhileStopped,
   snapshots,finishTimes:raceHorses.map(h=>h.finishTime)};
  })()`;
  return runInNewContext(source,{trackDistance:distance});
@@ -298,6 +313,8 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
   assert.ok(r.minRailClearance>=3.7-1e-8,'No horse meets the inside rail');
   assert.ok(r.minActiveCenterDistance>=3.0,'No active horse overlap');
   assert.ok(r.maxLateralSpeed<=4.401,'Sideways speed capped at 4.4m/s');
+  assert.ok(r.maxInwardToForwardRatio<=.300001,'Diagonal path cannot exceed a 0.30 inward/forward slope');
+  assert.equal(r.sidewaysWhileStopped,0,'No stationary sideways sliding');
   assert.equal(r.outwardSlotChanges,0,'No rapid outward-inward lane oscillation');
   assert.ok(r.stackedFrames>100,'Must visibly queue nose-to-tail at some stage');
   const start=r.snapshots[100].map(h=>h.d);
@@ -327,6 +344,7 @@ test('unobstructed outermost horse reaches real innermost lane promptly',()=>{
  const width=38.4;
  const ctx={THREE:fakeThree,activePlan:{distance:1400},
   FOUR_INWARD_RATE:4.4,FOUR_MIN_LONGITUDINAL:4.8,FOUR_LATERAL_SHARED:3.05,
+  FOUR_MAX_LATERAL_PER_FORWARD:.30,
   PAIR_RAIL_CENTER_CLEARANCE:3.7,PAIR_LANE_SPACING:3.35,
   FOUR_PACE_PROFILES:[{accel:3.42},{accel:3.15},{accel:3.32},{accel:3.1}],
   fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane};
@@ -348,6 +366,7 @@ test('horse alongside must not cut across a nearby occupied lane',()=>{
  const width=38.4;
  const ctx={THREE:fakeThree,activePlan:{distance:1400},
   FOUR_INWARD_RATE:4.4,FOUR_MIN_LONGITUDINAL:4.8,FOUR_LATERAL_SHARED:3.05,
+  FOUR_MAX_LATERAL_PER_FORWARD:.30,
   FOUR_PACE_PROFILES:[{accel:3.42},{accel:3.15},{accel:3.32},{accel:3.1}],
   fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane};
  ctx.fourHorseDesiredSlot=runInNewContext('('+extract('fourHorseDesiredSlot')+')',ctx);
@@ -359,4 +378,29 @@ test('horse alongside must not cut across a nearby occupied lane',()=>{
   'Do not enter a lane occupied by a horse within 2m longitudinally');
  const free=step(horse,[{...inside,distance:60}],1/60,15.95);
  assert.ok(free.lane>blocked.lane+.01,'Move directly inward once the gap is clear');
+});
+
+test('four-horse gait phase advances with actual forward metres, not elapsed stationary time',()=>{
+ const update=extract('updateOfficialPair');
+ assert.match(update,/const gaitTime=isOfficialFourTest\?/);
+ assert.match(update,/\(state\.distance\+\(state\.postDistance\|\|0\)\)\/16\.0\+i\*\.07/);
+ assert.match(update,/h\.mixer\.setTime\(gaitTime\)/);
+ assert.match(update,/shownTime\*Math\.min\(2,Number\(rate\.value\)\)\+i\*\.07/);
+});
+
+test('traffic stop also stops lateral movement on the same tick',()=>{
+ const width=38.4;
+ const ctx={THREE:fakeThree,activePlan:{distance:1400},
+  FOUR_INWARD_RATE:4.4,FOUR_MAX_LATERAL_PER_FORWARD:.30,
+  FOUR_MIN_LONGITUDINAL:4.8,FOUR_LATERAL_SHARED:3.05,
+  FOUR_PACE_PROFILES:[{accel:3.42},{accel:3.15},{accel:3.32},{accel:3.1}],
+  fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane};
+ ctx.fourHorseDesiredSlot=runInNewContext('('+extract('fourHorseDesiredSlot')+')',ctx);
+ const step=runInNewContext('('+extract('fourHorseSafeStep')+')',ctx);
+ const h={idx:3,distance:45,lane:.28,speed:11};
+ const ahead={idx:1,distance:47,speed:0,lane:.28,finished:false};
+ const moved=step(h,[ahead],1/60,15.95);
+ assert.ok(moved.distance>=h.distance,'Never reverse');
+ assert.ok(moved.lane-h.lane<=.30*(moved.distance-h.distance)+1e-9,
+  'Blocked forward motion may not produce independent sideways motion');
 });
