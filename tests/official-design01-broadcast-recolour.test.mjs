@@ -135,3 +135,20 @@ test('shader tints actual original helmet and cloth texels but never replaces bo
  assert.match(fn('initializeOfficialPair'),/const model=cloneSkeleton\(source\)/);
  assert.match(html,/official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119/);
 });
+
+test('approved 18-horse auto-camera survives model reload and race restart',()=>{
+ const loader=fn('loadApprovedHorse');
+ const reset=fn('resetDemo');
+ const change=fn('setView');
+ assert.match(loader,/setView\(isOfficialEighteenTest\?'broadcast':'field'\)/);
+ assert.match(reset,/isOfficialEighteenTest\?'broadcast':pairTrackingView\(view\)\?view:'field'/);
+ assert.match(html,/if\(isOfficialPairTest\)setView\(isOfficialEighteenTest\?'broadcast':'field'\)/);
+ assert.match(change,/which==='broadcast'&&isOfficialEighteenTest&&activePlan/);
+});
+test('helmet has expanded frame-colour region and shades the entire cap, not only blue stripes',()=>{
+ const region=fn('prepareOriginalFrameZones'),shader=fn('tintOriginalHelmetAndCloth');
+ assert.match(region,/const hat=y>\.42&&y<\.91&&z>-\.20&&z<\.48&&Math\.abs\(x\)<\.26/);
+ assert.match(shader,/float capMask=capRegion\*\(1\.0-skinGuard\)/);
+ assert.match(shader,/float clothMask=/);
+ assert.match(shader,/float skinGuard=/);
+});
