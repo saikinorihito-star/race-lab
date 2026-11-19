@@ -2499,8 +2499,13 @@ if(isOfficialPairTest){
  const pointers=new Map();
  const canvas=renderer.domElement;
  canvas.addEventListener('pointerdown',event=>{
-  if(event.pointerType==='mouse'&&event.button!==0)return;
-  pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+  if(event.pointerType==='mouse'&&event.button!==0&&
+   !(isOfficialEighteenTest&&event.button===2))return;
+  pointers.set(event.pointerId,{
+   x:event.clientX,y:event.clientY,
+   pan:isOfficialEighteenTest&&event.pointerType==='mouse'&&
+    (event.button===2||event.shiftKey)
+  });
   try{canvas.setPointerCapture(event.pointerId)}catch(_){}
  });
  canvas.addEventListener('pointermove',event=>{
@@ -2510,11 +2515,18 @@ if(isOfficialPairTest){
   const current={x:event.clientX,y:event.clientY};
   if(isOfficialEighteenTest){
    if(pointers.size===1){
-    camera18.yaw=wrapCameraAngle(camera18.yaw+
-     (current.x-previous.x)/Math.max(240,stage.clientWidth)*Math.PI*1.9);
-    camera18.pitch=THREE.MathUtils.clamp(camera18.pitch-
-     (current.y-previous.y)/Math.max(240,stage.clientHeight)*1.6,
-     -.35,1.31);
+    if(event.pointerType==='mouse'&&(previous.pan||event.shiftKey)){
+     camera18.pan=THREE.MathUtils.clamp(camera18.pan-
+      (current.x-previous.x)*.20*camera18.zoom,-100,100);
+     camera18.lift=THREE.MathUtils.clamp(camera18.lift+
+      (current.y-previous.y)*.16*camera18.zoom,-24,24);
+    }else{
+     camera18.yaw=wrapCameraAngle(camera18.yaw+
+      (current.x-previous.x)/Math.max(240,stage.clientWidth)*Math.PI*1.9);
+     camera18.pitch=THREE.MathUtils.clamp(camera18.pitch-
+      (current.y-previous.y)/Math.max(240,stage.clientHeight)*1.6,
+      -.35,1.31);
+    }
    }else if(pointers.size===2){
     const other=[...pointers.entries()].find(([id])=>id!==event.pointerId)?.[1];
     if(other){
@@ -2552,6 +2564,17 @@ if(isOfficialPairTest){
  for(const eventName of ['pointerup','pointercancel','lostpointercapture']){
   canvas.addEventListener(eventName,event=>pointers.delete(event.pointerId));
  }
+}
+// Mac mouse-wheel and trackpad zoom for the persistent 18-runner camera.
+if(isOfficialEighteenTest){
+ const stageCanvas=renderer.domElement;
+ stageCanvas.addEventListener('wheel',event=>{
+  if(event.cancelable)event.preventDefault();
+  camera18.zoom=THREE.MathUtils.clamp(
+   camera18.zoom*Math.exp(event.deltaY*.0013),.30,4);
+  syncCamera18Controls();
+ },{passive:false});
+ stageCanvas.addEventListener('contextmenu',event=>event.preventDefault());
 }
 // 2頭/4頭用：近ければ全頭、離れたら先頭優先でカメラが移動する。
 // 18頭の従来カメラは一切変更しない。
@@ -2757,6 +2780,27 @@ stageStartBtn.addEventListener('click',()=>{
  demoBtn.click();
  syncStageStartButton();
 });
+// Mac keyboard controls. Ignore fields and browser Cmd shortcuts.
+window.addEventListener('keydown',event=>{
+ if(!isOfficialEighteenTest||event.altKey||event.metaKey||event.ctrlKey)return;
+ if(document.activeElement?.closest('input,select,textarea,[contenteditable="true"]'))return;
+ const key=event.key.toLowerCase();
+ let handled=true;
+ if(key===' '){if(!stageStartBtn.disabled)stageStartBtn.click()}
+ else if(key==='1'){resetCamera18();setView('side')}
+ else if(key==='2'){resetCamera18();setView('front3q')}
+ else if(key==='3'){resetCamera18();setView('chase')}
+ else if(key==='4'){resetCamera18();setView('field')}
+ else if(key==='r'){resetCamera18()}
+ else if(key==='arrowleft'){adjustGroupCamera('left')}
+ else if(key==='arrowright'){adjustGroupCamera('right')}
+ else if(key==='arrowup'){adjustGroupCamera('up')}
+ else if(key==='arrowdown'){adjustGroupCamera('down')}
+ else if(key==='='||key==='+'){adjustGroupCamera('near')}
+ else if(key==='-'||key==='_'){adjustGroupCamera('far')}
+ else handled=false;
+ if(handled)event.preventDefault();
+});
 const raceSelector=document.querySelector('#raceDistance'),startInfo=document.querySelector('#startInfo');
 function selectRace(){
  activeDistance=Number(raceSelector.value);
@@ -2865,7 +2909,9 @@ if(isOfficialPairTest){
  document.querySelector('[data-view="chase"]').textContent=OFFICIAL_TEST_COUNT+'頭の後方を追尾';
  document.querySelector('[data-view="field"]').textContent=OFFICIAL_TEST_COUNT+'頭を自動追尾';
  document.querySelector('#help').textContent=isOfficialEighteenTest?
-  '1本指：360°回転・上下｜2本指：ズーム・視点移動｜📷から詳細調整':
+  (window.matchMedia('(pointer:fine)').matches?
+   'Mac：ドラッグ回転｜右/Shiftドラッグ移動｜ホイール拡大｜Space再生｜1～4視点｜Rリセット':
+   '1本指：360°回転・上下｜2本指：ズーム・視点移動｜📷から詳細調整'):
   '1本指：角度調整｜2本指：拡大縮小｜自動追尾は継続';
 }
 resize();setView('all');selectRace();updateDesign01Panel();setView(isOfficialPairTest?'field':(isDesign01Review?'side':'start'));
