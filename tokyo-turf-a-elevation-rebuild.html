@@ -313,6 +313,8 @@ if(isOfficialPairTest){
 if(isOfficialEighteenTest){
  raceSpeedButtons.hidden=false;
  document.querySelector('#legacyRateLabel').hidden=true;
+}
+if(isOfficialEighteenTest){
  const racingCameraViews=new Set(['side','front3q','chase','field']);
  const raceViewButtons=[...document.querySelectorAll('#views button')];
  for(const button of raceViewButtons)
