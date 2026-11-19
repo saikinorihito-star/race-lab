@@ -216,7 +216,7 @@ test('persistent in-video run control reflects play, pause, resume and completio
  assert.match(html,/if\(isOfficialPairTest\?raceFinished\.length>=OFFICIAL_TEST_COUNT:/);
 });
 
-test('4-horse inward heading is gradual, bounded and returns to tangent after merging',()=>{
+test('4-horse inward heading follows the actual lateral speed without allowing extreme yaw',()=>{
  const slope=runInNewContext('('+extract('fourHorseInwardSlope')+')',{
   isOfficialFourTest:true,FOUR_START_OUTSIDE_OFFSET:8,
   FOUR_INWARD_SETTLE_DISTANCE:160
@@ -234,7 +234,8 @@ test('4-horse inward heading is gradual, bounded and returns to tangent after me
   assert.ok(slope(d)<=.07500001,'Natural inward heading angle');
   assert.equal(oldSlope(d),0,'Preserve accepted two-horse heading');
  }
- assert.match(extract('updateOfficialPair'),/fourHorseInwardSlope\(state\.distance\)/);
+ assert.match(extract('updateOfficialPair'),/state\.sideSpeed\/Math\.max\(4,state\.speed\)/);
+ assert.match(extract('updateOfficialPair'),/isOfficialFourTest\?/);
 });
 
 function runActualFourHorseSimulation(distance){
@@ -246,7 +247,8 @@ function runActualFourHorseSimulation(distance){
  const THREE={MathUtils:{clamp:(v,lo,hi)=>Math.max(lo,Math.min(hi,v))}};
  const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35,
  FOUR_START_OUTSIDE_OFFSET=8,FOUR_INWARD_SETTLE_DISTANCE=160,
- FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=2.9,
+ FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=3.05,
+ FOUR_INWARD_RATE=4.4,
  isOfficialFourTest=true,OFFICIAL_TEST_COUNT=4;
  ${profiles}
  ${code}
@@ -279,7 +281,7 @@ function runActualFourHorseSimulation(distance){
    const a=active[i],b=active[j],long=Math.abs(a.distance-b.distance);
    const lateral=Math.abs(a.lane-b.lane);
    minActiveCenterDistance=Math.min(minActiveCenterDistance,Math.hypot(long,lateral));
-   if(lateral<2.9&&long>=4.8&&long<20)stackedFrames++;
+   if(lateral<3.05&&long>=4.8&&long<20)stackedFrames++;
   }
  }
  return {finished:raceFinished.length,minActiveCenterDistance,
@@ -294,15 +296,21 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
   const r=runActualFourHorseSimulation(distance);
   assert.equal(r.finished,4,'All four must reach the finish at '+distance+'m');
   assert.ok(r.minRailClearance>=3.7-1e-8,'No horse meets the inside rail');
-  assert.ok(r.minActiveCenterDistance>=2.75,'No active horse overlap');
-  assert.ok(r.maxLateralSpeed<=1.201,'Sideways speed capped at 1.2m/s');
+  assert.ok(r.minActiveCenterDistance>=3.0,'No active horse overlap');
+  assert.ok(r.maxLateralSpeed<=4.401,'Sideways speed capped at 4.4m/s');
   assert.equal(r.outwardSlotChanges,0,'No rapid outward-inward lane oscillation');
   assert.ok(r.stackedFrames>100,'Must visibly queue nose-to-tail at some stage');
   const start=r.snapshots[100].map(h=>h.d);
-  assert.ok(Math.max(...start)-Math.min(...start)<14,
-   'Horses should remain in a visible pack at 100m');
-  assert.ok(r.snapshots[200][1].slot<1,
-   'Stalker should merge behind the lead into the inner lane by 200m');
+  assert.ok(Math.max(...start)-Math.min(...start)<25,
+   'All horses should stay in the lead camera's visible formation at 100m');
+  const widthAtStart=36+5*Math.sin(.5);
+  const outsideStart=makeReviewLane(true)(widthAtStart,3,0);
+  assert.ok(r.snapshots[100][3].lane-outsideStart>12,
+   'The outermost horse must rush inward by more than 3 traditional lanes by 100m');
+  assert.equal(r.snapshots[200][1].slot,0,
+   'Stalker should reach the inner lane behind the leader by 200m');
+  assert.equal(r.snapshots[200][3].slot,0,
+   'Outermost horse can reach the inner lane when a safe gap appears');
  }
 });
 
@@ -311,5 +319,44 @@ test('four-horse role order displays independently of the approved source saddle
  assert.match(html,/ゼッケン4は正式デザインのままです。/);
  assert.match(html,/h\.role=\['逃げ','先行','差し','追込'\]\[i\]/);
  assert.match(html,/const FOUR_PACE_PROFILES=\[/);
- assert.match(html,/FOUR_MIN_LONGITUDINAL=4\.8,FOUR_LATERAL_SHARED=2\.9/);
+ assert.match(html,/FOUR_MIN_LONGITUDINAL=4\.8,FOUR_LATERAL_SHARED=3\.05/);
+ assert.match(html,/const FOUR_INWARD_RATE=4\.4/);
+});
+
+test('unobstructed outermost horse reaches real innermost lane promptly',()=>{
+ const width=38.4;
+ const ctx={THREE:fakeThree,activePlan:{distance:1400},
+  FOUR_INWARD_RATE:4.4,FOUR_MIN_LONGITUDINAL:4.8,FOUR_LATERAL_SHARED:3.05,
+  PAIR_RAIL_CENTER_CLEARANCE:3.7,PAIR_LANE_SPACING:3.35,
+  FOUR_PACE_PROFILES:[{accel:3.42},{accel:3.15},{accel:3.32},{accel:3.1}],
+  fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane};
+ ctx.fourHorseDesiredSlot=runInNewContext('('+extract('fourHorseDesiredSlot')+')',ctx);
+ const advance=runInNewContext('('+extract('fourHorseSafeStep')+')',ctx);
+ const start=makeReviewLane(true)(width,3,0);
+ const h={idx:3,distance:0,lane:start,speed:0};
+ for(let tick=0;tick<900&&h.distance<95;tick++){
+  const next=advance(h,[],1/60,15.95);
+  Object.assign(h,next);
+ }
+ const target=lane(width,0);
+ assert.ok(h.distance>=95,'The unblocked outermost horse should make forward progress');
+ assert.ok(Math.abs(h.lane-target)<.11,'In an empty corridor the outside horse must reach the innermost safety lane by 95m');
+ assert.ok(h.lane-start>17.8,'Inward rush covers the full original outside-to-inside range');
+});
+
+test('horse alongside must not cut across a nearby occupied lane',()=>{
+ const width=38.4;
+ const ctx={THREE:fakeThree,activePlan:{distance:1400},
+  FOUR_INWARD_RATE:4.4,FOUR_MIN_LONGITUDINAL:4.8,FOUR_LATERAL_SHARED:3.05,
+  FOUR_PACE_PROFILES:[{accel:3.42},{accel:3.15},{accel:3.32},{accel:3.1}],
+  fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane};
+ ctx.fourHorseDesiredSlot=runInNewContext('('+extract('fourHorseDesiredSlot')+')',ctx);
+ const step=runInNewContext('('+extract('fourHorseSafeStep')+')',ctx);
+ const horse={idx:3,distance:45,speed:12,lane:.28};
+ const inside={idx:1,distance:47,speed:12,lane:3.35,finished:false};
+ const blocked=step(horse,[inside],1/60,15.95);
+ assert.ok(blocked.lane<=inside.lane-3.05+1e-7,
+  'Do not enter a lane occupied by a horse within 2m longitudinally');
+ const free=step(horse,[{...inside,distance:60}],1/60,15.95);
+ assert.ok(free.lane>blocked.lane+.01,'Move directly inward once the gap is clear');
 });
