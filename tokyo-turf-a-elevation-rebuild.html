@@ -136,7 +136,7 @@ a{color:#95e8df}
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
 <div class="tools" id="officialPairTools" hidden>
- <strong>正式Design 01｜2頭走行テスト</strong>
+ <strong id="officialGroupHeading">正式Design 01｜2頭走行テスト</strong>
  <span>馬体・テクスチャは元のデザインを共有し、骨格とギャロップは馬ごとに独立。既存の18頭試作は変更しません。</span>
  <span id="officialPairStatus" role="status">1頭テストで保存したGLBを読み込みます。</span>
 </div>
@@ -194,7 +194,9 @@ const showStands=document.querySelector('#showStands');
 const fieldMode=document.querySelector('#fieldMode'),gridStatus=document.querySelector('#gridStatus');
 const qs=new URLSearchParams(window.location.search);
 const isDesign01Review=qs.get('model')==='design01';
-const isOfficialPairTest=isDesign01Review&&qs.get('pair')==='1';
+const isOfficialFourTest=isDesign01Review&&qs.get('group')==='4';
+const isOfficialPairTest=isDesign01Review&&(qs.get('pair')==='1'||isOfficialFourTest);
+const OFFICIAL_TEST_COUNT=isOfficialFourTest?4:2;
 if(isDesign01Review){
  fieldMode.value=isOfficialPairTest?'race18':'single';
  fieldMode.disabled=isOfficialPairTest;
@@ -447,10 +449,11 @@ const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x9ec8dd);
 scene.fog=new THREE.FogExp2(0x9ec8dd,.00011); // 遠景を見通せるように減霧
 const camera=new THREE.PerspectiveCamera(43,1,.15,6000);
-const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+const renderer=new THREE.WebGLRenderer({antialias:!isOfficialFourTest,powerPreference:'high-performance'});
 // The approved Meshy horse's meshes and textures are untouched. On iPhone,
 // reduce the pair-test fill rate only; original 1/18-horse modes are unchanged.
-renderer.setPixelRatio(isOfficialPairTest?Math.min(1.05,window.devicePixelRatio||1):
+renderer.setPixelRatio(isOfficialFourTest?Math.min(.95,window.devicePixelRatio||1):
+ isOfficialPairTest?Math.min(1.05,window.devicePixelRatio||1):
  Math.min(1.4,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
 renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -1097,7 +1100,7 @@ const RACE_CLEARANCE=.96;     // 近い位置にいる馬同士の横方向中�
 const RACE_FRONT_GAP=2.65;    // 同一進路で追突しないための前後中心間隔の目標
 let raceHorses=[],raceElapsed=0,raceFinished=[],raceAccumulator=0,raceContactWarnings=0;
 function initialDemoText(){
- return isOfficialPairTest?'正式モデル2頭を走らせる':
+ return isOfficialPairTest?'正式モデル'+OFFICIAL_TEST_COUNT+'頭を走らせる':
  fieldMode.value==='race18'?'18頭のレースを開始':
   fieldMode.value==='field18'?'18頭を一斉にスタート':'SからGへ走らせる';
 }
@@ -1107,7 +1110,8 @@ const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35;
 function pairRailLane(width,index){
  return width/2-PAIR_RAIL_CENTER_CLEARANCE-index*PAIR_LANE_SPACING;
 }
-console.assert([24,28,31,36,41].every(w=>[0,1].every(i=>
+console.assert([24,28,31,36,41].every(w=>
+ Array.from({length:OFFICIAL_TEST_COUNT},(_,i)=>i).every(i=>
  w/2-pairRailLane(w,i)>=PAIR_RAIL_CENTER_CLEARANCE-.001 &&
  pairRailLane(w,i)>-w/2+1.5)),'正式2頭の内外ラチ余裕');
 function initRaceHorses(){
@@ -1128,7 +1132,7 @@ function initRaceHorses(){
  }));
  if(isOfficialPairTest){
   // 2頭だけ最初から安全な内ラチ沿いの並走レーンへ配置。
-  for(let i=0;i<2;i++){
+  for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
    const h=raceHorses[i],lane=pairRailLane(width,i);
    h.startLane=lane;h.lane=lane;h.targetLane=lane;h.sideSpeed=0;
    h.prevDistance=h.distance;h.prevPostDistance=h.postDistance;
@@ -1334,9 +1338,9 @@ function stepRace(tick){
 // 正式2頭の足運び・表示テスト用。従来18頭の追い抜きAIを作用させない。
 // 馬ごとに巡航速度を持ち、内ラチからの余裕を保った平行経路を使う。
 function stepOfficialPair(tick){
- if(!activePlan||raceFinished.length>=2)return;
+ if(!activePlan||raceFinished.length>=OFFICIAL_TEST_COUNT)return;
  raceElapsed+=tick;
- for(let i=0;i<2;i++){
+ for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
   const h=raceHorses[i];
   h.prevDistance=h.distance;
   h.prevPostDistance=h.postDistance||0;
@@ -1344,7 +1348,7 @@ function stepOfficialPair(tick){
    h.postDistance=Math.min(24,h.postDistance+12*tick);
    continue;
   }
-  const targetSpeed=i===0?16.25:15.85;
+  const targetSpeed=i===0?16.25:(15.85-(i-1)*.12);
   h.speed=Math.min(targetSpeed,h.speed+3*tick);
   h.distance=Math.min(activePlan.distance,h.distance+h.speed*tick);
   const width=fieldCenterAt(activePlan,h.distance).width;
@@ -1365,8 +1369,8 @@ function updateRace(dt){
   raceAccumulator-=RACE_TICK;count++;
  }
  if(isOfficialPairTest){
-  travel=Math.max(raceHorses[0]?.distance||0,raceHorses[1]?.distance||0);
-  return raceFinished.length>=2;
+  travel=Math.max(...raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>h.distance));
+  return raceFinished.length>=OFFICIAL_TEST_COUNT;
  }
  const lead=racePositions()[0];travel=Math.max(0,lead?.distance||0);
  return raceFinished.length===FIELD_COUNT;
@@ -1739,7 +1743,7 @@ const officialPair=[];
 function initializeOfficialPair(source,clip){
  for(const h of officialPair){h.mixer.stopAllAction();pairRoot.remove(h.group)}
  officialPair.length=0;
- for(let i=0;i<2;i++){
+ for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
   // ジオメトリやテクスチャは共有し、スキンとボーンだけ独立させる。
   const model=cloneSkeleton(source);
   const group=new THREE.Group();group.add(model);pairRoot.add(group);
@@ -1749,11 +1753,11 @@ function initializeOfficialPair(source,clip){
   action.time=i*.07;
   officialPair.push({group,mixer});
  }
- document.querySelector('#officialPairStatus').textContent='正式モデル2頭を読み込みました。走行開始でギャロップと進路を個別に確認できます。';
+ document.querySelector('#officialPairStatus').textContent='正式モデル'+OFFICIAL_TEST_COUNT+'頭を読み込みました。骨格と走行アニメーションは個別です。';
 }
 function updateOfficialPair(dt){
  if(!isOfficialPairTest||!installedDesign01||!activePlan)return;
- for(let i=0;i<2;i++){
+ for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
   const h=officialPair[i],state=officialPairVisualState(i);
   if(!h||!state)continue;
   // Both the official model and following camera use this same render-time pose.
@@ -1830,7 +1834,7 @@ async function loadApprovedHorse(buffer){
  }else if(fieldMode.value==='single')setView('side');
  demoBtn.disabled=false;
  setDesign01Status(isOfficialPairTest?
-  '正式モデル2頭の読み込み完了。走行開始して確認できます。':
+  '正式モデル'+OFFICIAL_TEST_COUNT+'頭の読み込み完了。走行開始して確認できます。':
   '正式な馬の造形・テクスチャとギャロップV2を読込完了。横から1頭走行を確認できます。');
 }
 async function maybeLoadStoredHorse(){
@@ -1934,24 +1938,32 @@ markerFocus.addEventListener('change',inspectMarker);
 // 18頭の従来カメラは一切変更しない。
 function pairTrackingView(which){return ['field','side','front3q','chase'].includes(which)}
 function officialPairCameraShot(which='field'){
- const a0=officialPairVisualState(0),a1=officialPairVisualState(1);
- if(!a0||!a1||!activePlan)return fieldCameraShot();
- const d0=a0.distance+(a0.postDistance||0),d1=a1.distance+(a1.postDistance||0);
- const lead=d0>=d1?a0:a1,leadDistance=Math.max(d0,d1),tailDistance=Math.min(d0,d1);
+ const horses=Array.from({length:OFFICIAL_TEST_COUNT},(_,i)=>officialPairVisualState(i));
+ if(!activePlan||horses.some(h=>!h))return fieldCameraShot();
+ let lead=horses[0],leadDistance=-Infinity,tailDistance=Infinity,meanLane=0;
+ for(const h of horses){
+  const d=h.distance+(h.postDistance||0);
+  if(d>leadDistance){lead=h;leadDistance=d}
+  tailDistance=Math.min(tailDistance,d);
+  meanLane+=h.lane;
+ }
+ meanLane/=OFFICIAL_TEST_COUNT;
  const gap=leadDistance-tailDistance;
  // 14m未満は中点、27m以上で先頭-5mに移行。段差を出さず連続的に切替。
  const blend=THREE.MathUtils.smoothstep(gap,14,27);
  const focusDistance=THREE.MathUtils.lerp((leadDistance+tailDistance)/2,leadDistance-5,blend);
  const a=fieldCenterAt(activePlan,Math.max(0,focusDistance));
  const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
- const lane=THREE.MathUtils.lerp((a0.lane+a1.lane)/2,lead.lane,blend);
+ const lane=THREE.MathUtils.lerp(meanLane,lead.lane,blend);
  const focus=a.p.clone().addScaledVector(side,lane);
  const aspect=Math.max(.5,stage.clientWidth/Math.max(1,stage.clientHeight));
  const narrow=Math.max(0,1/aspect-1);
- const lateral=which==='chase'?-12:which==='front3q'?-26:
-  -THREE.MathUtils.lerp(35,27,blend)-narrow*7;
+ const extra=isOfficialFourTest?(1-blend)*11:0;
+ const lateral=which==='chase'?-12-extra*.6:which==='front3q'?-26-extra*.6:
+  -THREE.MathUtils.lerp(35,27,blend)-narrow*7-extra;
  const along=which==='chase'?-25:which==='front3q'?14:7;
- const height=(which==='chase'?11:which==='front3q'?9.5:9)+narrow*2;
+ const height=(which==='chase'?11:which==='front3q'?9.5:9)+narrow*2+
+  (isOfficialFourTest?(1-blend)*4:0);
  const eye=focus.clone().addScaledVector(side,lateral).addScaledVector(a.t,along)
   .add(new THREE.Vector3(0,height,0));
  const target=focus.clone().addScaledVector(a.t,1.4).add(new THREE.Vector3(0,2,0));
@@ -1960,14 +1972,14 @@ function officialPairCameraShot(which='field'){
 // 発走直後から全頭を追う従来のカメラ。進行方向の前方から馬群を捉える。
 function fieldCameraShot(){
  const sorted=fieldMode.value==='race18'&&raceHorses.length===FIELD_COUNT?
- (isOfficialPairTest?raceHorses.slice(0,2).sort((a,b)=>b.distance-a.distance):racePositions()):null;
+ (isOfficialPairTest?raceHorses.slice(0,OFFICIAL_TEST_COUNT).sort((a,b)=>b.distance-a.distance):racePositions()):null;
  const leader=sorted?sorted[0].distance:travel;
  const tail=sorted?sorted[sorted.length-1].distance:travel;
  const packLength=Math.max(0,leader-tail);
  const middle=(leader+tail)/2;
  const a=fieldCenterAt(activePlan,middle),side=new THREE.Vector3(a.t.z,0,-a.t.x);
  const laneOffset=isOfficialPairTest&&raceHorses.length===FIELD_COUNT?
-  (raceHorses[0].lane+raceHorses[1].lane)/2:0;
+  raceHorses.slice(0,OFFICIAL_TEST_COUNT).reduce((s,h)=>s+h.lane,0)/OFFICIAL_TEST_COUNT:0;
  const cameraCenter=a.p.clone().addScaledVector(side,laneOffset);
  const aspect=Math.max(.45,stage.clientWidth/Math.max(1,stage.clientHeight));
  const portrait=aspect<.9?(0.9/aspect-1)*26:0;
@@ -2046,7 +2058,7 @@ function selectRace(){
  playing=false;travel=0;gateOpening=0;initRaceHorses();
  demoBtn.textContent=initialDemoText();
  document.querySelector('#raceOrder').textContent=isOfficialPairTest?
- '正式モデル2頭を表示しています（レース計算は既存の18頭エンジンで継続）。':
+ '正式モデル'+OFFICIAL_TEST_COUNT+'頭で平行レーンを走行。18頭用の進路AIは適用しません。':
  fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  highlightRace(activePlan);drawFieldGate(activePlan);
  fieldRoot.visible=fieldMode.value!=='single'&&!isOfficialPairTest;
@@ -2073,7 +2085,7 @@ function resetDemo(){
  travel=0;playing=false;gateOpening=0;initRaceHorses();updateGateDoors();
  demoBtn.textContent=initialDemoText();
  document.querySelector('#raceOrder').textContent=isOfficialPairTest?
- '正式モデル2頭を表示しています（レース計算は既存の18頭エンジンで継続）。':
+ '正式モデル'+OFFICIAL_TEST_COUNT+'頭で平行レーンを走行。18頭用の進路AIは適用しません。':
  fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  positionRunner();positionFieldHorses();
  if(isOfficialPairTest)setView(pairTrackingView(view)?view:'field');
@@ -2127,11 +2139,12 @@ function resize(){
 }
 window.addEventListener('resize',resize);
 if(isOfficialPairTest){
- document.querySelector('[data-view="side"]').textContent='2頭の真横を追尾';
- document.querySelector('[data-view="front3q"]').textContent='2頭の斜め前を追尾';
- document.querySelector('[data-view="chase"]').textContent='2頭の後方を追尾';
- document.querySelector('[data-view="field"]').textContent='2頭を自動追尾';
- document.querySelector('#help').textContent='2頭追尾：近ければ両馬、離れたら先頭馬と後方の走路を表示';
+ document.querySelector('#officialGroupHeading').textContent='正式Design 01｜'+OFFICIAL_TEST_COUNT+'頭走行テスト';
+ document.querySelector('[data-view="side"]').textContent=OFFICIAL_TEST_COUNT+'頭の真横を追尾';
+ document.querySelector('[data-view="front3q"]').textContent=OFFICIAL_TEST_COUNT+'頭の斜め前を追尾';
+ document.querySelector('[data-view="chase"]').textContent=OFFICIAL_TEST_COUNT+'頭の後方を追尾';
+ document.querySelector('[data-view="field"]').textContent=OFFICIAL_TEST_COUNT+'頭を自動追尾';
+ document.querySelector('#help').textContent='正式モデル'+OFFICIAL_TEST_COUNT+'頭追尾：近ければ馬群、離れたら先頭とその後方を表示';
 }
 resize();setView('all');selectRace();updateDesign01Panel();setView(isOfficialPairTest?'field':(isDesign01Review?'side':'start'));
 function animate(time){
@@ -2145,7 +2158,7 @@ function animate(time){
  const dt=Math.min(clock.getDelta(),.05);
  if(playing){
   if(fieldMode.value==='race18'){
-   if(updateRace(dt)){playing=false;demoBtn.textContent=isOfficialPairTest?'2頭テストをもう一度':'18頭ゴール・もう一度'}
+   if(updateRace(dt)){playing=false;demoBtn.textContent=isOfficialPairTest?OFFICIAL_TEST_COUNT+'頭テストをもう一度':'18頭ゴール・もう一度'}
   }else{
    const step=16.7*Number(rate.value)*dt;
    travel=Math.min(activePlan?.distance||LAP,travel+step);
@@ -2187,7 +2200,7 @@ function animate(time){
   fps=fpsCount*1000/(time-lastTime||1);fpsCount=0;lastTime=time;
   const rest=Math.max(0,Math.round((activePlan?.distance||1400)-travel));
   drawElevationProfile();
-  const modeName=isOfficialPairTest?'正式Design 01・2頭テスト':fieldMode.value==='race18'?'18頭レース':
+  const modeName=isOfficialPairTest?'正式Design 01・'+OFFICIAL_TEST_COUNT+'頭テスト':fieldMode.value==='race18'?'18頭レース':
    fieldMode.value==='field18'?'18頭等速':'1頭デモ';
   info.textContent='東京芝A '+activeDistance+'m｜'+(playing?'走行中':'停止中')+
    '\n'+modeName+'｜残り'+rest+'m｜FPS '+fps.toFixed(0)+
@@ -2196,8 +2209,8 @@ function animate(time){
  if(isOfficialPairTest&&installedDesign01&&activePlan){
   const shot=officialPairCameraShot(pairTrackingView(view)?view:'field');
   document.querySelector('#officialPairStatus').textContent=
-   '2頭差 '+shot.gap.toFixed(1)+'m｜'+
-   (shot.focusedOnLead?'先頭と後方の走路を優先':'2頭の間隔に合わせて追尾')+
+   '先頭・最後尾差 '+shot.gap.toFixed(1)+'m｜'+
+   (shot.focusedOnLead?'先頭と後方の走路を優先':'馬群の間隔に合わせて追尾')+
    '｜内ラチまで中心3.7m以上';
  }
   info.style.whiteSpace='pre-line';
