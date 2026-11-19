@@ -462,3 +462,111 @@ test('approved 2-horse mode still uses its original independent finish-out behav
  assert.match(step,/h\.postDistance=Math\.min\(24,h\.postDistance\+12\*tick\)/);
  assert.match(step,/h\.postSpeed=Math\.max\(10\.5,/);
 });
+
+function runActualTokyoWidthFourHorseSimulation(distance){
+ const profiles=html.match(/const FOUR_PACE_PROFILES=\[[\s\S]*?\];/)?.[0];
+ const code=['widthAt','pairRailLane','officialReviewLane','fourHorseDesiredSlot',
+  'fourHorseSafeStep','stepOfficialPair'].map(extract).join('\n');
+ assert.ok(profiles,'Tactical pace profiles must exist');
+ const source=`(()=>{
+ const THREE={MathUtils:{clamp:(v,lo,hi)=>Math.max(lo,Math.min(hi,v))}};
+ const LAP=2083.1,FINISH_DISTANCE=525.9,PAIR_RAIL_CENTER_CLEARANCE=3.7,
+ PAIR_LANE_SPACING=3.35,FOUR_START_OUTSIDE_OFFSET=8,
+ FOUR_INWARD_SETTLE_DISTANCE=160,FOUR_MIN_LONGITUDINAL=4.8,
+ FOUR_LATERAL_SHARED=3.05,FOUR_INWARD_RATE=4.4,
+ FOUR_MAX_LATERAL_PER_FORWARD=.30,isOfficialFourTest=true,OFFICIAL_TEST_COUNT=4;
+ ${profiles}
+ ${code}
+ const startStation=((FINISH_DISTANCE-trackDistance)%LAP+LAP)%LAP;
+ const fieldCenterAt=(_p,d)=>({width:widthAt(startStation+d)});
+ const activePlan={distance:trackDistance};
+ let raceElapsed=0,raceFinished=[];
+ const raceHorses=Array.from({length:4},(_,i)=>({
+  idx:i,number:i+1,distance:0,postDistance:0,speed:0,
+  finished:false,finishTime:null,slot:i,nextLaneReviewTime:0,
+  lane:officialReviewLane(fieldCenterAt(activePlan,0).width,i,0)
+ }));
+ const frozenFrames=[0,0,0,0],minimumSpeed=[Infinity,Infinity,Infinity,Infinity];
+ const stoppedEvents=[],snapshots={},mileposts=[30,45,60,100,200,500,1000];
+ let minRail=Infinity,minCenterDistance=Infinity,sidewaysWithoutForward=0,
+     maximumForwardYawRatio=0,postFinishFrozen=0;
+ for(let t=0;t<30000&&raceFinished.length<4;t++){
+  const before=raceHorses.map(h=>({d:h.distance,lane:h.lane,
+   postDistance:h.postDistance||0,finished:h.finished}));
+  stepOfficialPair(1/60);
+  const lead=Math.max(...raceHorses.map(h=>h.distance));
+  for(const m of mileposts){
+   if(!snapshots[m]&&lead>=m)
+    snapshots[m]=raceHorses.map(h=>({distance:h.distance,
+     lane:h.lane,speed:h.speed}));
+  }
+  const active=raceHorses.filter(h=>!h.finished);
+  for(let i=0;i<4;i++){
+   const h=raceHorses[i];
+   const forward=h.distance-before[i].d;
+   const sideways=Math.max(0,h.lane-before[i].lane);
+   if(!h.finished&&h.distance>30){
+    minimumSpeed[i]=Math.min(minimumSpeed[i],h.speed);
+    if(h.speed<9 || forward<.035){
+     frozenFrames[i]++;
+     if(stoppedEvents.length<10)stoppedEvents.push({
+      horse:i+1,time:raceElapsed,distance:h.distance,speed:h.speed});
+    }
+   }
+   if(before[i].finished&&!h.finished)throw Error('Cannot revert finished state');
+   if(before[i].finished&&raceFinished.length<4&&
+     h.postDistance-before[i].postDistance<.01)postFinishFrozen++;
+   if(sideways>1e-8&&!h.finished){
+    if(forward<1e-8)sidewaysWithoutForward++;
+    maximumForwardYawRatio=Math.max(maximumForwardYawRatio,
+     sideways/Math.max(forward,1e-7));
+   }
+  }
+  for(let i=0;i<active.length;i++){
+   const a=active[i];
+   minRail=Math.min(minRail,fieldCenterAt(activePlan,a.distance).width/2-a.lane);
+   for(let j=i+1;j<active.length;j++){
+    const b=active[j];
+    minCenterDistance=Math.min(minCenterDistance,
+     Math.hypot(a.distance-b.distance,a.lane-b.lane));
+   }
+  }
+ }
+ return {distance:trackDistance,startStation,finished:raceFinished.length,
+  minimumSpeed,frozenFrames,stoppedEvents,snapshots,minRail,
+  minCenterDistance,sidewaysWithoutForward,
+  maximumForwardYawRatio,postFinishFrozen};
+ })()`;
+ return runInNewContext(source,{trackDistance:distance});
+}
+
+test('real Tokyo turf width and race start stations prevent all four pre-finish freezes',()=>{
+ for(const distance of [1400,1600,1800,2000,2300,2400,2500,2600,3400]){
+  const r=runActualTokyoWidthFourHorseSimulation(distance);
+  assert.equal(r.finished,4,'All four horses must finish '+distance+'m');
+  assert.ok(Math.abs(r.startStation-((525.9-distance)%2083.1+2083.1)%2083.1)<1e-7,
+   'True Tokyo starting station');
+  assert.equal(r.frozenFrames.reduce((a,b)=>a+b,0),0,
+   'No race horse may stall before finish on the actual Tokyo width profile: '+distance+
+    'm; '+JSON.stringify(r.stoppedEvents));
+  assert.ok(r.minimumSpeed.every(v=>v>10),
+   'Each horse maintains galloping forward speed after 30m: '+distance);
+  assert.ok(r.minCenterDistance>=3.05,
+   'Horses remain separated on the actual changing width: '+distance);
+  assert.ok(r.minRail>=3.7,
+   'No horse enters the inner rail on the actual changing width: '+distance);
+  assert.equal(r.sidewaysWithoutForward,0,'Never travel sideways without forward progression');
+  assert.ok(r.maximumForwardYawRatio<=.300001,'Natural diagonal merge angle cap');
+  assert.equal(r.postFinishFrozen,0,'Finished runners keep moving until the race ends');
+ }
+});
+
+test('Tokyo 1400m regression explicitly covers the previous 45m stoppage',()=>{
+ const r=runActualTokyoWidthFourHorseSimulation(1400);
+ assert.ok(r.snapshots[45],'Must simulate the previously defective 45m region');
+ assert.ok(r.snapshots[45].every(h=>h.speed>9),
+  'All four keep moving past the former deadlock at 45m');
+ assert.ok(r.snapshots[60].every(h=>h.speed>9),
+  'The same horses keep running beyond 60m');
+ assert.equal(r.frozenFrames.reduce((x,y)=>x+y,0),0);
+});
