@@ -75,8 +75,10 @@ test('all pair tracking angles frame both if close, leader plus trailing course 
      activePlan:{distance:1400},raceHorses:[
       {distance:200,postDistance:0,lane:12.3},
       {distance:200-gap,postDistance:0,lane:8.95}
-     ],fieldCenterAt:(_p,d)=>({p:new Vec3(d,0,0),t:new Vec3(1,0,0)}),
+     ],raceAccumulator:0,RACE_TICK:1/60,playing:false,
+     pairRailLane:lane,fieldCenterAt:(_p,d)=>({p:new Vec3(d,0,0),t:new Vec3(1,0,0),width:36}),
      fieldCameraShot:()=>{throw Error('Unexpected fallback camera')}};
+    ctx.officialPairVisualState=runInNewContext('('+extract('officialPairVisualState')+')',ctx);
     const camera=runInNewContext('('+extract('officialPairCameraShot')+')',ctx);
     const shot=camera(mode);
     const focusDistance=shot.target.x-1.4;
@@ -87,4 +89,29 @@ test('all pair tracking angles frame both if close, leader plus trailing course 
    }
   }
  }
+});
+
+test('official 2-horse visual position interpolates smoothly between 60Hz race ticks',()=>{
+ const h={distance:50.27,prevDistance:50,postDistance:0,prevPostDistance:0,lane:0,speed:16};
+ const step=1/60;
+ const readings=[];
+ for(const alpha of [0,.125,.25,.375,.50,.625,.75,.875,1]){
+  const ctx={THREE:fakeThree,raceHorses:[h],activePlan:{distance:1400},
+   playing:true,raceAccumulator:alpha*step,RACE_TICK:step,
+   fieldCenterAt:(_p,d)=>({width:36}),pairRailLane:lane};
+  const state=runInNewContext('('+extract('officialPairVisualState')+')',ctx)(0);
+  readings.push(state.distance);
+  assert.ok(Math.abs(state.distance-(50+alpha*.27))<1e-7);
+  assert.ok(Math.abs(state.lane-lane(36,0))<1e-7);
+ }
+ for(let i=1;i<readings.length;i++){
+  assert.ok(readings[i]>readings[i-1],'No duplicate frozen draw poses inside a tick');
+  assert.ok(readings[i]-readings[i-1]<.04,'No abrupt large step inside a tick');
+ }
+});
+
+test('2-horse mode lowers internal GPU pixel ratio without modifying official horse assets',()=>{
+ assert.match(html,/setPixelRatio\(isOfficialPairTest\?Math\.min\(1\.05,/);
+ assert.match(html,/cloneSkeleton\(source\)/);
+ assert.match(html,/h\.mixer\.setTime\(shownTime\*Math\.min\(2,Number\(rate\.value\)\)\+i\*\.07\)/);
 });
