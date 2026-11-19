@@ -96,6 +96,29 @@ a{color:#95e8df}
 #profileReadout{font-size:12px;color:#ffdf9a;font-weight:650}
 .gradeChip{display:inline-block;padding:3px 7px;border-radius:8px;background:#29434e;margin:3px 4px 1px 0;font-size:11px}
 @media(min-width:800px){h1{font-size:23px}.tools{gap:10px}#stage{min-height:590px}}
+
+.official18 #broadcastCameraLabel,.official18 #help{display:none!important}
+.official18 #telemetry{position:static;max-width:100%;width:auto;line-height:1.4;
+ padding:6px 8px;font-size:11px;background:#172c36;border:1px solid #355966}
+.official18 #stageDock{bottom:12px}
+#runnerLabelLayer{position:absolute;inset:0;z-index:4;overflow:hidden;pointer-events:none}
+#runnerLabelLayer[hidden],.runner-name-label[hidden]{display:none!important}
+.runner-name-label{position:absolute;display:block;transform:translate(-50%,-100%);
+ max-width:154px;white-space:nowrap;text-overflow:ellipsis;
+ padding:5px 9px;border-radius:8px;border:1px solid #ffffff59;
+ background:rgba(9,13,18,.93);color:#fff;font-size:12px;font-weight:780;
+ line-height:1.2;text-shadow:0 1px 2px #000;box-shadow:0 2px 8px #0008}
+.runner-name-label::after{content:'';position:absolute;left:50%;bottom:-6px;
+ transform:translateX(-50%);border-left:6px solid transparent;
+ border-right:6px solid transparent;border-top:6px solid rgba(9,13,18,.93)}
+.runner-name-label[data-rank="1"]{font-size:13px;border-color:#e5d393}
+#raceNameEditor{margin:8px 12px;padding:9px 11px;border:1px solid #41636d;
+ border-radius:11px;background:#162a34;font-size:12px}
+#raceNameEditor summary{cursor:pointer;font-weight:700;color:#e1f5f2}
+#raceNameInputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:11px}
+#raceNameInputs label{display:flex;align-items:center;gap:8px}
+#raceNameInputs input{width:100%;min-width:0;min-height:35px;background:#10212b;
+ border:1px solid #557781;border-radius:7px;color:#fff;font-size:13px;padding:6px}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script>
 </head>
@@ -109,6 +132,7 @@ a{color:#95e8df}
 <div id="stage">
  <div id="telemetry">3Dコースを準備中…</div>
  <div id="broadcastCameraLabel" hidden>📺 中継：ゲート・発走</div>
+ <div id="runnerLabelLayer" hidden aria-hidden="true"></div>
  <div id="help">1本指ドラッグ：回転　2本指：拡大縮小・移動　Mac：ドラッグ／ホイール</div>
  <div id="stageDock" hidden>
   <div id="cameraAdjustTools">
@@ -236,6 +260,10 @@ a{color:#95e8df}
  <span>馬体・テクスチャは元のデザインを共有し、骨格とギャロップは馬ごとに独立。既存の18頭試作は変更しません。</span>
  <span id="officialPairStatus" role="status">1頭テストで保存したGLBを読み込みます。</span>
 </div>
+<details id="raceNameEditor" hidden>
+ <summary>18頭の馬名を編集（端末に保存）</summary>
+ <div id="raceNameInputs"></div>
+</details>
 <div class="tools" id="design01OriginalInfo" hidden><strong>正式モデル：BabylonJSで承認されたMeshy版 Design 01</strong> <span>元の馬体・顔・青白の勝負服・ゼッケン4をそのまま使用</span></div>
 <div class="tools" id="design01Loader" hidden>
  <strong>正式モデルのファイルは3D画面の中央から選択できます</strong>
@@ -294,9 +322,58 @@ const isDesign01Review=qs.get('model')==='design01';
 const isOfficialFourTest=isDesign01Review&&qs.get('group')==='4';
 const isOfficialEightTest=isDesign01Review&&qs.get('group')==='8';
 const isOfficialEighteenTest=isDesign01Review&&qs.get('group')==='18';
+if(isOfficialEighteenTest)document.body.classList.add('official18');
 const isOfficialMultiTest=isOfficialFourTest||isOfficialEightTest||isOfficialEighteenTest;
 const isOfficialPairTest=isDesign01Review&&(qs.get('pair')==='1'||isOfficialMultiTest);
 const OFFICIAL_TEST_COUNT=isOfficialEighteenTest?18:isOfficialEightTest?8:isOfficialFourTest?4:2;
+const RUNNER_NAMES_KEY='race-lab-official-design01-18-runner-names-v1';
+function loadOfficialRunnerNames(){
+ const result=Array.from({length:18},(_,i)=>'試験馬'+(i+1));
+ try{
+  const main=JSON.parse(localStorage.getItem('race-lab-demo-v01')||'null');
+  if(Array.isArray(main?.horses))for(const horse of main.horses){
+   const index=Number(horse.id)-1;
+   if(index>=0&&index<18&&String(horse.name||'').trim())
+    result[index]=String(horse.name).trim().slice(0,24);
+  }
+  const edited=JSON.parse(localStorage.getItem(RUNNER_NAMES_KEY)||'null');
+  if(Array.isArray(edited))for(let i=0;i<18;i++){
+   if(typeof edited[i]==='string'&&edited[i].trim())result[i]=edited[i].trim().slice(0,24);
+  }
+ }catch(error){console.warn('馬名の保存内容を読み込めませんでした',error)}
+ return result;
+}
+const officialRunnerNames=isOfficialEighteenTest?loadOfficialRunnerNames():[];
+const runnerLabelLayer=document.querySelector('#runnerLabelLayer');
+const runnerNameLabels=[];
+if(isOfficialEighteenTest){
+ runnerLabelLayer.hidden=false;
+ const editor=document.querySelector('#raceNameEditor');
+ editor.hidden=false;
+ const fields=document.querySelector('#raceNameInputs');
+ for(let i=0;i<18;i++){
+  const label=document.createElement('label');
+  const title=document.createElement('span');title.textContent=(i+1)+'番';
+  const input=document.createElement('input');
+  input.type='text';input.maxLength=24;input.value=officialRunnerNames[i];
+  input.setAttribute('aria-label',(i+1)+'番の馬名');
+  input.addEventListener('input',()=>{officialRunnerNames[i]=input.value.trim()||'試験馬'+(i+1)});
+  input.addEventListener('change',()=>{
+   officialRunnerNames[i]=input.value.trim().slice(0,24)||'試験馬'+(i+1);
+   input.value=officialRunnerNames[i];
+   try{localStorage.setItem(RUNNER_NAMES_KEY,JSON.stringify(officialRunnerNames))}
+   catch(error){console.warn('馬名の保存に失敗しました',error)}
+  });
+  label.append(title,input);fields.append(label);
+ }
+ for(let i=0;i<3;i++){
+  const el=document.createElement('div');
+  el.className='runner-name-label';el.hidden=true;
+  el.dataset.rank=String(i+1);
+  runnerLabelLayer.append(el);runnerNameLabels.push(el);
+ }
+ document.querySelector('#officialPairTools').appendChild(info);
+}
 const stageDock=document.querySelector('#stageDock');
 const stageStartBtn=document.querySelector('#stageStartBtn');
 const cameraAdjustToggle=document.querySelector('#cameraAdjustToggle');
