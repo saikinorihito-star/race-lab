@@ -245,3 +245,14 @@
 - **実際のJS関数による検証**：`tests/official-design01-camera.test.mjs` 7項目追加。7種類のコース接線方向で、横視点の眼球座標と注視点座標は等高、視線は進行方向と直交すること、反対側では横方向が180°反転、360°回転・上下傾斜・近/遠ズーム・注視点の移動・追尾対象選択・旧カメラ処理の維持を検証。これまでの2/4/8頭28項目+18頭6項目も含め**全41項目PASS**。HTMLモジュールの構文とID重複も検証PASS。
 - GitHub Actionsに専用カメラテストを追加。GitHub Actions上の実際の成功状態、およびユーザーのiPhone Safari実機で真横視点がどのように見えるかは**未確認**。スクリーンショットのFPS約21の実機速度についても今回のカメラ修正では改善を約束しない。
 - 更新した18頭テストURL：`https://saikinorihito-star.github.io/race-lab/tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&group=18&v=9f5e6fa`
+
+
+### 2026-11-19追補：カメラ固定モードと最終検証
+
+- 18頭用 `📷 視点・画質` の「追う対象」に **現在位置に固定（馬が通過）** を追加。選択時の追尾注視点を `camera18FixedAnchor` に保存し、走行中の馬の距離が変化してもコース上の同じ地点に留まる。カメラ固定中にも360度回転、上下角度、ズーム、左右・上下の注視位置調整が可能。
+- 「自動」「先頭」「最後尾」「馬群中央」「試験馬1～18」へ戻すと通常追尾を再開する。距離選択を変更した場合は固定アンカーを初期化し、再び自動追尾から始める。
+- `tests/official-design01-camera.test.mjs` に固定視点を検証する1項目を追加。馬群が170m前進しても固定位置は動かず、追尾に戻すと前進した位置へ再合流することを検証。
+- レース側34項目＋カメラ8項目の**合計42検査PASS**。構文・DOM ID重複も問題なし。GitHub Actionsワークフローに追加済み。
+- 18頭テストの最終コードコミット：`01b5d9a1e6a805e83b8a3fca0aee70ca7026ce50`。
+- 確認URL：`https://saikinorihito-star.github.io/race-lab/tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&group=18&v=01b5d9a`
+- iPhone実機での新しいカメラ表示は未確認。ユーザーがスクリーンショットで示した**約21FPSの18頭描画負荷は今回の視点修正の対象外**であり、改善済みとは主張しない。
