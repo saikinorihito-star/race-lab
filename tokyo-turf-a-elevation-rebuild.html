@@ -2929,58 +2929,81 @@ function officialBroadcastStage(remaining,progress){
  if(remaining>55)return {id:'closing',label:'ゴール前・追い比べ',fov:30};
  return {id:'finish',label:'ゴール・決勝線',fov:32};
 }
+function fitBroadcastToRunners(eye,target,runners,fov){
+ // Fit approved horse positions (head to hooves) inside the TV camera.
+ // Focus shots fit their selected runners; wide shots fit the entire field.
+ const aspect=Math.max(.46,stage.clientWidth/Math.max(1,stage.clientHeight));
+ const halfTan=Math.tan(THREE.MathUtils.degToRad(fov*.5));
+ const upAxis=new THREE.Vector3(0,1,0),marks=[];
+ for(const h of runners){
+  const at=fieldCenterAt(activePlan,Math.max(0,h.distance+(h.postDistance||0)));
+  const side=new THREE.Vector3(at.t.z,0,-at.t.x).normalize();
+  const p=at.p.clone().addScaledVector(side,h.lane);
+  marks.push(p,p.clone().add(new THREE.Vector3(0,3.6,0)));
+ }
+ const offset=eye.clone().sub(target);
+ for(let pass=0;pass<9;pass++){
+  const forward=target.clone().sub(eye).normalize();
+  const right=new THREE.Vector3().crossVectors(forward,upAxis).normalize();
+  const up=new THREE.Vector3().crossVectors(right,forward).normalize();
+  let needed=1;
+  for(const mark of marks){
+   const rel=mark.clone().sub(eye),depth=rel.dot(forward);
+   if(depth<=.2){needed=Math.max(needed,2.2);continue}
+   const x=Math.abs(rel.dot(right))+1.65;
+   const y=Math.abs(rel.dot(up))+1.25;
+   needed=Math.max(needed,x/(depth*halfTan*aspect*.80),
+    y/(depth*halfTan*.76));
+  }
+  if(needed<=1.005)break;
+  offset.multiplyScalar(Math.min(2.3,needed*1.08));
+  eye.copy(target).add(offset);
+ }
+ return eye;
+}
 function officialBroadcastCameraShot(context){
- // Three deliberately different TV edits: a leading-three close-up,
- // runners around third place, and an occasional wider field shot.
- // 205m holds a shot long enough to identify runners at 2x/4x.
- const {leadDistance,tailDistance,meanLane,lead,gap}=context;
+ // Low three-quarter front, 3rd-place focus, lateral tracking and full-field.
+ // All camera work is isolated from the approved Design 01 rigs and race AI.
+ const {leadDistance,lead,gap}=context;
  const remaining=activePlan.distance-leadDistance;
  const stageShot=officialBroadcastStage(remaining,leadDistance);
- const ranked=(context.horses||[{...lead,distance:leadDistance,postDistance:0}]).map((h,i)=>({...h,number:h.number??i+1}))
+ const ranked=(context.horses||[{...lead,distance:leadDistance,postDistance:0}])
+  .map((h,i)=>({...h,number:h.number??i+1}))
   .sort((a,b)=>(b.distance+(b.postDistance||0))-(a.distance+(a.postDistance||0))||a.number-b.number);
  const leader=ranked[0]||lead;
  const third=ranked[Math.min(2,ranked.length-1)]||leader;
- const fifth=ranked[Math.min(4,ranked.length-1)]||third;
- const distanceOf=h=>h.distance+(h.postDistance||0);
- const cycle=Math.floor(Math.max(0,leadDistance-36)/205)%3;
+ const cycle=Math.floor(Math.max(0,leadDistance-36)/190)%4;
  const focusType=stageShot.id==='gate'?'gate':
-  remaining<=55?'lead':['lead','third','wide'][cycle];
- const trackDistance=focusType==='lead'?(distanceOf(leader)+distanceOf(third))/2:
-  focusType==='third'?(distanceOf(third)+distanceOf(fifth))/2:
-  focusType==='gate'?Math.min(25,leadDistance*.65):(leadDistance+tailDistance)/2;
- const focusLane=focusType==='lead'?(leader.lane+third.lane)/2:
-  focusType==='third'?(third.lane+fifth.lane)/2:meanLane;
- const at=fieldCenterAt(activePlan,Math.max(0,trackDistance));
+  remaining<=55?'lead':['lead','third','side','wide'][cycle];
+ const selected=focusType==='lead'?ranked.slice(0,Math.min(4,ranked.length)):
+  focusType==='third'?ranked.slice(Math.min(1,ranked.length-1),Math.min(7,ranked.length)):
+  focusType==='side'?ranked.slice(0,Math.min(6,ranked.length)):
+  focusType==='gate'?ranked.slice(0,Math.min(8,ranked.length)):ranked;
+ const dist=h=>h.distance+(h.postDistance||0);
+ const first=selected[0]||leader,last=selected[selected.length-1]||first;
+ const focusDistance=(dist(first)+dist(last))*.5;
+ const focusLane=selected.reduce((sum,h)=>sum+h.lane,0)/Math.max(1,selected.length);
+ const at=fieldCenterAt(activePlan,Math.max(0,focusDistance));
  const along=at.t.clone().normalize();
- const inward=new THREE.Vector3(at.t.z,0,-at.t.x).normalize();
- const target=at.p.clone().addScaledVector(inward,focusLane)
-  .add(new THREE.Vector3(0,focusType==='wide'?2.8:2.1,0));
+ const side=new THREE.Vector3(at.t.z,0,-at.t.x).normalize();
+ const target=at.p.clone().addScaledVector(side,focusLane)
+  .add(new THREE.Vector3(0,focusType==='wide'?3.3:2.45,0));
  let outside,height,ahead,fov;
- if(focusType==='gate'){
-  outside=65;height=15;ahead=18;fov=44;
- }else if(focusType==='wide'){
-  outside=THREE.MathUtils.clamp(58+gap*.24,58,88);
-  height=THREE.MathUtils.clamp(15+gap*.065,15,28);
-  ahead=18;fov=THREE.MathUtils.clamp(43+Math.max(0,gap-45)*.025,43,47);
- }else if(focusType==='lead'){
-  // Low three-quarter-front tracking view like the user-supplied footage.
-  const separation=distanceOf(leader)-distanceOf(third);
-  outside=THREE.MathUtils.clamp(25+separation*.20,25,39);
-  height=6.3;ahead=28;fov=THREE.MathUtils.clamp(38+separation*.11,38,44);
- }else{
-  const separation=distanceOf(third)-distanceOf(fifth);
-  outside=THREE.MathUtils.clamp(27+separation*.22,27,41);
-  height=6.9;ahead=24;fov=THREE.MathUtils.clamp(39+separation*.10,39,45);
- }
- const eye=at.p.clone().addScaledVector(inward,-outside)
+ if(focusType==='gate'){outside=28;height=7.8;ahead=22;fov=43}
+ else if(focusType==='wide'){outside=42;height=11.8;ahead=18;fov=42}
+ else if(focusType==='side'){outside=19;height=4.8;ahead=2;fov=38}
+ else if(focusType==='lead'){outside=17.5;height=4.5;ahead=17;fov=37}
+ else{outside=19;height=4.8;ahead=21;fov=38}
+ const eye=at.p.clone().addScaledVector(side,-outside)
   .addScaledVector(along,ahead).add(new THREE.Vector3(0,height,0));
+ fitBroadcastToRunners(eye,target,selected,fov);
  const caption=focusType==='gate'?'ゲート・発走':
-  focusType==='lead'?'先頭3頭を拡大':
-  focusType==='third'?'3番手付近を拡大':'馬群全景';
- const rankCaption='先頭 '+leader.number+'番 ／ 3番手 '+third.number+'番';
+  focusType==='lead'?'先頭集団・低い斜め前':
+  focusType==='third'?'3番手付近・斜め前':
+  focusType==='side'?'先頭集団・低い横位置':'馬群全景';
  return {eye,target,gap,focusedOnLead:focusType==='lead',
   fov,broadcastShotId:stageShot.id+'-'+focusType,
-  broadcastLabel:caption+'｜'+rankCaption};
+  broadcastLabel:caption+'｜先頭 '+leader.number+'番 ／ 3番手 '+third.number+'番'};
 }
 let broadcastLabelCutAt=0,lastRunnerLabelPaint=-1;
 function rankedOfficialRunners(){
