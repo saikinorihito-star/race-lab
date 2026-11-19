@@ -910,18 +910,25 @@ for(const lane of [6.2,11.7,17.1,21.9]){
 }
 
 // 芝A内ラチ・外ラチ。上下二段横材と支柱を配置。寸法は視認性優先の近似。
-function createRail(inner){
+// Keep a complete outer rail for ordinary courses; 1800/2000m receive a
+// distance-specific opening with two pocket guard rails at the true merge.
+const fullOuterRail=new THREE.Group();scene.add(fullOuterRail);
+const pocketRailVariants=new Map();
+function createRail(inner,parent=scene,gap=null){
  const count=330,offset=s=>inner?MEASURE_OFFSET:MEASURE_OFFSET-renderedTurfWidthAt(s);
  const beamMat=new THREE.MeshStandardMaterial({color:0xf4f9fa,roughness:.38,metalness:.04});
  const postMat=new THREE.MeshStandardMaterial({color:0xdfe9e8,roughness:.63});
+ const total=gap?LAP-gap.end+gap.start:LAP;
+ const stationAt=i=>gap?gap.end+total*i/(count-1):LAP*i/count;
  function beam(height,radius){
   const samples=[];
   for(let i=0;i<count;i++){
-   const s=LAP*i/count;
-   samples.push(offsetAt(s,offset(s),height));
+   const station=stationAt(i);
+   samples.push(offsetAt(station,offset(station),height));
   }
-  const curve=new THREE.CatmullRomCurve3(samples,true,'centripetal');
-  scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,1150,radius,6,true),beamMat));
+  const curve=new THREE.CatmullRomCurve3(samples,!gap,'centripetal');
+  parent.add(new THREE.Mesh(new THREE.TubeGeometry(curve,
+   gap?Math.max(600,Math.round(1150*total/LAP)):1150,radius,6,!gap),beamMat));
  }
  beam(1.43,.20);
  beam(.76,.12);
@@ -929,12 +936,13 @@ function createRail(inner){
  const posts=new THREE.InstancedMesh(postGeo,postMat,count);
  const dummy=new THREE.Object3D();
  for(let i=0;i<count;i++){
-  const station=LAP*i/count,p=offsetAt(station,offset(station),.76);
+  const station=stationAt(i),p=offsetAt(station,offset(station),.76);
   dummy.position.copy(p);dummy.updateMatrix();posts.setMatrixAt(i,dummy.matrix);
  }
- posts.instanceMatrix.needsUpdate=true;scene.add(posts);
+ posts.instanceMatrix.needsUpdate=true;parent.add(posts);
 }
-createRail(true);createRail(false);
+createRail(true);
+createRail(false,fullOuterRail);
 // ダートにも二段式の内ラチと外ラチ。支柱はInstancedMeshで軽量化。
 const dirtRailGroup=new THREE.Group();scene.add(dirtRailGroup);
 function createDirtRail(offset){
@@ -1354,6 +1362,113 @@ function makePocket(spec){
  return {...spec,curve,length,remaining,start:curve.getPointAt(0)};
 }
 const POCKETS=new Map(POCKET_DATA.map(x=>[x.distance,makePocket(x)]));
+// The start pockets are separate paved/grass geometry. Their former lack of
+// safety rails and the unbroken main-course outer fence made horses visibly
+// cross through barriers at both mergers.
+function createPocketRailing(pocket){
+ const group=new THREE.Group();group.name='PocketRailing_'+pocket.distance;
+ const w=pocket.distance===1800?24:28;
+ const outerAt=station=>offsetAt(station,
+  MEASURE_OFFSET-renderedTurfWidthAt(station),.12);
+ // Cache the local main-course fence. Compare horizontal distances only.
+ const boundary=[];
+ for(let s=pocket.join-205;s<=pocket.join+26;s+=1.15){
+  const a=positionAt(s);
+  boundary.push({station:s,point:outerAt(s),inward:a.inward});
+ }
+ function signedPosition(p){
+  let best=null,bestDist=Infinity;
+  for(const b of boundary){
+   const dx=p.x-b.point.x,dz=p.z-b.point.z;
+   const d=dx*dx+dz*dz;
+   if(d<bestDist){best=b;bestDist=d}
+  }
+  return {station:best.station,
+   signed:(p.x-best.point.x)*best.inward.x+
+    (p.z-best.point.z)*best.inward.z};
+ }
+ function edgePoint(u,sign){
+  const p=pocket.curve.getPointAt(u);
+  const t=pocket.curve.getTangentAt(u).normalize();
+  return p.addScaledVector(new THREE.Vector3(t.z,0,-t.x),sign*w/2);
+ }
+ function mergeIntersection(sign){
+  let previous=signedPosition(edgePoint(0,sign));
+  for(let i=1;i<=160;i++){
+   const u=i/160,now=signedPosition(edgePoint(u,sign));
+   if(previous.signed<=0&&now.signed>=0){
+    let lo=(i-1)/160,hi=u;
+    for(let pass=0;pass<12;pass++){
+     const mid=(lo+hi)/2;
+     if(signedPosition(edgePoint(mid,sign)).signed>=0)hi=mid;
+     else lo=mid;
+    }
+    const cross=(lo+hi)/2;
+    return {u:cross,station:signedPosition(edgePoint(cross,sign)).station};
+   }
+   previous=now;
+  }
+  console.error('Pocket railing merge was not found',pocket.distance,sign);
+  return null;
+ }
+ const outerMouth=mergeIntersection(-1),innerMouth=mergeIntersection(1);
+ if(!outerMouth||!innerMouth)return null;
+ // A small margin opens the outer rail on the sides of the entire pocket
+ // mouth, rather than at pocket.join (where the horse is already on track).
+ const gap={start:Math.min(outerMouth.station,innerMouth.station)-5,
+  end:Math.max(outerMouth.station,innerMouth.station)+5};
+ const white=new THREE.MeshStandardMaterial({color:0xf5faf8,roughness:.4});
+ const postMaterial=new THREE.MeshStandardMaterial({color:0xdfe9e8,roughness:.7});
+ function branch(sign,hit,station){
+  const safeU=Math.max(.03,hit.u-2/Math.max(1,pocket.length));
+  const path=[];
+  for(let i=0;i<=85;i++)path.push(edgePoint(safeU*i/85,sign));
+  // Join outside the track, at the end of the corresponding outer-rail gap.
+  path.push(outerAt(station));
+  const supportCurve=new THREE.CatmullRomCurve3(path,false,'centripetal');
+  const segmentCount=Math.max(110,Math.ceil(pocket.length*1.6));
+  for(const [y,radius] of [[1.43,.18],[.76,.115]]){
+   const points=path.map(p=>p.clone().add(new THREE.Vector3(0,y,0)));
+   const curve=new THREE.CatmullRomCurve3(points,false,'centripetal');
+   group.add(new THREE.Mesh(new THREE.TubeGeometry(curve,segmentCount,
+    radius,5,false),white));
+  }
+  const count=Math.max(12,Math.ceil(pocket.length/6));
+  const posts=new THREE.InstancedMesh(
+   new THREE.CylinderGeometry(.13,.16,1.52,6),postMaterial,count);
+  const dummy=new THREE.Object3D();
+  for(let i=0;i<count;i++){
+   const p=supportCurve.getPointAt(i/(count-1));
+   dummy.position.copy(p).add(new THREE.Vector3(0,.76,0));
+   dummy.updateMatrix();posts.setMatrixAt(i,dummy.matrix);
+  }
+  posts.instanceMatrix.needsUpdate=true;group.add(posts);
+ }
+ // Pocket +side edge intersects the earlier station; -side the later one.
+ branch(1,innerMouth,gap.start);
+ branch(-1,outerMouth,gap.end);
+ const mainOuter=new THREE.Group();
+ mainOuter.name='MainTurfRailOpening_'+pocket.distance;
+ createRail(false,mainOuter,gap);
+ scene.add(mainOuter);
+ group.visible=false;mainOuter.visible=false;scene.add(group);
+ pocketRailVariants.set(pocket.distance,{group,mainOuter,gap,
+  mouthStations:[innerMouth.station,outerMouth.station]});
+ console.assert(gap.end>gap.start&&gap.start>0&&gap.end<LAP,
+  'Pocket main-rail opening geometry',pocket.distance,gap);
+ return {gap,innerMouth,outerMouth};
+}
+const POCKET_RAIL_GEOMETRY=new Map();
+for(const pocket of POCKETS.values()){
+ POCKET_RAIL_GEOMETRY.set(pocket.distance,createPocketRailing(pocket));
+}
+function showPocketRailing(distance){
+ fullOuterRail.visible=!pocketRailVariants.has(distance);
+ for(const [value,item] of pocketRailVariants){
+  const show=Number(value)===Number(distance);
+  item.group.visible=show;item.mainOuter.visible=show;
+ }
+}
 function racePlan(distance){
  const pocket=POCKETS.get(distance)||null;
  return {distance,pocket,startStation:pocket?pocket.join:modulo(FINISH_DISTANCE-distance,LAP)};
@@ -3016,10 +3131,10 @@ function officialBroadcastCameraShot(context){
   .sort((a,b)=>(b.distance+(b.postDistance||0))-(a.distance+(a.postDistance||0))||a.number-b.number);
  const leader=ranked[0]||lead;
  const third=ranked[Math.min(2,ranked.length-1)]||leader;
- const cycle=Math.floor(Math.max(0,leadDistance-36)/190)%4;
+ const cycle=Math.floor(Math.max(0,leadDistance-36)/175)%5;
  const focusType=stageShot.id==='gate'?'gate':
-  remaining<=55?'lead':['lead','third','side','wide'][cycle];
- const selected=focusType==='lead'?ranked.slice(0,Math.min(3,ranked.length)):
+  remaining<=55?'lead':['lead','third','horseEye','side','wide'][cycle];
+ const selected=(focusType==='lead'||focusType==='horseEye')?ranked.slice(0,Math.min(3,ranked.length)):
   focusType==='third'?ranked.slice(Math.min(1,ranked.length-1),Math.min(5,ranked.length)):
   focusType==='side'?ranked.slice(0,Math.min(4,ranked.length)):
   focusType==='gate'?ranked.slice(0,Math.min(8,ranked.length)):
@@ -3037,6 +3152,10 @@ function officialBroadcastCameraShot(context){
  if(focusType==='gate'){outside=28;height=7.8;ahead=22;fov=43}
  else if(focusType==='wide'){outside=42;height=11.8;ahead=18;fov=42}
  else if(focusType==='side'){outside=19;height=4.8;ahead=2;fov=38}
+ else if(focusType==='horseEye'){
+  // Low tracking shot: no camera is allowed under the turf.
+  outside=13.8;height=2.8;ahead=13;fov=41;
+ }
  else if(focusType==='lead'){outside=17.5;height=4.5;ahead=17;fov=37}
  else{outside=19;height=4.8;ahead=21;fov=38}
  const eye=at.p.clone().addScaledVector(side,-outside)
@@ -3044,14 +3163,16 @@ function officialBroadcastCameraShot(context){
  fitBroadcastToRunners(eye,target,selected,fov);
  // Cap TV crane distance: horses, not scenery, remain the subject.
  const maxDistance=focusType==='wide'?82:focusType==='gate'?75:
-  focusType==='side'?57:60;
+  focusType==='side'?57:focusType==='horseEye'?53:60;
  const vector=eye.clone().sub(target),radius=vector.length();
  if(radius>maxDistance)eye.copy(target).addScaledVector(vector,maxDistance/radius);
- eye.y=Math.max(at.p.y+3.1,Math.min(eye.y,at.p.y+(focusType==='wide'?13:7.5)));
+ eye.y=Math.max(at.p.y+(focusType==='horseEye'?2.5:3.1),
+  Math.min(eye.y,at.p.y+(focusType==='wide'?13:focusType==='horseEye'?3.5:7.5)));
  const caption=focusType==='gate'?'ゲート・発走':
   focusType==='lead'?'先頭集団・低い斜め前':
   focusType==='third'?'3番手付近・斜め前':
-  focusType==='side'?'先頭集団・低い横位置':'馬群全景';
+  focusType==='side'?'先頭集団・低い横位置':
+  focusType==='horseEye'?'馬の目線・馬群へ接近':'馬群全景';
  return {eye,target,gap,focusedOnLead:focusType==='lead',
   fov,broadcastShotId:stageShot.id+'-'+focusType,
   broadcastLabel:caption+'｜先頭 '+leader.number+'番 ／ 3番手 '+third.number+'番'};
@@ -3361,6 +3482,7 @@ const raceSelector=document.querySelector('#raceDistance'),startInfo=document.qu
 function selectRace(){
  activeDistance=Number(raceSelector.value);
  activePlan=racePlan(activeDistance);
+ showPocketRailing(activeDistance);
  playing=false;travel=0;gateOpening=0;initRaceHorses();
  if(isOfficialEighteenTest){
   camera18LatestAnchor=null;camera18FixedAnchor=null;camera18Follow.value='auto';
