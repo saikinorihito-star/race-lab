@@ -3011,6 +3011,7 @@ function updateRunnerNameLabels(time){
  const shot=lastBroadcastShotId||'';
  const wide=shot.endsWith('-wide')||shot.endsWith('-gate');
  const limit=wide?2:3;
+ const rankStart=shot.endsWith('-third')?2:0;
  const seconds=Math.max(0,(time-broadcastLabelCutAt)/1000)%8.5;
  // Show leader first, then second and third, and fade out before repeating.
  const revealed=seconds>=.45&&seconds<6.8?
@@ -3021,7 +3022,7 @@ function updateRunnerNameLabels(time){
  const occupied=[];
  camera.updateMatrixWorld();
  for(let rank=0;rank<runnerNameLabels.length;rank++){
-  const el=runnerNameLabels[rank],item=ranked[rank];
+  const el=runnerNameLabels[rank],item=ranked[rankStart+rank];
   el.hidden=true;
   if(rank>=revealed||!item)continue;
   const runner=officialPair[item.index];
