@@ -679,6 +679,29 @@ renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.09;
 stage.prepend(renderer.domElement);
+// A genuine iOS WebGL context loss otherwise leaves a silent black viewport.
+// Let Three.js restore resources; show a recovery control only if necessary.
+let graphicsContextLost=false;
+const graphicsRecovery=document.createElement('div');
+graphicsRecovery.hidden=true;
+graphicsRecovery.style.cssText='position:absolute;z-index:12;left:8%;right:8%;top:26%;padding:16px;text-align:center;color:#fff;background:#142934f2;border:2px solid #f6d987;border-radius:12px;line-height:1.7;box-shadow:0 5px 24px #09141c99;';
+const graphicsRecoveryText=document.createElement('div');
+graphicsRecoveryText.textContent='グラフィック描画が停止しました。復旧しない場合は再読み込みしてください。';
+const graphicsRecoveryButton=document.createElement('button');
+graphicsRecoveryButton.type='button';
+graphicsRecoveryButton.textContent='描画を再起動';
+graphicsRecoveryButton.style.cssText='display:block;margin:10px auto 0;background:#b6ec55;color:#192d22;font-weight:800;';
+graphicsRecoveryButton.addEventListener('click',()=>window.location.reload());
+graphicsRecovery.append(graphicsRecoveryText,graphicsRecoveryButton);
+stage.append(graphicsRecovery);
+renderer.domElement.addEventListener('webglcontextlost',event=>{
+ event.preventDefault();
+ graphicsContextLost=true;graphicsRecovery.hidden=false;
+ playing=false;
+});
+renderer.domElement.addEventListener('webglcontextrestored',()=>{
+ graphicsContextLost=false;graphicsRecovery.hidden=true;
+});
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=.075;controls.minDistance=7;controls.maxDistance=3300;controls.maxPolarAngle=Math.PI*.49;
 // The approved group camera follows a moving horse; user input is handled as
@@ -3454,6 +3477,10 @@ resize();setView('all');selectRace();updateDesign01Panel();setView(
  (isDesign01Review?'side':'start'));
 function animate(time){
  requestAnimationFrame(animate);
+ if(graphicsContextLost){
+  clock.getDelta(); // prevent a huge physics delta after the GPU resumes
+  return;
+ }
  if(lastFrameStamp&&time>lastFrameStamp){
   const frameMs=time-lastFrameStamp;
   maxFrameMs=Math.max(maxFrameMs,frameMs);
