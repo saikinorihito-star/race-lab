@@ -2280,14 +2280,79 @@ function officialFrameIndex(horseNumber){
 // Keep the 36-bone original Design01 GLB, body, rider, skin, mesh, texture and
 // approved gallop unmodified. Visible frame-coloured number-cloth markers are
 // separate accessories on each clone; never recolour the original horse coat.
+// Inspect the actual APPROVED GLB data (one 484,459-vertex skinned mesh,
+// one shared diffuse atlas). The previous floating panels did not recolour
+// the original blue hat/cloth. Mark only the real original mesh positions for
+// runtime frame-colour shading; geometry, bones and gallop remain unchanged.
+// Atlas-zone coordinates are measured in the 36.7MB Design01 original model.
+function prepareOriginalFrameZones(source){
+ let count=0;
+ source.traverse(node=>{
+  if(!node.isSkinnedMesh||!node.geometry?.getAttribute('position'))return;
+  const geo=node.geometry;
+  if(geo.getAttribute('raceTintZone'))return;
+  const positions=geo.getAttribute('position'),data=new Uint8Array(positions.count);
+  for(let i=0;i<positions.count;i++){
+   const x=positions.getX(i),y=positions.getY(i),z=positions.getZ(i);
+   // Helmet crown (above rider's face), original Meshy bind-space bounds.
+   const hat=y>.535&&z>-.10&&z<.32&&Math.abs(x)<.17;
+   // Both sides of the saddlecloth, behind the forelegs and below the silk.
+   const cloth=y>-.23&&y<.18&&z>-.53&&z<.065&&Math.abs(x)>.145;
+   data[i]=hat?255:cloth?128:0;
+   if(hat||cloth)count++;
+  }
+  geo.setAttribute('raceTintZone',new THREE.Uint8BufferAttribute(data,1,true));
+ });
+ return count;
+}
+function tintOriginalHelmetAndCloth(model,horseNumber){
+ const tint=new THREE.Color(RACE_FRAME_COLORS[officialFrameIndex(horseNumber)].hex);
+ model.traverse(node=>{
+  if(!node.isSkinnedMesh||!node.geometry?.getAttribute('raceTintZone'))return;
+  const old=node.material;
+  if(!old||Array.isArray(old))return;
+  // Material cloning keeps the original shared 36.7MB GLB untouched. The
+  // geometry remains shared; only this horse's colour uniform differs.
+  const mat=old.clone();
+  mat.onBeforeCompile=(shader)=>{
+   shader.uniforms.raceFrameTint={value:tint};
+   shader.vertexShader=shader.vertexShader.replace(
+    '#include <common>',
+    '#include <common>\\nattribute float raceTintZone;\\nvarying float vRaceTintZone;')
+    .replace('#include <begin_vertex>',
+    '#include <begin_vertex>\\nvRaceTintZone=raceTintZone;');
+   shader.fragmentShader=shader.fragmentShader.replace(
+    '#include <common>',
+    '#include <common>\\nuniform vec3 raceFrameTint;\\nvarying float vRaceTintZone;')
+    .replace('#include <color_fragment>',`#include <color_fragment>
+    if(vRaceTintZone>.30){
+     // Use BLUE from the original texture as the gate; leave reins,
+     // skin, horse coat, blue-and-white jacket and all other UVs intact.
+     float originalBlue=diffuseColor.b-max(diffuseColor.r,diffuseColor.g);
+     float blueMask=smoothstep(.018,.085,originalBlue);
+     float brightMask=vRaceTintZone>.87?
+      smoothstep(.55,.85,min(min(diffuseColor.r,diffuseColor.g),diffuseColor.b)):.0;
+     float mask=max(blueMask,brightMask*.88);
+     float lightness=dot(diffuseColor.rgb,vec3(.2126,.7152,.0722));
+     vec3 shaded=raceFrameTint*(.55+min(.55,lightness*.95));
+     diffuseColor.rgb=mix(diffuseColor.rgb,shaded,mask);
+    }`);
+  };
+  mat.customProgramCacheKey=()=> 'race-frame-tint-v2';
+  mat.needsUpdate=true;
+  node.material=mat;
+ });
+}
 function addOfficialFrameCloth(group,horseNumber,bounds){
  const frame=RACE_FRAME_COLORS[officialFrameIndex(horseNumber)];
  const size=bounds.getSize(new THREE.Vector3());
  const center=bounds.getCenter(new THREE.Vector3());
  if(!Number.isFinite(size.x*size.y*size.z)||
   size.x<.08||size.y<.08||size.z<.08)return null;
- const panelLength=THREE.MathUtils.clamp(size.z*.26,.38,.95);
- const panelHeight=THREE.MathUtils.clamp(size.y*.18,.25,.62);
+ // The approved GLB has length ~1.9 and height ~1.33 in bind-space.
+ // Short, high-contrast numbers cover the original printed #4 on each side.
+ const panelLength=THREE.MathUtils.clamp(size.z*.25,.37,.57);
+ const panelHeight=THREE.MathUtils.clamp(size.y*.24,.26,.36);
  const canvas=document.createElement('canvas');
  canvas.width=256;canvas.height=192;
  const ctx=canvas.getContext('2d');
@@ -2304,9 +2369,9 @@ function addOfficialFrameCloth(group,horseNumber,bounds){
   map:texture,side:THREE.DoubleSide,transparent:false,depthTest:true
  });
  const geometry=new THREE.PlaneGeometry(panelLength,panelHeight);
- const y=bounds.min.y+size.y*.59;
- const z=center.z-size.z*.075;
- const sideX=Math.max(.08,size.x*.43);
+ const y=bounds.min.y+size.y*.50;
+ const z=center.z-size.z*.105;
+ const sideX=Math.max(.22,size.x*.515);
  const outsidePanels=new THREE.Group();
  outsidePanels.name='raceFrameCloth_'+horseNumber+'_'+frame.name;
  for(const side of [-1,1]){
@@ -2322,7 +2387,7 @@ function addOfficialFrameCloth(group,horseNumber,bounds){
   new THREE.BoxGeometry(size.x*.60,.035,panelLength*.9),
   new THREE.MeshBasicMaterial({color:frame.hex,depthTest:true})
  );
- top.position.set(center.x,bounds.min.y+size.y*.64,z);
+ top.position.set(center.x,bounds.min.y+size.y*.535,z);
  top.name='frame_colour_back_strip';
  outsidePanels.add(top);
  group.add(outsidePanels);
@@ -2333,13 +2398,17 @@ async function initializeOfficialPair(source,clip){
  officialPair.length=0;
  // Bounds of the approved GLB are identical across all cloned horse rigs.
  // Compute this only once; never recalculate 484k-vertex geometry 18 times.
+ if(isOfficialEighteenTest)prepareOriginalFrameZones(source);
  const originalFrameBounds=isOfficialEighteenTest?
   new THREE.Box3().setFromObject(source):null;
  for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
   // ジオメトリやテクスチャは共有し、スキンとボーンだけ独立させる。
   const model=cloneSkeleton(source);
   const group=new THREE.Group();group.add(model);
-  if(isOfficialEighteenTest)addOfficialFrameCloth(group,i+1,originalFrameBounds);
+  if(isOfficialEighteenTest){
+   tintOriginalHelmetAndCloth(model,i+1);
+   addOfficialFrameCloth(group,i+1,originalFrameBounds);
+  }
   pairRoot.add(group);
   const mixer=new THREE.AnimationMixer(model);
   const action=mixer.clipAction(clip);
