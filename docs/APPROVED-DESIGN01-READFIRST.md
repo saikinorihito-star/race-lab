@@ -277,3 +277,15 @@
 - **レース用画面とコース制作・点検用画面を分離**：正式18頭 `isOfficialEighteenTest` のとき `#views` 内で表示するのは `side`（真横）、`front3q`（斜め前）、`chase`（後方）、`field`（自動追尾）の4つだけ。 `all`・`top`・`stand`・`goal`・`goalboard`・`first`・`third`・`hill`・`dirt` は隠す。ハロン棒位置確認の `#distanceViews` も隠す。ボタンのDOM要素は削除せず、他モードや通常のコース制作・点検画面では全13ボタンとハロン棒確認を従来どおり表示。18頭モードでもステージ上の「📷 視点・画質」から360度・倍率・追尾対象等の詳細操作が可能。
 - 検証：`tests/official-design01-eighteen.test.mjs`・`tests/official-design01-visuals.test.mjs` を1.35の安定DPRに合わせて更新。後者に、iPhone向けレース画面の4ボタンのみ表示と通常モードの13ボタン保持を実際のUI制御JSを抽出して確認する回帰テスト1項目を追加。**既存2/4/8/18頭の走行・カメラ・外ラチ・発馬ゲート等の合計48項目PASS**、JS構文/HTML ID重複検査PASS。GitHub Actions実行状態、iPhone実機FPS/見た目は未確認。
 - 修正ページのコードコミット：`e9edf0736cc2f41762194b5f49bbc6f5316eed57`。URL：`https://saikinorihito-star.github.io/race-lab/tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&group=18&v=e9edf073`
+
+
+## 2026-11-19：Mac操作、2倍/4倍、枠色ゼッケン、3種類の木（iPhone版維持）
+
+- ユーザーが「Macでも操作しやすく、倍速は2・4だけ、馬を枠色に合わせ、コース周囲に3種類の木」と依頼。その後「接続して下さい」「今までつないでいたのに急に接続できなくなるの？」と質問。**GitHub APIのファイル取得と更新が実際に利用可能で、再接続は不要であることを確認した。先の『切断した』との説明は誤り。** リポジトリ `saikinorihito-star/race-lab` を直接更新。
+- **Mac操作**（正式18頭モードのみ）：左ドラッグで追尾カメラ360度回転・上下、右ドラッグ/Shift＋左ドラッグで注視点移動、ホイール/トラックパッドでズーム。Space=再生/一時停止、1=真横、2=斜め前、3=後方、4=自動追尾、R=カメラ初期化、矢印=角度補正、+/-=ズーム。WebGLキャンバス以外のスクロールには干渉しない。Mac向けにレースステージを大きくし、画質・カメラ詳細パネルも幅を拡げる。iPhoneの1本指/2本指ジェスチャーは従来どおり。
+- **2倍・4倍のみ**：画面上の`#raceSpeedButtons`に2倍・4倍ボタンを配置。押すとその速度で固定時間刻みの走行シミュレーションを進め、選択中のボタンを再度押すと通常1倍に戻る。元の速度プルダウンは18頭レース画面では非表示。残す値は通常1・2倍・4倍のみで、0.5倍と8倍は削除。モード別の脚質・接触回避のロジックそのものは変更なし。
+- **JRA枠色**：18頭立ての枠番号を馬番1/2=1枠白、3/4=2枠黒、5/6=3枠赤、7/8=4枠青、9/10=5枠黄、11/12=6枠緑、13/14/15=7枠橙、16/17/18=8枠桃とする。`officialFrameIndex` と `RACE_FRAME_COLORS` で変換。**重要**：承認済みDesign01の馬体・毛色・乗り手・36ボーン/ギャロップV2・UV/テクスチャを直接改変せず、各馬に左右の馬番入り枠色ゼッケンパネルと背の枠色帯を別ジオメトリで装着。`Box3` による元モデルの寸法取得は複製18回分ではなく元GLBに対して1回だけ。実機でのゼッケン位置合わせは未確認。
+- **3種類の木**：正式18頭モードのみ、旧88本の単一タイプ樹木を非表示にし、広葉樹・針葉樹・高木（楕円樹冠）各36本、合計108本の軽量`InstancedMesh`（幹・下部/上部樹冠の計9描画集合）を新設。植える場所は外ラチの外34〜58mで、1～2コーナー、向正面、3～4コーナーの遠景側とし、ホーム直線とスタンドの手前、レース追尾カメラの視線をなるべく避ける。参考資料：JRA東京競馬場コース資料 `https://www.jra.go.jp/facilities/race/tokyo/course/`、東京競馬場の芝・樹木参考画像 `https://www.tokyokeibajo.com/s/turf.html`。**樹木位置は写真・コース形状を踏まえた仮想配置であり、個々の実在木の測量位置・レース動画をフレームごとに照合したものではない**。
+- 枠色対応の一次資料：JRA `https://www.jra.go.jp/kouza/beginner/seminar/pdf/beginnersbook2026.pdf`（18頭立ての枠色・馬番配列）。
+- **検証**：旧2頭/4頭/8頭/18頭の走行・カメラ・芝外幅・ゲート・画質・操作テスト48項目、追加 `tests/official-design01-desktop-frame-trees.test.mjs` 7項目（枠色と馬番配列、承認GLB保持、3樹種と植樹領域、2/4倍切替・Mac操作）を合わせて**計55項目合格**。HTMLのJS構文も合格。GitHub Actions `.github/workflows/design01-regression.yml` に新規テストを登録。Mac/SafariとiPhone/Safari実機での最終FPS・表示位置・操作感は未確認。
+- 更新ページのソースコミット：`6ed60536c48530bf6aeabc5953e1671e881fbd27`。Web確認URL：`https://saikinorihito-star.github.io/race-lab/tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&group=18&v=6ed60536`。Mac/iPhone共通で開けるが、端末間のGLBキャッシュは独立。
