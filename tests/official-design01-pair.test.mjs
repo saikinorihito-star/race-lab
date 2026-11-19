@@ -17,9 +17,9 @@ const lane=runInNewContext('('+extract('pairRailLane')+')',{
  PAIR_RAIL_CENTER_CLEARANCE:SAFE,PAIR_LANE_SPACING:SEP
 });
 
-test('official horses stay clear of the inner and outer turf rails across widths',()=>{
+test('2 and 4 official horses stay clear of the inner and outer turf rails',()=>{
  for(const width of [24,28,31,33,36,39,41]){
-  for(const i of [0,1]){
+  for(const i of [0,1,2,3]){
    const position=lane(width,i);
    const innerClearance=width/2-position;
    const outerClearance=width/2+position;
@@ -29,18 +29,19 @@ test('official horses stay clear of the inner and outer turf rails across widths
  }
 });
 
-test('pair review moves on stable parallel lanes, without invoking 18-horse avoidance logic',()=>{
- for(const distance of [1400,1600,1800,2000,2300,2400,2500,2600,3400]){
+test('both 2 and 4 horse reviews use stable lanes without 18-horse AI',()=>{
+ for(const count of [2,4])for(const distance of [1400,1600,1800,2000,2300,2400,2500,2600,3400]){
   const widthAt=d=>36+5*Math.sin(d/2083.1*Math.PI*2+.5);
-  const raceHorses=Array.from({length:2},(_,i)=>({
+  const raceHorses=Array.from({length:count},(_,i)=>({
    number:i+1,distance:0,postDistance:0,lane:lane(widthAt(0),i),
    speed:0,finished:false,finishTime:null
   }));
   const ctx={activePlan:{distance},raceFinished:[],raceElapsed:0,raceHorses,
+   OFFICIAL_TEST_COUNT:count,
    fieldCenterAt:(_plan,d)=>({width:widthAt(d)}),pairRailLane:lane};
   const step=runInNewContext('('+extract('stepOfficialPair')+')',ctx);
   let minCloseSpacing=Infinity;
-  for(let tick=0;tick<24000&&ctx.raceFinished.length<2;tick++){
+  for(let tick=0;tick<24000&&ctx.raceFinished.length<count;tick++){
    step(1/60);
    const [h0,h1]=raceHorses;
    for(const [i,h] of raceHorses.entries()){
@@ -50,7 +51,7 @@ test('pair review moves on stable parallel lanes, without invoking 18-horse avoi
    if(Math.abs(h0.distance-h1.distance)<4)
     minCloseSpacing=Math.min(minCloseSpacing,Math.abs(h0.lane-h1.lane));
   }
-  assert.equal(ctx.raceFinished.length,2,'Both test horses finish '+distance+'m');
+  assert.equal(ctx.raceFinished.length,count,'All '+count+' test horses finish '+distance+'m');
   assert.ok(minCloseSpacing>=3.2,'Close-range horse-to-horse clearance '+distance+'m');
  }
 });
@@ -67,15 +68,17 @@ const fakeThree={Vector3:Vec3,MathUtils:{
  smoothstep:(x,a,b)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t)}
 }};
 
-test('all pair tracking angles frame both if close, leader plus trailing course if far',()=>{
- for(const mode of ['field','side','front3q','chase']){
+test('2 and 4 horse tracking angles frame whole pack if close, leader if far',()=>{
+ for(const count of [2,4])for(const mode of ['field','side','front3q','chase']){
   for(const aspect of [.58,.85,1.7]){
    for(const gap of [0,8,14,20,27,50,95]){
     const ctx={THREE:fakeThree,stage:{clientWidth:800*aspect,clientHeight:800},
-     activePlan:{distance:1400},raceHorses:[
-      {distance:200,postDistance:0,lane:12.3},
-      {distance:200-gap,postDistance:0,lane:8.95}
-     ],raceAccumulator:0,RACE_TICK:1/60,playing:false,
+     activePlan:{distance:1400},
+     OFFICIAL_TEST_COUNT:count,isOfficialFourTest:count===4,
+     raceHorses:Array.from({length:count},(_,i)=>({
+      distance:200-(gap*i/(count-1)),postDistance:0,lane:12.3-i*3.35
+     })),
+     raceAccumulator:0,RACE_TICK:1/60,playing:false,
      pairRailLane:lane,fieldCenterAt:(_p,d)=>({p:new Vec3(d,0,0),t:new Vec3(1,0,0),width:36}),
      fieldCameraShot:()=>{throw Error('Unexpected fallback camera')}};
     ctx.officialPairVisualState=runInNewContext('('+extract('officialPairVisualState')+')',ctx);
@@ -110,8 +113,17 @@ test('official 2-horse visual position interpolates smoothly between 60Hz race t
  }
 });
 
-test('2-horse mode lowers internal GPU pixel ratio without modifying official horse assets',()=>{
- assert.match(html,/setPixelRatio\(isOfficialPairTest\?Math\.min\(1\.05,/);
+test('both 2- and 4-horse modes limit GPU pixel ratio without changing model assets',()=>{
+ assert.match(html,/setPixelRatio\(isOfficialFourTest\?Math\.min\(\.95,/);
+ assert.match(html,/isOfficialPairTest\?Math\.min\(1\.05,/);
  assert.match(html,/cloneSkeleton\(source\)/);
  assert.match(html,/h\.mixer\.setTime\(shownTime\*Math\.min\(2,Number\(rate\.value\)\)\+i\*\.07\)/);
+});
+
+test('4-horse clone count and safe independent animation loop use test count',()=>{
+ assert.match(extract('initializeOfficialPair'),/for\(let i=0;i<OFFICIAL_TEST_COUNT;i\+\+\)/);
+ assert.match(extract('updateOfficialPair'),/for\(let i=0;i<OFFICIAL_TEST_COUNT;i\+\+\)/);
+ assert.match(extract('stepOfficialPair'),/raceFinished\.length>=OFFICIAL_TEST_COUNT/);
+ assert.match(html,/const OFFICIAL_TEST_COUNT=isOfficialFourTest\?4:2;/);
+ assert.match(html,/official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119/);
 });
