@@ -448,7 +448,10 @@ scene.background=new THREE.Color(0x9ec8dd);
 scene.fog=new THREE.FogExp2(0x9ec8dd,.00011); // 遠景を見通せるように減霧
 const camera=new THREE.PerspectiveCamera(43,1,.15,6000);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(1.4,window.devicePixelRatio||1));
+// The approved Meshy horse's meshes and textures are untouched. On iPhone,
+// reduce the pair-test fill rate only; original 1/18-horse modes are unchanged.
+renderer.setPixelRatio(isOfficialPairTest?Math.min(1.05,window.devicePixelRatio||1):
+ Math.min(1.4,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
@@ -1128,8 +1131,22 @@ function initRaceHorses(){
   for(let i=0;i<2;i++){
    const h=raceHorses[i],lane=pairRailLane(width,i);
    h.startLane=lane;h.lane=lane;h.targetLane=lane;h.sideSpeed=0;
+   h.prevDistance=h.distance;h.prevPostDistance=h.postDistance;
   }
  }
+}
+// The 60Hz physics step stores previous state. Drawing interpolates between
+// ticks so frame timing jitter does not turn 60Hz steps into visible snapping.
+function officialPairVisualState(index){
+ const h=raceHorses[index];
+ if(!h||!activePlan)return null;
+ const alpha=playing?Math.max(0,Math.min(1,raceAccumulator/RACE_TICK)):1;
+ const distance=THREE.MathUtils.lerp(h.prevDistance??h.distance,h.distance,alpha);
+ const postDistance=THREE.MathUtils.lerp(
+  h.prevPostDistance??(h.postDistance||0),h.postDistance||0,alpha);
+ const width=fieldCenterAt(activePlan,distance+postDistance).width;
+ return {distance,postDistance,lane:pairRailLane(width,index),
+  speed:h.speed,sideSpeed:0,alpha};
 }
 function raceHorsePosition(horse){
  const a=fieldCenterAt(activePlan,horse.distance+(horse.postDistance||0));
@@ -1321,6 +1338,8 @@ function stepOfficialPair(tick){
  raceElapsed+=tick;
  for(let i=0;i<2;i++){
   const h=raceHorses[i];
+  h.prevDistance=h.distance;
+  h.prevPostDistance=h.postDistance||0;
   if(h.finished){
    h.postDistance=Math.min(24,h.postDistance+12*tick);
    continue;
@@ -1735,12 +1754,16 @@ function initializeOfficialPair(source,clip){
 function updateOfficialPair(dt){
  if(!isOfficialPairTest||!installedDesign01||!activePlan)return;
  for(let i=0;i<2;i++){
-  const h=officialPair[i],state=raceHorses[i];
+  const h=officialPair[i],state=officialPairVisualState(i);
   if(!h||!state)continue;
+  // Both the official model and following camera use this same render-time pose.
   const a=raceHorsePosition(state);
   h.group.position.copy(a.p);
-  h.group.rotation.y=Math.atan2(a.t.x,a.t.z)+Math.atan2(state.sideSpeed||0,Math.max(3,state.speed||0));
-  if(playing)h.mixer.update(dt*Math.min(2,Number(rate.value)));
+  h.group.rotation.y=Math.atan2(a.t.x,a.t.z);
+  // Rig animation shares interpolated physics time. The clip and assets remain unchanged.
+  const shownTime=Math.max(0,raceElapsed-
+   (playing?RACE_TICK*(1-state.alpha):0));
+  h.mixer.setTime(shownTime*Math.min(2,Number(rate.value))+i*.07);
  }
 }
 function setDesign01Status(message){
@@ -1911,7 +1934,7 @@ markerFocus.addEventListener('change',inspectMarker);
 // 18頭の従来カメラは一切変更しない。
 function pairTrackingView(which){return ['field','side','front3q','chase'].includes(which)}
 function officialPairCameraShot(which='field'){
- const a0=raceHorses[0],a1=raceHorses[1];
+ const a0=officialPairVisualState(0),a1=officialPairVisualState(1);
  if(!a0||!a1||!activePlan)return fieldCameraShot();
  const d0=a0.distance+(a0.postDistance||0),d1=a1.distance+(a1.postDistance||0);
  const lead=d0>=d1?a0:a1,leadDistance=Math.max(d0,d1),tailDistance=Math.min(d0,d1);
