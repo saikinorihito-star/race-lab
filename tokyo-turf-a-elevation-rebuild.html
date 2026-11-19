@@ -1162,14 +1162,19 @@ function initialDemoText(){
 // 正式馬2頭テスト専用。内ラチはfieldCenterAtから+width/2。
 // 馬体中心と内ラチ間を3.7m取り、2頭目はさらに外側へ3.35m。
 const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35;
+const FOUR_RAIL_CENTER_CLEARANCE=2.8; // 4頭テストのみ、馬体中心から内ラチの計算上の距離
 function pairRailLane(width,index){
  return width/2-PAIR_RAIL_CENTER_CLEARANCE-index*PAIR_LANE_SPACING;
 }
+function fourHorseInnerLane(width){
+ return width/2-FOUR_RAIL_CENTER_CLEARANCE;
+}
 // 4頭だけ外寄りから内ラチへ一度だけ寄る。既に確認済みの2頭は変更しない。
-// 8mの横移動を発走後160mで完了。滑らかに減速して柵との距離は最低3.7m。
+// 外からの進入は従来どおり。4頭だけ内ラチ余裕の目標を2.8mにする。
 const FOUR_START_OUTSIDE_OFFSET=8.0,FOUR_INWARD_SETTLE_DISTANCE=160;
 function officialReviewLane(width,index,distance){
- const inside=pairRailLane(width,index);
+ const inside=isOfficialFourTest?
+  fourHorseInnerLane(width)-index*PAIR_LANE_SPACING:pairRailLane(width,index);
  if(!isOfficialFourTest)return inside;
  const t=THREE.MathUtils.clamp(distance/FOUR_INWARD_SETTLE_DISTANCE,0,1);
  const eased=t*t*(3-2*t);
@@ -1435,7 +1440,7 @@ function fourHorseDesiredSlot(h,snapshot){
 }
 function fourHorseSafeStep(h,snapshot,dt,targetSpeed){
  const width=fieldCenterAt(activePlan,h.distance).width;
- const inner=pairRailLane(width,0);
+ const inner=fourHorseInnerLane(width);
  const lateralRate=FOUR_INWARD_RATE*(.62+.38*THREE.MathUtils.clamp(h.distance/15,0,1));
  // Look ahead to a slower horse BEFORE reaching the minimum headway.
  // The former hard clip newDistance=Math.max(h.distance,allowed) froze horses
@@ -1521,7 +1526,7 @@ function stepOfficialPair(tick){
    // 現在位置からおおよそのレーンを表示。目標は常に最内0。
    const widthNow=fieldCenterAt(activePlan,h.distance).width;
    const currentSlot=THREE.MathUtils.clamp(Math.round(
-    (pairRailLane(widthNow,0)-h.lane)/PAIR_LANE_SPACING),0,3);
+    (fourHorseInnerLane(widthNow)-h.lane)/PAIR_LANE_SPACING),0,3);
    h.slot=Math.min(h.slot,currentSlot);
   }
   if(h.distance>=activePlan.distance){
@@ -2494,7 +2499,7 @@ function animate(time){
   document.querySelector('#officialPairStatus').textContent=
    '先頭・最後尾差 '+shot.gap.toFixed(1)+'m｜'+
    (shot.focusedOnLead?'先頭と後方の走路を優先':'馬群の間隔に合わせて追尾')+
-   '｜内ラチまで中心3.7m以上'+
+   (isOfficialFourTest?'｜内ラチまで中心2.8m以上':'｜内ラチまで中心3.7m以上')+
    (isOfficialFourTest?'｜速度(m/s) '+raceHorses.slice(0,4).map((h,i)=>
     (i+1)+':'+(h.speed||0).toFixed(1)).join('／'):'');
  }
