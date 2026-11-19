@@ -108,7 +108,7 @@ a{color:#95e8df}
 <div class="pillrow"><span class="pill">芝A｜1周2,083.1m／幅31～41m</span><span class="pill">芝直線525.9m／高低差2.7m</span><span class="pill">ダート｜1周1,899m／幅25m</span><span class="pill">ダート直線501.6m／高低差2.5m</span><span class="pill">左回り</span></div>
 <div id="stage">
  <div id="telemetry">3Dコースを準備中…</div>
- <div id="broadcastCameraLabel" hidden>📺 自動中継・ゲート</div>
+ <div id="broadcastCameraLabel" hidden>📺 中継：ゲート・発走</div>
  <div id="help">1本指ドラッグ：回転　2本指：拡大縮小・移動　Mac：ドラッグ／ホイール</div>
  <div id="stageDock" hidden>
   <div id="cameraAdjustTools">
@@ -172,7 +172,7 @@ a{color:#95e8df}
  </div>
 </div>
 <div class="tools" id="views">
-<button data-view="broadcast" hidden>📺 自動中継</button>
+<button data-view="broadcast" hidden>📺 自動中継（自動切替）</button>
 <button data-view="all" class="selected">全景</button>
 <button data-view="top">真上</button>
 <button data-view="stand">スタンド側</button>
@@ -2302,7 +2302,7 @@ function prepareOriginalFrameZones(source){
   for(let i=0;i<positions.count;i++){
    const x=positions.getX(i),y=positions.getY(i),z=positions.getZ(i);
    // Helmet crown (above rider's face), original Meshy bind-space bounds.
-   const hat=y>.535&&z>-.10&&z<.32&&Math.abs(x)<.17;
+   const hat=y>.42&&y<.91&&z>-.20&&z<.48&&Math.abs(x)<.26;
    // Both sides of the saddlecloth, behind the forelegs and below the silk.
    const cloth=y>-.23&&y<.18&&z>-.53&&z<.065&&Math.abs(x)>.145;
    data[i]=hat?255:cloth?128:0;
@@ -2333,15 +2333,18 @@ function tintOriginalHelmetAndCloth(model,horseNumber){
     '#include <common>\nuniform vec3 raceFrameTint;\nvarying float vRaceTintZone;')
     .replace('#include <color_fragment>',`#include <color_fragment>
     if(vRaceTintZone>.30){
-     // Use BLUE from the original texture as the gate; leave reins,
-     // skin, horse coat, blue-and-white jacket and all other UVs intact.
+     // Recolour the complete cap area of the approved GLB's shared atlas.
+     // Exposed rider skin is protected by a red-dominant material guard.
      float originalBlue=diffuseColor.b-max(diffuseColor.r,diffuseColor.g);
-     float blueMask=smoothstep(.018,.085,originalBlue);
-     float brightMask=vRaceTintZone>.87?
-      smoothstep(.55,.85,min(min(diffuseColor.r,diffuseColor.g),diffuseColor.b)):0.0;
-     float mask=max(blueMask,brightMask*.88);
+     float blueMask=smoothstep(.012,.065,originalBlue);
+     float capRegion=smoothstep(.76,.98,vRaceTintZone);
+     float skinRed=diffuseColor.r-max(diffuseColor.g,diffuseColor.b);
+     float skinGuard=smoothstep(.055,.15,skinRed);
+     float capMask=capRegion*(1.0-skinGuard);
+     float clothMask=smoothstep(.33,.51,vRaceTintZone)*(1.0-capRegion)*blueMask;
+     float mask=clamp(max(capMask,clothMask),0.0,1.0);
      float lightness=dot(diffuseColor.rgb,vec3(.2126,.7152,.0722));
-     vec3 shaded=raceFrameTint*(.55+min(.55,lightness*.95));
+     vec3 shaded=raceFrameTint*(.65+min(.43,lightness*.78));
      diffuseColor.rgb=mix(diffuseColor.rgb,shaded,mask);
     }`);
   };
@@ -2520,7 +2523,7 @@ async function loadApprovedHorse(buffer){
  document.querySelector('#design01Overlay').hidden=true;
  if(isOfficialPairTest){
   await initializeOfficialPair(horse,gltf.animations.find(a=>a.name==='Design01_RightLead_TransverseGallop_v2'));
-  fieldRoot.visible=false;setView('field');
+  fieldRoot.visible=false;setView(isOfficialEighteenTest?'broadcast':'field');
  }else if(fieldMode.value==='single')setView('side');
  demoBtn.disabled=false;
  setDesign01Status(isOfficialPairTest?
@@ -3067,6 +3070,9 @@ function setView(which){
   eye=gateAt.clone().addScaledVector(a.t,76).addScaledVector(side,-8).add(new THREE.Vector3(0,25,0));
   target=gateAt.clone().addScaledVector(a.t,2).add(new THREE.Vector3(0,2.0,0));
  }
+ else if(which==='broadcast'&&isOfficialEighteenTest&&activePlan){
+  ({eye,target}=officialPairCameraShot('broadcast'));
+ }
  else if(which==='field'&&activePlan){
   ({eye,target}=isOfficialPairTest?officialPairCameraShot('field'):fieldCameraShot());
  }
@@ -3169,7 +3175,7 @@ function resetDemo(){
  '正式モデル'+OFFICIAL_TEST_COUNT+'頭：逃げ・先行・差し・追込の隊列、内側への進路選択と接触回避を確認。':
  fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  positionRunner();positionFieldHorses();
- if(isOfficialPairTest)setView(pairTrackingView(view)?view:'field');
+ if(isOfficialPairTest)setView(isOfficialEighteenTest?'broadcast':pairTrackingView(view)?view:'field');
  else if(fieldMode.value!=='single')setView('start');
  else if(['side','front3q','chase'].includes(view))setView(view);
 
@@ -3180,7 +3186,7 @@ demoBtn.addEventListener('click',()=>{
  (travel>=activePlan.distance||fieldMode.value==='race18'&&raceFinished.length===FIELD_COUNT)){
   travel=0;gateOpening=0;initRaceHorses();updateGateDoors();positionFieldHorses();
   if(isOfficialEighteenTest)gateRoot.visible=true;
-  if(isOfficialPairTest)setView('field');
+  if(isOfficialPairTest)setView(isOfficialEighteenTest?'broadcast':'field');
   else if(fieldMode.value!=='single')setView('start');
  }
  playing=!playing;
