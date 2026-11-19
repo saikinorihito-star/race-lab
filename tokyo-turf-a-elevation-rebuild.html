@@ -1417,10 +1417,10 @@ function stepRace(tick){
 // In the approved two-horse mode use the former movement exactly.
 // The four-horse mode adds distinct running styles and safe lane convergence.
 const FOUR_PACE_PROFILES=[
- {role:'逃げ',accel:3.55,early:16.25,kickStart:1.00,kick:0},
- {role:'先行',accel:2.25,early:15.95,kickStart:.75,kick:.20},
- {role:'差し',accel:2.70,early:15.80,kickStart:.25,kick:.64},
- {role:'追込',accel:2.08,early:15.65,kickStart:.36,kick:1.16}
+ {role:'逃げ',accel:3.42,early:16.25,kickStart:1.00,kick:0},
+ {role:'先行',accel:3.25,early:16.13,kickStart:.75,kick:.12},
+ {role:'差し',accel:3.32,early:16.10,kickStart:.25,kick:.52},
+ {role:'追込',accel:3.10,early:15.95,kickStart:.36,kick:.82}
 ];
 const FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=2.65;
 function fourHorseDesiredSlot(h,snapshot){
