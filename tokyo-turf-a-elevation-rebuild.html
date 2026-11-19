@@ -1085,6 +1085,8 @@ function makeRaceMonitorTexture(){
  return texture;
 }
 const raceMonitorTexture=makeRaceMonitorTexture();
+// Sharper slanted-screen lettering without additional geometry or draw calls.
+raceMonitorTexture.anisotropy=Math.min(16,renderer.capabilities.getMaxAnisotropy());
 // コース近景で遮蔽物となる大型ビジョンを、カメラモードに応じて切り替える。
 const turfVisionGroups=[];
 function turfVision(x,z,caption){
@@ -1102,7 +1104,7 @@ function turfVision(x,z,caption){
  }
  addBox(group,0,13,.72,67.1,12.05,.20,0x60757c,.19);
  const screen=new THREE.Mesh(new THREE.PlaneGeometry(66.4,11.2),
-  new THREE.MeshBasicMaterial({map:raceMonitorTexture,side:THREE.FrontSide}));
+  new THREE.MeshBasicMaterial({map:raceMonitorTexture,side:THREE.FrontSide,toneMapped:false}));
  screen.position.set(0,13,.91);group.add(screen);
  // Stand-facing image is in front of its housing, not obscured by the slab.
  for(const px of [-11.05,11.05])addBox(group,px,13,.96,.09,11.2,.09,0x1c2833,.24);
