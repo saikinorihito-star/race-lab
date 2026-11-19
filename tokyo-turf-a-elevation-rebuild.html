@@ -2259,13 +2259,83 @@ const DESIGN01_CACHE_KEY='official-meshy-blue-ribbon-original-geometry-gallop-v2
 let installedDesign01=false,installedScene=null,horseLoaderGeneration=0;
 const pairRoot=new THREE.Group();scene.add(pairRoot);
 const officialPair=[];
+// JRA 18-runner allocation: frames 1..6 have two numbers each;
+// orange frame 7 has 13-15, pink frame 8 has 16-18.
+const RACE_FRAME_COLORS=[
+ {name:'白',hex:'#f9f9f5',ink:'#19232b'},
+ {name:'黒',hex:'#171b21',ink:'#ffffff'},
+ {name:'赤',hex:'#d63a34',ink:'#ffffff'},
+ {name:'青',hex:'#276bb9',ink:'#ffffff'},
+ {name:'黄',hex:'#f1cc39',ink:'#1b2730'},
+ {name:'緑',hex:'#27834a',ink:'#ffffff'},
+ {name:'橙',hex:'#ed852c',ink:'#19232b'},
+ {name:'桃',hex:'#ef9ab7',ink:'#19232b'}
+];
+function officialFrameIndex(horseNumber){
+ return horseNumber<=12?Math.floor((horseNumber-1)/2):
+  horseNumber<=15?6:7;
+}
+// Keep the 36-bone original Design01 GLB, body, rider, skin, mesh, texture and
+// approved gallop unmodified. Visible frame-coloured number-cloth markers are
+// separate accessories on each clone; never recolour the original horse coat.
+function addOfficialFrameCloth(group,model,horseNumber){
+ const frame=RACE_FRAME_COLORS[officialFrameIndex(horseNumber)];
+ const bounds=new THREE.Box3().setFromObject(model);
+ const size=bounds.getSize(new THREE.Vector3());
+ const center=bounds.getCenter(new THREE.Vector3());
+ if(!Number.isFinite(size.x*size.y*size.z)||
+  size.x<.08||size.y<.08||size.z<.08)return null;
+ const panelLength=THREE.MathUtils.clamp(size.z*.26,.38,.95);
+ const panelHeight=THREE.MathUtils.clamp(size.y*.18,.25,.62);
+ const canvas=document.createElement('canvas');
+ canvas.width=256;canvas.height=192;
+ const ctx=canvas.getContext('2d');
+ ctx.fillStyle=frame.hex;ctx.fillRect(0,0,256,192);
+ ctx.lineWidth=8;ctx.strokeStyle='#d0d6da';
+ ctx.strokeRect(4,4,248,184);
+ ctx.fillStyle=frame.ink;
+ ctx.font='900 132px Arial,sans-serif';
+ ctx.textAlign='center';ctx.textBaseline='middle';
+ ctx.fillText(String(horseNumber),128,99,226);
+ const texture=new THREE.CanvasTexture(canvas);
+ texture.colorSpace=THREE.SRGBColorSpace;
+ const material=new THREE.MeshBasicMaterial({
+  map:texture,side:THREE.DoubleSide,transparent:false,depthTest:true
+ });
+ const geometry=new THREE.PlaneGeometry(panelLength,panelHeight);
+ const y=bounds.min.y+size.y*.59;
+ const z=center.z-size.z*.075;
+ const sideX=Math.max(.08,size.x*.43);
+ const outsidePanels=new THREE.Group();
+ outsidePanels.name='raceFrameCloth_'+horseNumber+'_'+frame.name;
+ for(const side of [-1,1]){
+  const numberPanel=new THREE.Mesh(geometry,material);
+  numberPanel.name='frame_'+(officialFrameIndex(horseNumber)+1)+'_number_'+horseNumber;
+  numberPanel.rotation.y=side*Math.PI/2;
+  numberPanel.position.set(center.x+side*sideX,y,z);
+  outsidePanels.add(numberPanel);
+ }
+ // Small coloured upper strip helps distinguish horses from the overhead
+ // race camera without recolouring the original jockey/horse materials.
+ const top=new THREE.Mesh(
+  new THREE.BoxGeometry(size.x*.60,.035,panelLength*.9),
+  new THREE.MeshBasicMaterial({color:frame.hex,depthTest:true})
+ );
+ top.position.set(center.x,bounds.min.y+size.y*.64,z);
+ top.name='frame_colour_back_strip';
+ outsidePanels.add(top);
+ group.add(outsidePanels);
+ return outsidePanels;
+}
 async function initializeOfficialPair(source,clip){
  for(const h of officialPair){h.mixer.stopAllAction();pairRoot.remove(h.group)}
  officialPair.length=0;
  for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
   // ジオメトリやテクスチャは共有し、スキンとボーンだけ独立させる。
   const model=cloneSkeleton(source);
-  const group=new THREE.Group();group.add(model);pairRoot.add(group);
+  const group=new THREE.Group();group.add(model);
+  if(isOfficialEighteenTest)addOfficialFrameCloth(group,model,i+1);
+  pairRoot.add(group);
   const mixer=new THREE.AnimationMixer(model);
   const action=mixer.clipAction(clip);
   action.setLoop(THREE.LoopRepeat,Infinity);action.play();
@@ -3075,7 +3145,8 @@ function animate(time){
    });
    document.querySelector('#raceOrder').textContent=
     '現在の隊列：'+order.map((h,i)=>(i+1)+'位 試験馬'+h.number+'（'+h.role+'）').join(' → ')+
-    '｜ゼッケン4は正式デザインのままです。';
+    (isOfficialEighteenTest?'｜枠色・馬番：JRAの18頭枠順に対応':
+  '｜ゼッケン4は正式デザインのままです。');
   }
  if(isOfficialPairTest&&installedDesign01&&activePlan){
   const shot=officialPairCameraShot(pairTrackingView(view)?view:'field');
