@@ -15,7 +15,11 @@ h1{font-size:20px;line-height:1.35;margin:0 0 5px;font-weight:750}
 main{max-width:1320px;margin:0 auto}
 .pillrow{padding:9px 12px;display:flex;gap:7px;flex-wrap:wrap}
 .pill{font-size:11px;color:#b7e5d4;background:#234b44;border:1px solid #37796d;border-radius:16px;padding:5px 9px}
-#views button[hidden],#distanceViews[hidden]{display:none!important}
+#views button[hidden],#distanceViews[hidden],#broadcastCameraLabel[hidden]{display:none!important}
+#broadcastCameraLabel{position:absolute;z-index:3;top:10px;right:10px;
+ padding:7px 11px;border-radius:9px;background:#12334acb;
+ border:1px solid #7cb6b6;color:#e9fff8;font-size:12px;
+ font-weight:750;pointer-events:none}
 #stage{height:min(69svh,720px);min-height:370px;position:relative;background:linear-gradient(#a2d1da,#cce5da);overflow:hidden;touch-action:none}
 #stage canvas{display:block}
 #telemetry{position:absolute;left:10px;top:10px;z-index:3;padding:8px 10px;border-radius:9px;background:#112736e8;color:#ecfff9;font-size:12px;line-height:1.55;border:1px solid #456b79;pointer-events:none}
@@ -104,6 +108,7 @@ a{color:#95e8df}
 <div class="pillrow"><span class="pill">芝A｜1周2,083.1m／幅31～41m</span><span class="pill">芝直線525.9m／高低差2.7m</span><span class="pill">ダート｜1周1,899m／幅25m</span><span class="pill">ダート直線501.6m／高低差2.5m</span><span class="pill">左回り</span></div>
 <div id="stage">
  <div id="telemetry">3Dコースを準備中…</div>
+ <div id="broadcastCameraLabel" hidden>📺 自動中継・ゲート</div>
  <div id="help">1本指ドラッグ：回転　2本指：拡大縮小・移動　Mac：ドラッグ／ホイール</div>
  <div id="stageDock" hidden>
   <div id="cameraAdjustTools">
@@ -113,6 +118,7 @@ a{color:#95e8df}
     <div id="cameraAdjustHint">映像を1本指で動かすと角度変更、2本指で拡大縮小できます。</div>
     <div id="cam18Extras" hidden>
      <div class="camPreset">
+      <button type="button" data-cam18-view="broadcast">📺 自動中継</button>
       <button type="button" data-cam18-view="side">真横</button>
       <button type="button" data-cam18-view="insideSide">反対側</button>
       <button type="button" data-cam18-view="front3q">斜め前</button>
@@ -166,6 +172,7 @@ a{color:#95e8df}
  </div>
 </div>
 <div class="tools" id="views">
+<button data-view="broadcast" hidden>📺 自動中継</button>
 <button data-view="all" class="selected">全景</button>
 <button data-view="top">真上</button>
 <button data-view="stand">スタンド側</button>
@@ -315,7 +322,7 @@ if(isOfficialEighteenTest){
  document.querySelector('#legacyRateLabel').hidden=true;
 }
 if(isOfficialEighteenTest){
- const racingCameraViews=new Set(['side','front3q','chase','field']);
+ const racingCameraViews=new Set(['broadcast','side','front3q','chase','field']);
  const raceViewButtons=[...document.querySelectorAll('#views button')];
  for(const button of raceViewButtons)
   button.hidden=!racingCameraViews.has(button.dataset.view);
@@ -2620,6 +2627,8 @@ markerFocus.addEventListener('change',inspectMarker);
 // 追尾中のカメラでも、利用者が指定した微調整を上書きしない。
 const groupCameraOffset={yaw:0,pitch:0,zoom:1};
 const camera18={yaw:0,pitch:0,zoom:1,pan:0,lift:0};
+const broadcastCameraLabel=document.querySelector('#broadcastCameraLabel');
+let lastBroadcastShotId=null;
 const camera18Follow=document.querySelector('#cam18Follow');
 let camera18LatestAnchor=null,camera18FixedAnchor=null;
 const camera18Inputs={
@@ -2807,7 +2816,7 @@ if(isOfficialEighteenTest){
 }
 // 2頭/4頭用：近ければ全頭、離れたら先頭優先でカメラが移動する。
 // 18頭の従来カメラは一切変更しない。
-function pairTrackingView(which){return ['field','side','insideSide','front3q','chase'].includes(which)}
+function pairTrackingView(which){return ['field','broadcast','side','insideSide','front3q','chase'].includes(which)}
 // The full field is followed in the local track coordinate system.
 // For side/insideSide presets, the camera is exactly perpendicular to the
 // running tangent and the eye/target have identical Y coordinates.
@@ -2933,7 +2942,11 @@ function fieldCameraShot(){
 }
 function setView(which){
  view=which;
- if(isOfficialEighteenTest)syncCamera18Controls();
+ if(isOfficialEighteenTest){
+  syncCamera18Controls();
+  broadcastCameraLabel.hidden=which!=='broadcast';
+  lastBroadcastShotId=null;
+ }
  if(which!=='marker'){markerFocus.value='all';markerInfo.textContent='表示は残り距離。発走地点とは別です。'}
  document.querySelectorAll('#views button').forEach(b=>b.classList.toggle('selected',b.dataset.view===which));
  const aspect=stage.clientWidth/Math.max(1,stage.clientHeight);
@@ -3057,7 +3070,8 @@ function selectRace(){
   :activeDistance+'m：'+regionForS(activePlan.startStation)+'のSから発走'+(activeDistance===2600?'（仮配置）':'');
  startInfo.textContent=description+'／Gまで'+activeDistance+'m';
  drawElevationProfile();
- if(isOfficialPairTest)setView(pairTrackingView(view)?view:'field');
+ if(isOfficialPairTest)setView(pairTrackingView(view)?view:
+  (isOfficialEighteenTest?'broadcast':'field'));
  else if(view==='chase'||view==='start'||view==='field')
   setView(fieldMode.value!=='single'?'start':(isDesign01Review?'side':'all'));
 }
@@ -3143,7 +3157,9 @@ if(isOfficialPairTest){
    '1本指：360°回転・上下｜2本指：ズーム・視点移動｜📷から詳細調整'):
   '1本指：角度調整｜2本指：拡大縮小｜自動追尾は継続';
 }
-resize();setView('all');selectRace();updateDesign01Panel();setView(isOfficialPairTest?'field':(isDesign01Review?'side':'start'));
+resize();setView('all');selectRace();updateDesign01Panel();setView(
+ isOfficialEighteenTest?'broadcast':isOfficialPairTest?'field':
+ (isDesign01Review?'side':'start'));
 function animate(time){
  requestAnimationFrame(animate);
  if(lastFrameStamp&&time>lastFrameStamp){
