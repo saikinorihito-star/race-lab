@@ -59,13 +59,15 @@ test('both 2 and 4 horse reviews use stable lanes without 18-horse AI',()=>{
 class Vec3{
  constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}
  clone(){return new Vec3(this.x,this.y,this.z)}
+ set(x,y,z){this.x=x;this.y=y;this.z=z;return this}
  normalize(){const l=Math.hypot(this.x,this.y,this.z)||1;this.x/=l;this.y/=l;this.z/=l;return this}
  addScaledVector(v,n){this.x+=v.x*n;this.y+=v.y*n;this.z+=v.z*n;return this}
  add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this}
 }
 const fakeThree={Vector3:Vec3,MathUtils:{
  lerp:(a,b,t)=>a+(b-a)*t,
- smoothstep:(x,a,b)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t)}
+ smoothstep:(x,a,b)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t)},
+ clamp:(x,a,b)=>Math.max(a,Math.min(b,x))
 }};
 
 test('2 and 4 horse tracking angles frame whole pack if close, leader if far',()=>{
@@ -74,7 +76,8 @@ test('2 and 4 horse tracking angles frame whole pack if close, leader if far',()
    for(const gap of [0,8,14,20,27,50,95]){
     const ctx={THREE:fakeThree,stage:{clientWidth:800*aspect,clientHeight:800},
      activePlan:{distance:1400},
-     OFFICIAL_TEST_COUNT:count,isOfficialFourTest:count===4,
+     OFFICIAL_TEST_COUNT:count,isOfficialFourTest:count===4,isOfficialPairTest:true,
+     groupCameraOffset:{yaw:0,pitch:0,zoom:1},
      raceHorses:Array.from({length:count},(_,i)=>({
       distance:200-(gap*i/(count-1)),postDistance:0,lane:12.3-i*3.35
      })),
@@ -113,9 +116,10 @@ test('official 2-horse visual position interpolates smoothly between 60Hz race t
  }
 });
 
-test('both 2- and 4-horse modes limit GPU pixel ratio without changing model assets',()=>{
- assert.match(html,/setPixelRatio\(isOfficialFourTest\?Math\.min\(\.95,/);
- assert.match(html,/isOfficialPairTest\?Math\.min\(1\.05,/);
+test('4-horse render defaults to sharp antialiasing with adjustable fallback',()=>{
+ assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:true,/);
+ assert.match(html,/const renderDprLevels=\{sharp:1\.35,standard:1\.05,light:\.90\}/);
+ assert.match(html,/renderQuality\.addEventListener\('change',applyRenderQuality\)/);
  assert.match(html,/cloneSkeleton\(source\)/);
  assert.match(html,/h\.mixer\.setTime\(shownTime\*Math\.min\(2,Number\(rate\.value\)\)\+i\*\.07\)/);
 });
@@ -126,4 +130,41 @@ test('4-horse clone count and safe independent animation loop use test count',()
  assert.match(extract('stepOfficialPair'),/raceFinished\.length>=OFFICIAL_TEST_COUNT/);
  assert.match(html,/const OFFICIAL_TEST_COUNT=isOfficialFourTest\?4:2;/);
  assert.match(html,/official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119/);
+});
+
+test('manual camera direction and zoom change the tracking eye but preserve its target',()=>{
+ const ctx={THREE:fakeThree,stage:{clientWidth:430,clientHeight:800},
+  OFFICIAL_TEST_COUNT:4,isOfficialFourTest:true,isOfficialPairTest:true,
+  raceHorses:Array.from({length:4},(_,i)=>({distance:200-i*2,postDistance:0,lane:12.3-i*3.35})),
+  raceAccumulator:0,RACE_TICK:1/60,playing:false,activePlan:{distance:1400},
+  groupCameraOffset:{yaw:0,pitch:0,zoom:1},pairRailLane:lane,
+  fieldCenterAt:(_p,d)=>({p:new Vec3(d,0,0),t:new Vec3(1,0,0),width:36}),
+  fieldCameraShot:()=>{throw Error('Unexpected fallback')}};
+ ctx.officialPairVisualState=runInNewContext('('+extract('officialPairVisualState')+')',ctx);
+ const camera=runInNewContext('('+extract('officialPairCameraShot')+')',ctx);
+ const adjust=runInNewContext('('+extract('adjustGroupCamera')+')',ctx);
+ const start=camera('field');
+ adjust('right');adjust('up');adjust('near');
+ const changed=camera('field');
+ const delta= Math.hypot(changed.eye.x-start.eye.x,changed.eye.y-start.eye.y,changed.eye.z-start.eye.z);
+ assert.ok(delta>1,'User adjustments must not be overwritten by auto tracking');
+ assert.ok(Math.abs(changed.target.x-start.target.x)<1e-8,'Tracking focus remains stable');
+ adjust('reset');
+ const reset=camera('field');
+ assert.ok(Math.hypot(reset.eye.x-start.eye.x,reset.eye.y-start.eye.y,reset.eye.z-start.eye.z)<1e-7);
+});
+
+test('persistent in-video run control reflects play, pause, resume and completion',()=>{
+ const button={textContent:'',disabled:false,attributes:{},
+  setAttribute(k,v){this.attributes[k]=v}};
+ const ctx={isOfficialPairTest:true,OFFICIAL_TEST_COUNT:4,raceFinished:[],
+  raceElapsed:0,playing:false,installedDesign01:false,stageStartBtn:button};
+ const sync=runInNewContext('('+extract('syncStageStartButton')+')',ctx);
+ sync();assert.equal(button.textContent,'▶ スタート');assert.equal(button.disabled,true);
+ ctx.installedDesign01=true;ctx.playing=true;sync();
+ assert.equal(button.textContent,'⏸ 一時停止');assert.equal(button.disabled,false);
+ ctx.playing=false;ctx.raceElapsed=1;sync();assert.equal(button.textContent,'▶ 再開');
+ ctx.raceFinished=[1,2,3,4];sync();assert.equal(button.textContent,'↻ もう一度');
+ assert.match(html,/stageStartBtn\.addEventListener\('click'/);
+ assert.match(html,/if\(isOfficialPairTest\?raceFinished\.length>=OFFICIAL_TEST_COUNT:/);
 });
