@@ -179,3 +179,13 @@
 - 既存2頭モード・カメラ・モデル・横移動・ゴール後処理などの検査と合わせて**全21テスト群PASS**（HTML中の実関数を抽出してNode互換JSの擬似環境内で実行）。現行改訂版の東京芝1400m実コース幅モデルで最小中心距離約3.24m、ゴール前30m以降の最小速度（馬ごと）概ね12.97～14.31m/s。*実機動画での連続動作確認はまだしていない*。
 - 保存したテストはGitHub Actions `.github/workflows/design01-regression.yml` により関連コード更新時に自動実行する構成。Actions実際の実行成功状況は別途未確認。
 - 更新ページ：`https://saikinorihito-star.github.io/race-lab/tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&group=4&v=e170c19b`
+
+
+## 2026-11-19：4頭の内ラチ目標を2.8mに狭める（ユーザー画像1491への対応）
+
+- ユーザー画像 IMG_1491.jpeg で、2頭がまだ外寄りに残っていることを確認。指示「もっと内に入っていい」「自動で進めて」「お願いします」に従い、GitHubの正式4頭テストを直接修正。
+- **4頭だけ** 内ラチから馬体中心までの目標クリアランスを **3.7m → 2.8m** に変更（`FOUR_RAIL_CENTER_CLEARANCE=2.8`、`fourHorseInnerLane(width)`）。従来の2頭は `PAIR_RAIL_CENTER_CLEARANCE=3.7` を維持。
+- `officialReviewLane`（開始位置と従来の内への進入レーン）、`fourHorseSafeStep`（実際の走行目標と安全クランプ）、4頭内部のレーン表示、走行ステータスを4頭用の2.8m基準へ揃えた。4頭の最内目標は従来より0.9m内側。馬ごとの速度・他馬を避けるロジック・ギャロップとカメラ・スタートUI・画質は変更しない。
+- **自動検査**：`tests/official-design01-pair.test.mjs` に4頭専用の2.8mクリアランスと2頭用3.7m保持を明示した回帰試験を追加。4頭の実コース幅、9レース距離の全頭完走・停止ゼロ・中心間距離、横滑り防止、ゴール後継続、カメラ・画質・操作UIを含む**22テスト群PASS**。構文検査・DOM ID重複検査もPASS。
+- 注意：2.8mは簡易コース幅・馬体中心位置に基づく計算上の余裕であり、精密な3Dメッシュと内ラチの当たり判定ではない。iPhone Safariの実機描画での新しい位置と間隔は未確認。2頭の外側馬がどこまで寄れるかは走行中の前後関係にも依存する。
+- 4頭確認版：`https://saikinorihito-star.github.io/race-lab/tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&group=4&v=dd948f74`
