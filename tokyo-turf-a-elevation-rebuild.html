@@ -1206,7 +1206,8 @@ function initRaceHorses(){
   // 4頭はまず外寄りから並び、発走後に内側へ入る。2頭は従来位置。
   for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
    const h=raceHorses[i],lane=officialReviewLane(width,i,0);
-   h.startLane=lane;h.lane=lane;h.targetLane=lane;h.sideSpeed=0;
+   h.startLane=lane;h.lane=lane;h.prevLane=lane;h.targetLane=lane;h.sideSpeed=0;
+   h.slot=i;h.nextLaneReviewTime=0;h.role=['逃げ','先行','差し','追込'][i];
    h.prevDistance=h.distance;h.prevPostDistance=h.postDistance;
   }
  }
@@ -1221,8 +1222,12 @@ function officialPairVisualState(index){
  const postDistance=THREE.MathUtils.lerp(
   h.prevPostDistance??(h.postDistance||0),h.postDistance||0,alpha);
  const width=fieldCenterAt(activePlan,distance+postDistance).width;
- return {distance,postDistance,lane:officialReviewLane(width,index,distance),
-  speed:h.speed,sideSpeed:0,alpha};
+ const lane=isOfficialFourTest?
+ THREE.MathUtils.lerp(h.prevLane??h.lane,h.lane,alpha):
+ officialReviewLane(width,index,distance);
+ const lateralSpeed=isOfficialFourTest?(h.lane-(h.prevLane??h.lane))/RACE_TICK:0;
+ return {distance,postDistance,lane,
+  speed:h.speed,sideSpeed:lateralSpeed,alpha};
 }
 function raceHorsePosition(horse){
  const a=fieldCenterAt(activePlan,horse.distance+(horse.postDistance||0));
@@ -1409,31 +1414,110 @@ function stepRace(tick){
 }
 // 正式2頭の足運び・表示テスト用。従来18頭の追い抜きAIを作用させない。
 // 馬ごとに巡航速度を持ち、内ラチからの余裕を保った平行経路を使う。
+// In the approved two-horse mode use the former movement exactly.
+// The four-horse mode adds distinct running styles and safe lane convergence.
+const FOUR_PACE_PROFILES=[
+ {role:'逃げ',accel:3.55,early:16.25,kickStart:1.00,kick:0},
+ {role:'先行',accel:2.25,early:15.95,kickStart:.75,kick:.20},
+ {role:'差し',accel:2.70,early:15.80,kickStart:.25,kick:.64},
+ {role:'追込',accel:2.08,early:15.65,kickStart:.36,kick:1.16}
+];
+const FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=2.65;
+function fourHorseDesiredSlot(h,snapshot){
+ const current=h.slot??h.idx;
+ const width=fieldCenterAt(activePlan,h.distance).width;
+ const others=snapshot.filter(x=>x.idx!==h.idx&&!x.finished);
+ function slotOpen(slot){
+  const proposed=officialReviewLane(width,slot,h.distance);
+  for(const x of others){
+   if(Math.abs(x.distance-h.distance)<FOUR_MIN_LONGITUDINAL+1.2 &&
+    Math.abs(x.lane-proposed)<FOUR_LATERAL_SHARED+.25)return false;
+  }
+  return true;
+ }
+ // A late closer uses the outside path until the pack is established.
+ const minSlot=h.idx===3&&h.distance<300?2:0;
+ for(let slot=minSlot;slot<=3;slot++)if(slotOpen(slot))return slot;
+ return current;
+}
+function fourHorseSafeStep(h,snapshot,dt,targetSpeed){
+ const width=fieldCenterAt(activePlan,h.distance).width;
+ const desired=officialReviewLane(width,h.slot??h.idx,h.distance);
+ // Smooth side movement up to 1.2m/s; no sudden sideways teleport.
+ let nextLane=h.lane+THREE.MathUtils.clamp(desired-h.lane,-1.2*dt,1.2*dt);
+ for(const x of snapshot){
+  if(x.idx===h.idx||x.finished)continue;
+  if(Math.abs(x.distance-h.distance)<FOUR_MIN_LONGITUDINAL+1.0 &&
+   Math.abs(nextLane-x.lane)<FOUR_LATERAL_SHARED &&
+   Math.abs(nextLane-x.lane)<Math.abs(h.lane-x.lane)-1e-5){
+   nextLane=h.lane;
+  }
+ }
+ nextLane=THREE.MathUtils.clamp(nextLane,-width/2+1.6,
+  width/2-PAIR_RAIL_CENTER_CLEARANCE);
+ let newSpeed=Math.min(targetSpeed,h.speed+FOUR_PACE_PROFILES[h.idx].accel*dt);
+ let newDistance=Math.min(activePlan.distance,h.distance+newSpeed*dt);
+ // If following in nearly the same lane, maintain a nose-to-tail interval.
+ for(const x of snapshot){
+  if(x.idx===h.idx||x.finished)continue;
+  const ahead=x.distance-h.distance;
+  if(ahead>.0001&&ahead<FOUR_MIN_LONGITUDINAL+2.0 &&
+   Math.abs(x.lane-nextLane)<FOUR_LATERAL_SHARED){
+   const allowed=x.distance+x.speed*dt-FOUR_MIN_LONGITUDINAL;
+   newDistance=Math.min(newDistance,Math.max(h.distance,allowed));
+  }
+ }
+ newSpeed=Math.min(newSpeed,Math.max(0,(newDistance-h.distance)/dt));
+ return {distance:newDistance,lane:nextLane,speed:newSpeed};
+}
 function stepOfficialPair(tick){
  if(!activePlan||raceFinished.length>=OFFICIAL_TEST_COUNT)return;
+ const previous=raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>({
+  idx:h.idx,distance:h.distance,lane:h.lane,speed:h.speed,finished:h.finished
+ }));
  raceElapsed+=tick;
  for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
   const h=raceHorses[i];
   h.prevDistance=h.distance;
   h.prevPostDistance=h.postDistance||0;
+  h.prevLane=h.lane;
   if(h.finished){
    h.postDistance=Math.min(24,h.postDistance+12*tick);
    continue;
   }
-  const targetSpeed=i===0?16.25:(15.85-(i-1)*.12);
-  h.speed=Math.min(targetSpeed,h.speed+3*tick);
-  h.distance=Math.min(activePlan.distance,h.distance+h.speed*tick);
-  const width=fieldCenterAt(activePlan,h.distance).width;
-  const lane=officialReviewLane(width,i,h.distance);
-  h.sideSpeed=(lane-h.lane)/tick;
-  h.lane=lane;h.targetLane=lane;
+  if(!isOfficialFourTest){
+   const targetSpeed=i===0?16.25:15.85;
+   h.speed=Math.min(targetSpeed,h.speed+3*tick);
+   h.distance=Math.min(activePlan.distance,h.distance+h.speed*tick);
+   const width=fieldCenterAt(activePlan,h.distance).width;
+   const lane=officialReviewLane(width,i,h.distance);
+   h.sideSpeed=(lane-h.lane)/tick;
+   h.lane=lane;h.targetLane=lane;
+  }else{
+   const profile=FOUR_PACE_PROFILES[i];
+   const progress=h.distance/Math.max(1,activePlan.distance);
+   const launch=THREE.MathUtils.clamp((h.distance-180)/540,0,1);
+   const late=THREE.MathUtils.clamp((progress-profile.kickStart)/.24,0,1);
+   const targetSpeed=profile.early+profile.kick*launch+
+    (i===3?late*.22:0);
+   // Deliberate lane decisions, at most once every 1.2–3.5 seconds.
+   if(h.distance>=115&&raceElapsed>=h.nextLaneReviewTime){
+    const selected=fourHorseDesiredSlot(h,previous);
+    if(selected!==h.slot){
+     h.slot=selected;h.nextLaneReviewTime=raceElapsed+3.5;
+    }else h.nextLaneReviewTime=raceElapsed+1.2;
+   }
+   const result=fourHorseSafeStep(h,previous,tick,targetSpeed);
+   h.distance=result.distance;h.speed=result.speed;
+   h.sideSpeed=(result.lane-h.lane)/tick;
+   h.lane=result.lane;h.targetLane=result.lane;
+  }
   if(h.distance>=activePlan.distance){
    h.finished=true;h.finishTime=raceElapsed;h.postDistance=0;
    raceFinished.push(h.number);
   }
  }
-}
-function updateRace(dt){
+}function updateRace(dt){
  // iPhoneのフレームレートに依存しない固定時間刻み。
  raceAccumulator+=Math.min(.3,dt*Number(rate.value));
  let count=0;
@@ -1836,7 +1920,9 @@ function updateOfficialPair(dt){
   // Both the official model and following camera use this same render-time pose.
   const a=raceHorsePosition(state);
   h.group.position.copy(a.p);
-  const inwardSlope=fourHorseInwardSlope(state.distance);
+  const inwardSlope=isOfficialFourTest?
+   THREE.MathUtils.clamp(state.sideSpeed/Math.max(4,state.speed),-.12,.12):
+   fourHorseInwardSlope(state.distance);
   if(inwardSlope){
    const left=new THREE.Vector3(a.t.z,0,-a.t.x);
    const direction=a.t.clone().addScaledVector(left,inwardSlope).normalize();
@@ -2220,7 +2306,7 @@ function selectRace(){
  playing=false;travel=0;gateOpening=0;initRaceHorses();
  demoBtn.textContent=initialDemoText();
  document.querySelector('#raceOrder').textContent=isOfficialPairTest?
- '正式モデル'+OFFICIAL_TEST_COUNT+'頭で平行レーンを走行。18頭用の進路AIは適用しません。':
+ '正式モデル'+OFFICIAL_TEST_COUNT+'頭：逃げ・先行・差し・追込の隊列、内側への進路選択と接触回避を確認。':
  fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  highlightRace(activePlan);drawFieldGate(activePlan);
  fieldRoot.visible=fieldMode.value!=='single'&&!isOfficialPairTest;
@@ -2247,7 +2333,7 @@ function resetDemo(){
  travel=0;playing=false;gateOpening=0;initRaceHorses();updateGateDoors();
  demoBtn.textContent=initialDemoText();
  document.querySelector('#raceOrder').textContent=isOfficialPairTest?
- '正式モデル'+OFFICIAL_TEST_COUNT+'頭で平行レーンを走行。18頭用の進路AIは適用しません。':
+ '正式モデル'+OFFICIAL_TEST_COUNT+'頭：逃げ・先行・差し・追込の隊列、内側への進路選択と接触回避を確認。':
  fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  positionRunner();positionFieldHorses();
  if(isOfficialPairTest)setView(pairTrackingView(view)?view:'field');
