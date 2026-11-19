@@ -2462,6 +2462,19 @@ function animate(time){
    '\n'+modeName+'｜残り'+rest+'m｜FPS '+fps.toFixed(0)+
    (isOfficialPairTest?'｜最長間隔 '+Math.round(maxFrameMs)+'ms｜遅延 '+slowFrames+'回':'');
   if(fieldMode.value==='race18'&&!isOfficialPairTest)document.querySelector('#raceOrder').textContent=raceOrderText();
+  if(isOfficialFourTest&&installedDesign01){
+   // The four source models retain their approved blue saddlecloth #4.
+   // Internal test IDs distinguish tactics without recoloring the model.
+   const order=raceHorses.slice(0,4).sort((a,b)=>{
+    if(a.finished&&b.finished)return a.finishTime-b.finishTime;
+    if(a.finished)return -1;
+    if(b.finished)return 1;
+    return b.distance-a.distance;
+   });
+   document.querySelector('#raceOrder').textContent=
+    '現在の隊列：'+order.map((h,i)=>(i+1)+'位 試験馬'+h.number+'（'+h.role+'）').join(' → ')+
+    '｜ゼッケン4は正式デザインのままです。';
+  }
  if(isOfficialPairTest&&installedDesign01&&activePlan){
   const shot=officialPairCameraShot(pairTrackingView(view)?view:'field');
   document.querySelector('#officialPairStatus').textContent=
