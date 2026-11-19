@@ -116,8 +116,8 @@ a{color:#95e8df}
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
 <div id="raceOrder" aria-live="polite">18頭の順位とレース展開を準備しています。</div>
-<div id="message">発走後、内ラチまでの進路に他馬がいない馬は、最大4.5m/sの横方向移動で早く内へ寄ります。他馬が近い場合は3m/sまでに抑え、無理な横切りを防止します。カメラ・コース・発馬機の形状は変更していません。</div>
-<div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
+<div id="message">18頭の馬体を改良しました。首・顔・耳・たてがみ・鞍・騎手を立体化し、脚は上下関節と蹄を動かします。馬体色と勝負服を個別に表示し、部品をまとめて描画してiPhoneでの負荷を抑えています。カメラ・コース・発馬機と進路判断は変更していません。</div>
+<div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">18頭：毛色・勝負服を個別表示</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
  <canvas id="elevationChart" width="980" height="286" aria-label="東京競馬場 芝A 高低差グラフ"></canvas>
@@ -1265,28 +1265,168 @@ function updateRace(dt){
  return raceFinished.length===FIELD_COUNT;
 }
 
+// ====== 18頭用・軽量な関節式3D馬体（試作） ======
+// 個別馬を数百メッシュとして描画せず、部品ごとにInstancedMeshで18頭をまとめる。
+// 1頭モードの保存GLBは変更しない。18頭は形状を共用し、毛色と勝負服を個別化する。
 const silkColors=[0xff3b39,0x2c7bd9,0xeec232,0x1b965e,0x914bc0,0xf0f0f0,0xf57e25,0x15a8c2,0x284d89];
-const sharedHorse=fallbackHorse();
-for(let i=0;i<FIELD_COUNT;i++){
- const horse=sharedHorse.clone(true);
- // 4番目のメッシュは騎手の勝負服。配色だけを個別に変える。
- horse.children[3].material=new THREE.MeshStandardMaterial({color:silkColors[i%silkColors.length]});
- horse.children[4].material=new THREE.MeshStandardMaterial({color:silkColors[i%silkColors.length]});
- horse.userData.legs=horse.children.slice(5);
- fieldRoot.add(horse);fieldHorses.push(horse);
+const horseCoatColors=[0x81513b,0x50392e,0xa16b48,0x362c2a,0x94614a,0x4a3732,0x736258,0x9b6b4d,0x534338];
+const horseManeColors=[0x30231f,0x211b1c,0x644d38,0x19191b,0x39271f,0x20191a,0x40342c,0x5a3a2e,0x242022];
+const whiteMuzzleColors=[0xe5d4be,0x635044,0xd7c2a7,0x55443e,0xcbad92,0x514239,0xe5dfcd,0x9c7b62,0x4b3e38];
+const fieldHorsePalette={
+ coat:i=>horseCoatColors[i%horseCoatColors.length],
+ mane:i=>horseManeColors[i%horseManeColors.length],
+ muzzle:i=>whiteMuzzleColors[i%whiteMuzzleColors.length],
+ silk:i=>silkColors[i%silkColors.length],
+ cap:i=>silkColors[i%silkColors.length],
+ cloth:i=>[0xf0e9d1,0xcad6dc,0x314c64,0xe1d4bb,0xcfc6a2,0x314650][i%6],
+ leather:i=>i%3===0?0x443128:0x282326,
+ boot:()=>0x272a2b,hoof:()=>0x252525,skin:()=>0xd7b58b,
+ white:()=>0xf3eeee,dark:()=>0x222324,metal:()=>0xb5c2bf
+};
+const hSphere=new THREE.SphereGeometry(1,12,9);
+const hSmallSphere=new THREE.SphereGeometry(1,9,7);
+const hBox=new THREE.BoxGeometry(1,1,1);
+const hLegUpper=new THREE.CylinderGeometry(.088,.072,1,7);
+const hLegLower=new THREE.CylinderGeometry(.068,.046,1,7);
+const hTaper=new THREE.CylinderGeometry(.19,.27,1,9);
+const hCone=new THREE.ConeGeometry(1,1,7);
+const horsePartMaterials={};
+const horsePartDefs=[];
+function horsePart(name,geometry,role,xyz,scale,rotation=[0,0,0],anim=null){
+ if(!horsePartMaterials[role]){
+  horsePartMaterials[role]=new THREE.MeshStandardMaterial({
+   color:0xffffff,roughness:role==='hoof'?.84:.92,
+   metalness:role==='metal'?.38:0,flatShading:false
+  });
+ }
+ const mesh=new THREE.InstancedMesh(geometry,horsePartMaterials[role],FIELD_COUNT);
+ mesh.frustumCulled=false;
+ for(let i=0;i<FIELD_COUNT;i++){
+  mesh.setColorAt(i,new THREE.Color(fieldHorsePalette[role](i)));
+ }
+ if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+ fieldRoot.add(mesh);
+ horsePartDefs.push({name,mesh,xyz,scale,rotation,anim});
+ return mesh;
+}
+// 体型: 丸一個の胴体から、肩・胸・臀部・首・頭部へ分けてシルエットを立体化。
+horsePart('barrel',hSphere,'coat',[0,1.43,-.10],[.40,.38,.70]);
+horsePart('rump',hSphere,'coat',[0,1.49,-.57],[.365,.40,.39]);
+horsePart('shoulder',hSphere,'coat',[0,1.45,.41],[.35,.42,.36]);
+horsePart('neck',hTaper,'coat',[0,1.92,.57],[1,.89,1],[.49,0,0]);
+horsePart('cheek',hSphere,'coat',[0,2.27,.89],[.20,.255,.29]);
+horsePart('nose',hSmallSphere,'muzzle',[0,2.14,1.16],[.17,.145,.205]);
+horsePart('ear-left',hCone,'coat',[-.137,2.57,.80],[.095,.23,.085],[0,0,-.14]);
+horsePart('ear-right',hCone,'coat',[.137,2.57,.80],[.095,.23,.085],[0,0,.14]);
+horsePart('mane-neck',hBox,'mane',[0,2.06,.435],[.15,.55,.11],[.47,0,0]);
+horsePart('mane-forelock',hSmallSphere,'mane',[0,2.48,.95],[.18,.12,.20]);
+horsePart('eye-left',hSmallSphere,'dark',[-.185,2.32,1.04],[.040,.05,.050]);
+horsePart('eye-right',hSmallSphere,'dark',[.185,2.32,1.04],[.040,.05,.050]);
+horsePart('bridle-nose',hBox,'leather',[0,2.22,1.27],[.37,.053,.065]);
+horsePart('bridle-cheek',hBox,'leather',[-.17,2.33,1.02],[.036,.34,.058],[.30,0,0]);
+horsePart('bridle-cheek2',hBox,'leather',[.17,2.33,1.02],[.036,.34,.058],[.30,0,0]);
+// 鞍・ゼッケン。ヘルメットと勝負服は馬ごとに色分け。
+horsePart('saddlecloth',hBox,'cloth',[0,1.83,-.10],[.68,.105,.63]);
+horsePart('saddle',hSphere,'leather',[0,1.90,-.08],[.31,.105,.36]);
+horsePart('rider-body',hTaper,'silk',[0,2.34,-.02],[.91,.66,.85],[.42,0,0]);
+horsePart('rider-head',hSmallSphere,'skin',[0,2.79,.22],[.163,.16,.152]);
+horsePart('helmet',hSmallSphere,'cap',[0,2.91,.22],[.198,.13,.183]);
+horsePart('helmet-peak',hBox,'cap',[0,2.86,.39],[.39,.045,.17]);
+horsePart('rider-arm-left',hTaper,'silk',[-.27,2.34,.33],[.48,.48,.48],[.78,0,-.26]);
+horsePart('rider-arm-right',hTaper,'silk',[.27,2.34,.33],[.48,.48,.48],[.78,0,.26]);
+horsePart('rider-thigh-left',hTaper,'leather',[-.31,1.93,-.15],[.62,.55,.62],[-.55,0,-.08]);
+horsePart('rider-thigh-right',hTaper,'leather',[.31,1.93,-.15],[.62,.55,.62],[-.55,0,.08]);
+horsePart('rider-boot-left',hBox,'boot',[-.35,1.55,-.05],[.12,.42,.16],[.15,0,0]);
+horsePart('rider-boot-right',hBox,'boot',[.35,1.55,-.05],[.12,.42,.16],[.15,0,0]);
+horsePart('reins-left',hBox,'leather',[-.20,2.21,.70],[.028,.034,.64],[.14,0,-.08]);
+horsePart('reins-right',hBox,'leather',[.20,2.21,.70],[.028,.034,.64],[.14,0,.08]);
+// 後ろ脚2本・前脚2本。上下脚と蹄を独立して関節運動させる。
+const horseLegDefs=[];
+for(let i=0;i<4;i++){
+ const front=i<2,right=(i%2)===1;
+ const hip=[right?.255:-.255,front?1.25:1.20,front?.40:-.50];
+ const phaseOffset=[0,.70,3.08,3.70][i];
+ const upper=horsePart('leg'+i+'-upper',hLegUpper,'coat',[0,0,0],[1,1,1],undefined,{kind:'upper',i});
+ const lower=horsePart('leg'+i+'-lower',hLegLower,'coat',[0,0,0],[1,1,1],undefined,{kind:'lower',i});
+ const hoof=horsePart('leg'+i+'-hoof',hBox,'hoof',[0,0,0],[.16,.14,.24],undefined,{kind:'hoof',i});
+ horseLegDefs.push({i,hip,front,phaseOffset,upper,lower,hoof});
+}
+horsePart('tail-base',hTaper,'mane',[0,1.36,-.87],[.55,.49,.65],[-.77,0,0],{kind:'tail'});
+horsePart('tail-tip',hCone,'mane',[0,1.01,-1.06],[.15,.48,.17],[.40,0,Math.PI],{kind:'tail'});
+const horseRootPose=new THREE.Object3D();
+const horseLocalPose=new THREE.Object3D();
+const horseResultMatrix=new THREE.Matrix4();
+const horseUpAxis=new THREE.Vector3(0,1,0);
+const horseXAxis=new THREE.Vector3(1,0,0);
+const segmentFrom=new THREE.Vector3(),segmentTo=new THREE.Vector3(),segmentVector=new THREE.Vector3();
+const limbEnd=new THREE.Vector3();
+function writeHorsePart(part,index,rootMatrix,xyz,scale,rotation){
+ horseLocalPose.position.set(xyz[0],xyz[1],xyz[2]);
+ horseLocalPose.rotation.set(rotation[0],rotation[1],rotation[2]);
+ horseLocalPose.scale.set(scale[0],scale[1],scale[2]);
+ horseLocalPose.updateMatrix();
+ horseResultMatrix.multiplyMatrices(rootMatrix,horseLocalPose.matrix);
+ part.mesh.setMatrixAt(index,horseResultMatrix);
+}
+function writeHorseSegment(part,index,rootMatrix,a,b){
+ segmentFrom.set(a[0],a[1],a[2]);segmentTo.set(b[0],b[1],b[2]);
+ segmentVector.subVectors(segmentTo,segmentFrom);
+ const len=segmentVector.length();
+ horseLocalPose.position.copy(segmentFrom).add(segmentTo).multiplyScalar(.5);
+ horseLocalPose.quaternion.setFromUnitVectors(horseUpAxis,segmentVector.normalize());
+ horseLocalPose.scale.set(1,len,1);
+ horseLocalPose.updateMatrix();
+ horseResultMatrix.multiplyMatrices(rootMatrix,horseLocalPose.matrix);
+ part.mesh.setMatrixAt(index,horseResultMatrix);
 }
 function positionFieldHorses(){
  if(!activePlan)return;
  for(let i=0;i<FIELD_COUNT;i++){
   const state=fieldMode.value==='race18'?raceHorses[i]:null;
-  const a=state?raceHorsePosition(state):fieldHorseAt(activePlan,travel,i),horse=fieldHorses[i];
-  const horseDistance=state?state.distance:travel;
-  const phase=horseDistance*.67+i*.22,motion=Math.min(1,horseDistance/5);
-  horse.position.copy(a.p);horse.position.y+=.05*motion*Math.sin(phase*2);
-  const lateralYaw=state?Math.atan2(state.sideSpeed||0,Math.max(3,state.speed||0)):0;
-  horse.rotation.y=Math.atan2(a.t.x,a.t.z)+lateralYaw;
-  horse.userData.legs.forEach((leg,j)=>{leg.rotation.x=motion*.35*Math.sin(phase+(j%2?Math.PI:0)+(j>1?Math.PI:0))});
+  const at=state?raceHorsePosition(state):fieldHorseAt(activePlan,travel,i);
+  const distance=state?state.distance:travel;
+  const velocity=state?state.speed:(playing?16.7*Number(rate.value):0);
+  // 踏み出しから巡航まで滑らかにつなぎ、止まっているときは4本脚を接地。
+  const gallop=Math.min(1,Math.max(0,distance/7))*
+   Math.min(1,Math.max(0,velocity/10));
+  const cycle=distance*.88+i*.21;
+  horseRootPose.position.copy(at.p);
+  horseRootPose.position.y+=gallop*(.055*Math.sin(cycle*2.0)+.055);
+  horseRootPose.rotation.set(0,Math.atan2(at.t.x,at.t.z)+
+   (state?Math.atan2(state.sideSpeed||0,Math.max(3,state.speed||0)):0),0);
+  horseRootPose.scale.setScalar(1);
+  horseRootPose.updateMatrix();
+  const root=horseRootPose.matrix;
+  for(const part of horsePartDefs){
+   if(part.anim && part.anim.kind!=='tail')continue;
+   const pos=part.xyz.slice(),rot=(part.rotation||[0,0,0]).slice();
+   if(part.name==='rider-body'||part.name==='rider-head'||part.name==='helmet'||part.name==='helmet-peak'){
+    pos[1]+=gallop*.043*Math.sin(cycle*2.0+.5);
+   }
+   if(part.name==='neck'||part.name==='cheek'||part.name==='nose'){
+    pos[1]+=gallop*.025*Math.sin(cycle+.75);
+   }
+   if(part.anim && part.anim.kind==='tail'){
+    rot[2]+=gallop*.13*Math.sin(cycle+.8);
+   }
+   writeHorsePart(part,i,root,pos,part.scale,rot);
+  }
+  for(const leg of horseLegDefs){
+   const phase=cycle+leg.phaseOffset;
+   const swing=gallop*(leg.front?.56:.66)*Math.sin(phase);
+   const flex=gallop*(leg.front?.37:.46)*Math.max(0,Math.cos(phase));
+   const upperVector=new THREE.Vector3(0,-.54,0).applyAxisAngle(horseXAxis,swing);
+   const knee=[leg.hip[0],leg.hip[1]+upperVector.y,leg.hip[2]+upperVector.z];
+   const shinVector=new THREE.Vector3(0,-.54,0).applyAxisAngle(horseXAxis,
+    swing*.40+(leg.front?1:-1)*flex);
+   const ankle=[knee[0],knee[1]+shinVector.y,knee[2]+shinVector.z];
+   writeHorseSegment(horsePartDefs.find(p=>p.mesh===leg.upper),i,root,leg.hip,knee);
+   writeHorseSegment(horsePartDefs.find(p=>p.mesh===leg.lower),i,root,knee,ankle);
+   writeHorsePart(horsePartDefs.find(p=>p.mesh===leg.hoof),i,root,
+    [ankle[0],ankle[1]-.07,ankle[2]+.08],[.16,.14,.24],[.15*swing,0,0]);
+  }
  }
+ for(const part of horsePartDefs)part.mesh.instanceMatrix.needsUpdate=true;
 }
 function drawFieldGate(plan){
  gateRoot.traverse(x=>{
