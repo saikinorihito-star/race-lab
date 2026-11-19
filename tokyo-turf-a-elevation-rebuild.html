@@ -1473,7 +1473,8 @@ function fourHorseSafeStep(h,snapshot,dt,targetSpeed){
  nextLane=THREE.MathUtils.clamp(Math.max(h.lane,nextLane),
   -width/2+1.6,inner-.05);
  return {distance:nextDistance,lane:nextLane,speed:nextSpeed};
-}function stepOfficialPair(tick){
+}
+function stepOfficialPair(tick){
  if(!activePlan||raceFinished.length>=OFFICIAL_TEST_COUNT)return;
  const previous=raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>({
   idx:h.idx,distance:h.distance,lane:h.lane,speed:h.speed,finished:h.finished
