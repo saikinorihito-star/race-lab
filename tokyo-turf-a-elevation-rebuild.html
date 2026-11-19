@@ -389,7 +389,7 @@ if(isOfficialEighteenTest){
 if(isOfficialPairTest){
  stageDock.hidden=false;
  if(isOfficialEighteenTest){
-  renderQuality.add(new Option('高精細・FPS自動調整（18頭推奨）','auto'),0);
+  renderQuality.add(new Option('安定・固定画質（18頭推奨）','auto'),0);
   renderQuality.value='auto';
  }else renderQuality.value=isOfficialEightTest?'standard':isOfficialFourTest?'sharp':'standard';
 }
@@ -670,8 +670,8 @@ const renderer=new THREE.WebGLRenderer({antialias:!(isOfficialEightTest||isOffic
 // Higher internal raster resolution cures 4-horse background blur without
 // modifying the approved 3D horse or textures. A visible quality switch lets
 // iPhone users choose a faster render if the frame interval grows.
-const renderDprLevels=isOfficialEighteenTest?{sharp:1.85,standard:1.45,light:1.10}:{sharp:1.35,standard:1.05,light:.90};
-const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?1.75:
+const renderDprLevels=isOfficialEighteenTest?{sharp:1.75,standard:1.40,light:1.08}:{sharp:1.35,standard:1.05,light:.90};
+const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?1.40:
  renderDprLevels[renderQuality.value]||1.05):1.4;
 renderer.setPixelRatio(Math.min(initialDpr,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
@@ -691,28 +691,14 @@ function applyRenderQuality(){
   renderDprLevels[renderQuality.value]||1.05,window.devicePixelRatio||1));
  renderer.setSize(stage.clientWidth,stage.clientHeight,false);
 }
-let auto18Dpr=1.75,auto18ObservedFps=0;
-let auto18LastAdjustment=0,auto18LowSamples=0,auto18HighSamples=0;
+let auto18Dpr=1.40,auto18ObservedFps=0;
 renderQuality.addEventListener('change',()=>{
- auto18Dpr=1.75;auto18LowSamples=0;auto18HighSamples=0;
+ // A user action is the ONLY time drawing-buffer resolution is reallocated.
  applyRenderQuality();
 });
 function autoTune18HorseResolution(fps){
- // Throttle iPhone Safari drawing-buffer reallocations to avoid flicker.
- if(!isOfficialEighteenTest||renderQuality.value!=='auto')return;
- auto18ObservedFps=fps;
- if(fps<27){auto18LowSamples++;auto18HighSamples=0}
- else if(fps>48){auto18HighSamples++;auto18LowSamples=0}
- else{auto18LowSamples=0;auto18HighSamples=0}
- const now=performance.now();
- if(now-auto18LastAdjustment<16000)return;
- const old=auto18Dpr;
- if(auto18LowSamples>=3)auto18Dpr=Math.max(1.15,Math.round((auto18Dpr-.16)*100)/100);
- else if(auto18HighSamples>=8)auto18Dpr=Math.min(1.75,Math.round((auto18Dpr+.12)*100)/100);
- if(auto18Dpr!==old){
-  auto18LastAdjustment=now;auto18LowSamples=0;auto18HighSamples=0;
-  applyRenderQuality();
- }
+ // Avoid Safari black/white flashes: no auto DPR reallocations during the race.
+ if(isOfficialEighteenTest)auto18ObservedFps=fps;
 }
 scene.add(new THREE.HemisphereLight(0xeaf7ff,0x4e6450,1.42));
 const sun=new THREE.DirectionalLight(0xfff4e6,1.95);
@@ -2738,6 +2724,7 @@ markerFocus.addEventListener('change',inspectMarker);
 // 追尾中のカメラでも、利用者が指定した微調整を上書きしない。
 const groupCameraOffset={yaw:0,pitch:0,zoom:1};
 const camera18={yaw:0,pitch:0,zoom:1,pan:0,lift:0};
+let camera18CutPending=false; // Avoid passing through black 3D objects between views.
 const broadcastCameraLabel=document.querySelector('#broadcastCameraLabel');
 let lastBroadcastShotId=null;
 const camera18Follow=document.querySelector('#cam18Follow');
@@ -3145,17 +3132,18 @@ function officialEighteenCameraShot(which,context){
  const baseRadius=which==='field'?Math.min(145,57+gap*.85):
   choice==='pack'?Math.max(34,Math.min(135,gap*1.60)):
   which==='chase'?32:which==='front3q'?34:29;
- const radius=THREE.MathUtils.clamp(baseRadius*camera18.zoom,8,500);
+ const radius=THREE.MathUtils.clamp(baseRadius*camera18.zoom,16,320);
  // A 0-degree side view has neither along-course nor upward component.
  const outward=side.clone().multiplyScalar(-Math.cos(yaw))
   .addScaledVector(a.t,Math.sin(yaw)).normalize();
  const screenRight=new THREE.Vector3(outward.z,0,-outward.x).normalize();
  const target=focus.clone().addScaledVector(screenRight,camera18.pan)
   .add(new THREE.Vector3(0,2+camera18.lift,0));
+ // Negative camera lift may aim underground and black out the whole field.
+ target.y=Math.max(a.p.y+2.6,target.y);
  const eye=target.clone().addScaledVector(outward,radius*Math.cos(elevation))
   .add(new THREE.Vector3(0,radius*Math.sin(elevation),0));
- // Never send negative-pitch camera below the turf.
- eye.y=Math.max(a.p.y+1.45,eye.y);
+ eye.y=Math.max(a.p.y+2.25,eye.y);
  return {eye,target,gap,focusedOnLead:blend>=.8};
 }
 function officialPairCameraShot(which='field'){
@@ -3235,6 +3223,7 @@ function fieldCameraShot(){
 function setView(which){
  view=which;
  if(isOfficialEighteenTest){
+  if(pairTrackingView(which))camera18CutPending=true;
   syncCamera18Controls();
   broadcastCameraLabel.hidden=which!=='broadcast';
   lastBroadcastShotId=null;
@@ -3422,7 +3411,11 @@ function updateSceneLabelVisibility(){
  }
  dirtRailGroup.visible=!(isOfficialEighteenTest&&pairTrackingView(view));
  const closeViews=new Set(['goal','goalboard','hill','dirt','chase','field','start','marker']);
- turfVisionGroups.forEach(group=>{group.visible=!closeViews.has(view)});
+ // Screens stay in the course overview, never within 18-horse filming.
+ // No per-frame monitor popping when the image crosses the camera frustum.
+ turfVisionGroups.forEach(group=>{
+  group.visible=!closeViews.has(view)&&!(isOfficialEighteenTest&&pairTrackingView(view));
+ });
 }
 checkLabels.addEventListener('change',updateSceneLabelVisibility);
 courseSigns.addEventListener('change',updateSceneLabelVisibility);
@@ -3436,7 +3429,7 @@ function resize(){
  // Safari may fire resize events as address/tool bars animate even if the
  // WebGL stage size is unchanged. Avoid reallocating the drawing buffer,
  // a potential cause of sporadic full-canvas flashes on iPhone.
- if(isOfficialEighteenTest&&w===lastStageWidth&&h===lastStageHeight)return;
+ if(isOfficialEighteenTest&&Math.abs(w-lastStageWidth)<3&&Math.abs(h-lastStageHeight)<3)return;
  lastStageWidth=w;lastStageHeight=h;
  camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();renderer.setSize(w,h,false);
  if(view==='all'||view==='top'||view==='start'||view==='field')setView(view);
@@ -3506,13 +3499,14 @@ function animate(time){
    // Official-style camera switching uses hard cuts between stations,
    // but smooth motor-like panning within each camera's own shot.
    const alpha=1-Math.exp(-Math.min(.05,dt)*12);
-   if(cut){
+   if(cut||camera18CutPending){
     camera.position.copy(shot.eye);
     controls.target.copy(shot.target);
    }else{
     camera.position.lerp(shot.eye,alpha);
     controls.target.lerp(shot.target,alpha);
    }
+   camera18CutPending=false;
    camera.lookAt(controls.target);
    pairTracking=true;
   }else if(view==='field'&&activePlan){
@@ -3523,26 +3517,15 @@ function animate(time){
  // 追尾中の自動カメラの姿勢をOrbitControlsで上書きしない。
  if(!pairTracking)controls.update();
  updateRunnerNameLabels(time);
- // In broadcast mode, screen furniture must not hide the race pack.
- if(isOfficialEighteenTest&&view==='broadcast'){
-  camera.updateMatrixWorld();
-  const focusDistance=camera.position.distanceTo(controls.target);
-  for(const group of turfVisionGroups){
-   const center=new THREE.Vector3(group.position.x,
-    group.position.y+13*group.scale.y,group.position.z);
-   const screenDistance=camera.position.distanceTo(center);
-   const ndc=center.clone().project(camera);
-   const obstructs=screenDistance<focusDistance&&screenDistance>2&&
-    ndc.z>-1&&ndc.z<1&&Math.abs(ndc.x)<.94&&Math.abs(ndc.y)<.9;
-   group.visible=!obstructs;
-  }
- }
  // ピンチ操作で屋根や床の内部に入ったときは、障害物の模型だけ一時的に隠す。
  for(const item of stadiumGroups){
-  const insideX=Math.abs(camera.position.x-item.x)<item.len/2+16;
-  const insideZ=Math.abs(camera.position.z-item.backZ)<75;
-  const insideY=camera.position.y>0&&camera.position.y<item.height+18;
-  item.group.visible=showStands.checked&&!(insideX&&insideZ&&insideY);
+  // Hysteresis: do not alternate hide/show of a whole building at one pixel.
+  const previouslyHidden=!!item.cameraOccluded;
+  const insideX=Math.abs(camera.position.x-item.x)<item.len/2+(previouslyHidden?40:20);
+  const insideZ=Math.abs(camera.position.z-item.backZ)<(previouslyHidden?100:80);
+  const insideY=camera.position.y>0&&camera.position.y<item.height+(previouslyHidden?29:18);
+  item.cameraOccluded=insideX&&insideZ&&insideY;
+  item.group.visible=showStands.checked&&!item.cameraOccluded;
  }
  renderer.render(scene,camera);
  fpsCount++;
