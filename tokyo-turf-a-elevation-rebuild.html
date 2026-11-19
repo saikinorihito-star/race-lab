@@ -116,7 +116,7 @@ a{color:#95e8df}
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
 <div id="raceOrder" aria-live="polite">18頭の順位とレース展開を準備しています。</div>
-<div id="message">発走後約3mから外枠馬が内側の空きを探し始め、序盤約115mで進路を絞り込みます。移動中は馬体の向きも進路に連動し、前が塞がれば無理には内へ切り込みません。カメラ、コース、発馬機の構造は変更していません。</div>
+<div id="message">発走後、内ラチまでの進路に他馬がいない馬は、最大4.5m/sの横方向移動で早く内へ寄ります。他馬が近い場合は3m/sまでに抑え、無理な横切りを防止します。カメラ・コース・発馬機の形状は変更していません。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">金色：選択距離のルート</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -1106,6 +1106,18 @@ function canChangeLane(state,target,others){
  }
  return true;
 }
+// 内ラチまでの横断経路が空いているかを確認する。
+// 今いる位置と目標位置の「間」に他馬がいれば、直ちに内へ寄らない。
+function hasClearInwardPath(state,goal,others){
+ if(goal<=state.lane+.35)return false;
+ for(const other of others){
+  if(other===state||other.finished)continue;
+  // 前後7m以内の馬は、横断経路に割り込む危険があるため保守的に扱う。
+  if(Math.abs(other.distance-state.distance)<7.0&&
+    other.lane>state.lane+.25&&other.lane<goal+1.35)return false;
+ }
+ return true;
+}
 function stepRace(tick){
  if(!activePlan||raceFinished.length>=FIELD_COUNT)return;
  const previous=raceHorses.map(h=>({distance:h.distance,lane:h.lane,speed:h.speed,finished:h.finished}));
@@ -1139,9 +1151,15 @@ function stepRace(tick){
     nearest=j;frontGap=gap;
    }
   }
-  // 約3mで最初の加速を終えたら、外枠ほど積極的に内の空きスペースを探す。
-  // 進路目標は序盤115mで絞り込み、前が詰まるときは一時的に外を走る。
-  if(h.distance>3&&h.moveCooldown===0){
+  // 内ラチまで見通せる馬は、外枠でも積極的に最短の内側進路を選ぶ。
+  // 進路が塞がる馬だけ、従来どおり小刻みに空きスペースを探す。
+  const innerRailLane=at.width/2-1.02;
+  const openToRail=h.distance>3&&h.distance<290&&
+   hasClearInwardPath(h,innerRailLane,raceHorses);
+  if(openToRail){
+   h.targetLane=innerRailLane;
+   h.moveCooldown=0;
+  }else if(h.distance>3&&h.moveCooldown===0){
    const settle=Math.min(1,(h.distance-3)/115);
    const desired=Math.min(at.width/2-1.25,
     h.startLane+(h.number-1)/17*h.innerTendency*settle);
@@ -1152,7 +1170,7 @@ function stepRace(tick){
     }
    }
   }
-  if(nearest>=0&&frontGap<8.8&&h.moveCooldown===0){
+  if(nearest>=0&&frontGap<8.8&&h.moveCooldown===0&&!openToRail){
    const preferIn=h.number%3!==0;
    const attempts=preferIn?[1,-1]:[-1,1];
    for(const side of attempts){
@@ -1162,8 +1180,9 @@ function stepRace(tick){
     }
    }
   }
-  // 進路変更速度は3m/sまで。内側が詰まっている場合は既存の接触回避を優先。
-  const move=Math.max(-3*tick,Math.min(3*tick,h.targetLane-lane));
+  // 内側まで空いているときだけ最大4.5m/s。馬がいるときは3m/sに抑える。
+  const sideRate=openToRail?4.5:3.0;
+  const move=Math.max(-sideRate*tick,Math.min(sideRate*tick,h.targetLane-lane));
   const targetLane=lane+move;
   if(canChangeLane(h,targetLane,raceHorses))lane=targetLane;
   else h.targetLane=lane;
