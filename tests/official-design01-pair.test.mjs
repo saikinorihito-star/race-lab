@@ -168,7 +168,7 @@ test('render-time 4-horse inward movement is smoothly interpolated',()=>{
 test('4-horse render defaults to sharp antialiasing with adjustable fallback',()=>{
  assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:!\(isOfficialEightTest\|\|isOfficialEighteenTest\),/);
  assert.match(html,/const renderDprLevels=\{sharp:1\.35,standard:1\.05,light:\.90\}/);
- assert.match(html,/renderQuality\.addEventListener\('change',applyRenderQuality\)/);
+ assert.match(html,/renderQuality\.addEventListener\('change',\(\)=>\{/);
  assert.match(html,/cloneSkeleton\(source\)/);
  assert.match(html,/h\.mixer\.setTime\(gaitTime\)/);
  assert.match(html,/const gaitTime=isOfficialMultiTest\?/);
@@ -208,7 +208,8 @@ test('manual camera direction and zoom change the tracking eye but preserve its 
 test('persistent in-video run control reflects play, pause, resume and completion',()=>{
  const button={textContent:'',disabled:false,attributes:{},
   setAttribute(k,v){this.attributes[k]=v}};
- const ctx={isOfficialPairTest:true,OFFICIAL_TEST_COUNT:4,raceFinished:[],
+ const ctx={isOfficialPairTest:true,isOfficialEighteenTest:false,
+  OFFICIAL_TEST_COUNT:4,raceFinished:[],officialPair:[],
   raceElapsed:0,playing:false,installedDesign01:false,stageStartBtn:button};
  const sync=()=>runInNewContext('('+extract('syncStageStartButton')+')',ctx)();
  sync();assert.equal(button.textContent,'▶ スタート');assert.equal(button.disabled,true);
