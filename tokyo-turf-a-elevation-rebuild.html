@@ -1427,6 +1427,8 @@ const FOUR_PACE_PROFILES=[
 // 横断を待ち、スピードを調節して前後の安全な間隔を作る。
 const FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=3.05;
 const FOUR_INWARD_RATE=4.4;
+// No sideways motion without forward progress: atan(.30) ≈ 16.7° heading.
+const FOUR_MAX_LATERAL_PER_FORWARD=.30;
 function fourHorseDesiredSlot(h,snapshot){
  // 最内への進路目標を全4頭で共有。安全判定は実際の横移動側で行う。
  return 0;
@@ -1461,6 +1463,10 @@ function fourHorseSafeStep(h,snapshot,dt,targetSpeed){
  nextSpeed+=THREE.MathUtils.clamp(target-h.speed,
   -longitudinalRate*dt,longitudinalRate*dt);
  let nextDistance=Math.min(activePlan.distance,h.distance+nextSpeed*dt);
+ // 内側へ寄る動きは前進と連動させる。発馬直後に横だけ動かない。
+ // 同時に、この時点の安全判定を実際の斜め進行位置で行う。
+ nextLane=Math.min(nextLane,
+  h.lane+Math.max(0,nextDistance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD);
  // 同じ進路に先行馬がいる場合は4.8mの前後間隔を優先する。
  for(const x of snapshot){
   if(x.idx===h.idx||x.finished)continue;
@@ -1471,6 +1477,9 @@ function fourHorseSafeStep(h,snapshot,dt,targetSpeed){
    nextDistance=Math.min(nextDistance,Math.max(h.distance,allowed));
   }
  }
+ // 他馬を避けるために前進が遅れた場合は、横移動も同じ割合で抑える。
+ nextLane=Math.min(nextLane,
+  h.lane+Math.max(0,nextDistance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD);
  nextSpeed=Math.min(nextSpeed,Math.max(0,(nextDistance-h.distance)/dt));
  return {distance:nextDistance,lane:nextLane,speed:nextSpeed};
 }
@@ -1925,7 +1934,7 @@ function updateOfficialPair(dt){
   const a=raceHorsePosition(state);
   h.group.position.copy(a.p);
   const inwardSlope=isOfficialFourTest?
-   THREE.MathUtils.clamp(state.sideSpeed/Math.max(4,state.speed),-.12,.12):
+   THREE.MathUtils.clamp(state.sideSpeed/Math.max(.5,state.speed),-.30,.30):
    fourHorseInwardSlope(state.distance);
   if(inwardSlope){
    const left=new THREE.Vector3(a.t.z,0,-a.t.x);
@@ -1937,7 +1946,13 @@ function updateOfficialPair(dt){
   // Rig animation shares interpolated physics time. The clip and assets remain unchanged.
   const shownTime=Math.max(0,raceElapsed-
    (playing?RACE_TICK*(1-state.alpha):0));
-  h.mixer.setTime(shownTime*Math.min(2,Number(rate.value))+i*.07);
+  // In 4-horse formation, animation phase follows actual travel distance;
+  // stationary/accelerating horses must not gallop at full speed in place.
+  // The approved 2-horse animation timeline stays unchanged.
+  const gaitTime=isOfficialFourTest?
+   (state.distance+(state.postDistance||0))/16.0+i*.07:
+   shownTime*Math.min(2,Number(rate.value))+i*.07;
+  h.mixer.setTime(gaitTime);
  }
 }
 function setDesign01Status(message){
