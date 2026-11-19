@@ -36,8 +36,8 @@ test('2 and 4 official horses stay clear of the inner and outer turf rails',()=>
  }
 });
 
-test('both 2 and 4 horse reviews use stable lanes without 18-horse AI',()=>{
- for(const count of [2,4])for(const distance of [1400,1600,1800,2000,2300,2400,2500,2600,3400]){
+test('approved 2-horse review still follows its original stable lanes',()=>{
+ for(const count of [2])for(const distance of [1400,1600,1800,2000,2300,2400,2500,2600,3400]){
   const widthAt=d=>36+5*Math.sin(d/2083.1*Math.PI*2+.5);
   const raceHorses=Array.from({length:count},(_,i)=>({
    number:i+1,distance:0,postDistance:0,lane:lane(widthAt(0),i),
@@ -148,14 +148,15 @@ test('4-horse review approaches rail from 8m farther out and never turns away af
 
 test('render-time 4-horse inward movement is smoothly interpolated',()=>{
  const reviewLane=makeReviewLane(true);
- const h={distance:50.27,prevDistance:50,postDistance:0,prevPostDistance:0,speed:16};
+ const h={distance:50.27,prevDistance:50,postDistance:0,prevPostDistance:0,speed:16,
+  prevLane:reviewLane(36,0,50),lane:reviewLane(36,0,50.27)};
  let previous=-Infinity;
  for(const alpha of [0,.125,.25,.375,.5,.625,.75,.875,1]){
   const ctx={THREE:fakeThree,raceHorses:[h],activePlan:{distance:1400},
-   playing:true,raceAccumulator:alpha/60,RACE_TICK:1/60,
+   isOfficialFourTest:true,playing:true,raceAccumulator:alpha/60,RACE_TICK:1/60,
    fieldCenterAt:(_p,d)=>({width:36}),officialReviewLane:reviewLane};
   const state=runInNewContext('('+extract('officialPairVisualState')+')',ctx)(0);
-  assert.ok(Math.abs(state.lane-reviewLane(36,0,state.distance))<1e-9);
+  assert.ok(Math.abs(state.lane-(h.prevLane+(h.lane-h.prevLane)*alpha))<1e-9);
   assert.ok(state.lane>previous,'Inward lateral motion is continuous between simulation ticks');
   previous=state.lane;
  }
@@ -234,4 +235,73 @@ test('4-horse inward heading is gradual, bounded and returns to tangent after me
   assert.equal(oldSlope(d),0,'Preserve accepted two-horse heading');
  }
  assert.match(extract('updateOfficialPair'),/fourHorseInwardSlope\(state\.distance\)/);
+});
+
+function runActualFourHorseSimulation(distance){
+ const profiles=html.match(/const FOUR_PACE_PROFILES=\[[\s\S]*?\];/)?.[0];
+ assert.ok(profiles,'Four-horse profiles missing');
+ const code=['pairRailLane','officialReviewLane','fourHorseDesiredSlot',
+  'fourHorseSafeStep','stepOfficialPair'].map(extract).join('\n');
+ const source=`(()=>{
+ const THREE={MathUtils:{clamp:(v,lo,hi)=>Math.max(lo,Math.min(hi,v))}};
+ const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35,
+ FOUR_START_OUTSIDE_OFFSET=8,FOUR_INWARD_SETTLE_DISTANCE=160,
+ FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=2.65,
+ isOfficialFourTest=true,OFFICIAL_TEST_COUNT=4;
+ ${profiles}
+ ${code}
+ const activePlan={distance:trackDistance};
+ const fieldCenterAt=(_p,d)=>({width:36+5*Math.sin(d/2083.1*Math.PI*2+.5)});
+ let raceElapsed=0,raceFinished=[];
+ const raceHorses=Array.from({length:4},(_,i)=>({
+  idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,
+  finishTime:null,slot:i,nextLaneReviewTime:0,
+  lane:officialReviewLane(fieldCenterAt(activePlan,0).width,i,0)
+ }));
+ const snapshots={},mark=[100,200,400,800];
+ let minActiveCenterDistance=Infinity,minRailClearance=Infinity,
+  maxLateralSpeed=0,stackedFrames=0,outwardSlotChanges=0,maxFrontGap=0;
+ const lastSlots=[0,1,2,3];
+ for(let t=0;t<24000&&raceFinished.length<4;t++){
+  stepOfficialPair(1/60);
+  const leader=Math.max(...raceHorses.map(h=>h.distance));
+  for(const m of mark)if(!snapshots[m]&&leader>=m)
+   snapshots[m]=raceHorses.map(h=>({d:h.distance,lane:h.lane,slot:h.slot}));
+  for(const h of raceHorses){
+   minRailClearance=Math.min(minRailClearance,
+    fieldCenterAt(activePlan,h.distance).width/2-h.lane);
+   maxLateralSpeed=Math.max(maxLateralSpeed,Math.abs(h.sideSpeed||0));
+   if(h.slot>lastSlots[h.idx])outwardSlotChanges++;
+   lastSlots[h.idx]=h.slot;
+  }
+  const active=raceHorses.filter(h=>!h.finished);
+  for(let i=0;i<active.length;i++)for(let j=i+1;j<active.length;j++){
+   const a=active[i],b=active[j],long=Math.abs(a.distance-b.distance);
+   const lateral=Math.abs(a.lane-b.lane);
+   minActiveCenterDistance=Math.min(minActiveCenterDistance,Math.hypot(long,lateral));
+   if(lateral<2.65&&long>=4.8&&long<20)stackedFrames++;
+  }
+ }
+ return {finished:raceFinished.length,minActiveCenterDistance,
+  minRailClearance,maxLateralSpeed,stackedFrames,outwardSlotChanges,
+  snapshots,finishTimes:raceHorses.map(h=>h.finishTime)};
+ })()`;
+ return runInNewContext(source,{trackDistance:distance});
+}
+
+test('actual four-horse formation creates nose-to-tail stacking, safe overtakes and no weaving',()=>{
+ for(const distance of [1400,1600,1800,2000,2300,2400,2500,2600,3400]){
+  const r=runActualFourHorseSimulation(distance);
+  assert.equal(r.finished,4,'All four must reach the finish at '+distance+'m');
+  assert.ok(r.minRailClearance>=3.7-1e-8,'No horse meets the inside rail');
+  assert.ok(r.minActiveCenterDistance>=2.6,'No active horse overlap');
+  assert.ok(r.maxLateralSpeed<=1.201,'Sideways speed capped at 1.2m/s');
+  assert.equal(r.outwardSlotChanges,0,'No rapid outward-inward lane oscillation');
+  assert.ok(r.stackedFrames>100,'Must visibly queue nose-to-tail at some stage');
+  const start=r.snapshots[100].map(h=>h.d);
+  assert.ok(Math.max(...start)-Math.min(...start)<14,
+   'Horses should remain in a visible pack at 100m');
+  assert.ok(r.snapshots[200][1].slot<1,
+   'Stalker should merge behind the lead into the inner lane by 200m');
+ }
 });
