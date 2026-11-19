@@ -108,7 +108,7 @@ a{color:#95e8df}
 <label>走行テスト <select id="fieldMode"><option value="race18" selected>18頭レース展開（能力差あり）</option><option value="field18">18頭同時走行（固定レーン）</option><option value="single">従来の1頭走行</option></select></label>
 <button id="demo">18頭のレースを開始</button>
 <button id="reset">発馬機へ戻す</button>
-<label>デモ速度 <select id="rate"><option value="1" selected>1倍（発走確認）</option><option value="4">4倍</option><option value="8">8倍（確認向け）</option></select></label>
+<label>デモ速度 <select id="rate"><option value="0.5">0.5倍（脚の動き確認）</option><option value="1" selected>1倍（発走確認）</option><option value="4">4倍</option><option value="8">8倍（確認向け）</option></select></label>
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
 <label><input type="checkbox" id="courseSigns"/>大きな案内看板（全景用）</label>
 <label><input type="checkbox" id="showStands" checked/>スタンド建物を表示</label>
@@ -116,7 +116,7 @@ a{color:#95e8df}
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
 <div id="raceOrder" aria-live="polite">18頭の順位とレース展開を準備しています。</div>
-<div id="message">18頭の馬体を改良しました。首・顔・耳・たてがみ・鞍・騎手を立体化し、脚は上下関節と蹄を動かします。馬体色と勝負服を個別に表示し、部品をまとめて描画してiPhoneでの負荷を抑えています。カメラ・コース・発馬機と進路判断は変更していません。</div>
+<div id="message">18頭の走行アニメーションを改良。4拍子の脚運びと空中期、膝・飛節の関節、馬体・首の上下動、騎手の揺れを抑える動きを追加しました。デモ速度0.5倍で脚の動きを確認できます。コース・カメラ・発馬機・進路判断は変更していません。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">18頭：毛色・勝負服を個別表示</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -1378,50 +1378,117 @@ function writeHorseSegment(part,index,rootMatrix,a,b){
  horseResultMatrix.multiplyMatrices(rootMatrix,horseLocalPose.matrix);
  part.mesh.setMatrixAt(index,horseResultMatrix);
 }
+// 競走馬のギャロップを簡易近似: 左右前脚・左右後脚をずらす4拍子と空中期。
+// 実測モーションではなく、騎手・首・脚を連動させる軽量な手続きアニメーション。
+const GALLOP_TAU=Math.PI*2,GALLOP_HOLD=.155;
+const UPPER_LEG_LENGTH=.77,LOWER_LEG_LENGTH=.73;
+let lastFieldPosePlan=null,lastFieldPoseMode='',lastFieldPoseStamp=NaN;
+function frac(v){return v-Math.floor(v)}
+function clamp01(v){return Math.max(0,Math.min(1,v))}
+function gallopPhase(distance,index,velocity){
+ // 巡航速度で1ストライド約6.6～7m。移動距離で位相を決め、FPSに依存しない。
+ const stride=6.65+index%4*.09;
+ const phi=frac(distance/stride+index*.036);
+ const strength=clamp01((velocity-.5)/10)*clamp01(distance/5);
+ const suspension=phi>.75?Math.sin(Math.PI*(phi-.75)/.25):0;
+ const push=Math.max(0,Math.sin(GALLOP_TAU*(phi-.10)));
+ const bounce=strength*(.017+.085*suspension+.020*push);
+ return {phi,strength,bounce,bodyPitch:strength*.047*Math.sin(GALLOP_TAU*(phi-.13))};
+}
+function gallopFootTarget(leg,phi,strength,bounce,leadLeft){
+ const hip=leg.hip;
+ if(strength<.01)return [hip[0],-.056,hip[2]];
+ // 転がるような4拍子: 後脚2→後脚3→前脚0→前脚1（左右の手前で入替）。
+ const footfalls=leadLeft?[.56,.40,.23,.08]:[.40,.56,.08,.23];
+ const local=frac(phi-footfalls[leg.i]);
+ const frontReach=leg.front?.39:.31,backReach=leg.front?.33:.41;
+ const stance=local<GALLOP_HOLD;
+ const t=stance?local/GALLOP_HOLD:(local-GALLOP_HOLD)/(1-GALLOP_HOLD);
+ let z=hip[2],lift=0;
+ if(stance){
+  z+=frontReach-(frontReach+backReach)*t;
+ }else{
+  const ease=t*t*(3-2*t);
+  z+=-backReach+(frontReach+backReach)*ease;
+  lift=strength*(leg.front?.42:.36)*Math.pow(Math.sin(Math.PI*t),1.25);
+ }
+ // 蹄の接地高さは胴体の上下動を相殺し、空中期は脚が一斉に浮く。
+ return [hip[0],-.056-bounce+lift,z];
+}
+function horseKneePoint(hip,hoof,front){
+ // 長さ固定の2リンクIK（地面に接する足の位置から膝・飛節の位置を求める）。
+ const dz=hoof[2]-hip[2],dy=hoof[1]-hip[1];
+ const raw=Math.hypot(dz,dy);
+ const d=Math.max(.025,Math.min(raw,UPPER_LEG_LENGTH+LOWER_LEG_LENGTH-.005));
+ const unitZ=dz/(raw||1),unitY=dy/(raw||1);
+ const along=(UPPER_LEG_LENGTH*UPPER_LEG_LENGTH-LOWER_LEG_LENGTH*LOWER_LEG_LENGTH+d*d)/(2*d);
+ const bend=Math.sqrt(Math.max(0,UPPER_LEG_LENGTH*UPPER_LEG_LENGTH-along*along));
+ const direction=front?1:-1;
+ return [hip[0],hip[1]+unitY*along+direction*unitZ*bend,
+  hip[2]+unitZ*along-direction*unitY*bend];
+}
 function positionFieldHorses(){
  if(!activePlan||fieldMode.value==='single')return;
+ // 停止状態の43×18インスタンス行列を毎フレーム再転送しない。
+ let stamp=0;
+ if(fieldMode.value==='race18'){
+  for(let i=0;i<FIELD_COUNT;i++){
+   const h=raceHorses[i];
+   stamp+=(i+1)*(h.distance+(h.postDistance||0)*.73+h.lane*.02+h.speed*.0001);
+  }
+ }else stamp=travel;
+ if(lastFieldPosePlan===activePlan&&lastFieldPoseMode===fieldMode.value&&
+  Math.abs(lastFieldPoseStamp-stamp)<.000005)return;
+ lastFieldPosePlan=activePlan;lastFieldPoseMode=fieldMode.value;lastFieldPoseStamp=stamp;
  for(let i=0;i<FIELD_COUNT;i++){
   const state=fieldMode.value==='race18'?raceHorses[i]:null;
   const at=state?raceHorsePosition(state):fieldHorseAt(activePlan,travel,i);
   const distance=state?state.distance+(state.postDistance||0):travel;
   const velocity=state?(state.finished&&state.postDistance<87?12:state.speed):
    (playing?16.7*Number(rate.value):0);
-  // 踏み出しから巡航まで滑らかにつなぎ、止まっているときは4本脚を接地。
-  const gallop=Math.min(1,Math.max(0,distance/7))*
-   Math.min(1,Math.max(0,velocity/10));
-  const cycle=distance*.88+i*.21;
+  const gait=gallopPhase(distance,i,velocity);
+  const {phi,strength,bounce,bodyPitch}=gait;
+  const leadingLeft=(i%5)!==0; // 多くを左手前とした仮設定。手前替えは後工程。
+  const turnYaw=state?Math.atan2(state.sideSpeed||0,Math.max(3,state.speed||0)):0;
   horseRootPose.position.copy(at.p);
-  horseRootPose.position.y+=gallop*(.055*Math.sin(cycle*2.0)+.055);
-  horseRootPose.rotation.set(0,Math.atan2(at.t.x,at.t.z)+
-   (state?Math.atan2(state.sideSpeed||0,Math.max(3,state.speed||0)):0),0);
+  horseRootPose.position.y+=bounce;
+  horseRootPose.rotation.set(bodyPitch,Math.atan2(at.t.x,at.t.z)+turnYaw,0);
   horseRootPose.scale.setScalar(1);
   horseRootPose.updateMatrix();
   const root=horseRootPose.matrix;
+  // 騎手は馬体の上下動を完全には追わず、立ち乗り姿勢で揺れを吸収する。
+  const riderCompensation=-bounce*.63+strength*.012*Math.sin(GALLOP_TAU*(phi+.12));
+  const headBob=strength*.065*Math.sin(GALLOP_TAU*(phi+.39));
   for(const part of horsePartDefs){
-   if(part.anim && part.anim.kind!=='tail')continue;
+   if(part.anim&&part.anim.kind!=='tail')continue;
    let pos=part.xyz,rot=part.rotation||[0,0,0];
-   if(part.name==='rider-body'||part.name==='rider-head'||part.name==='helmet'||part.name==='helmet-peak'){
-    pos=[pos[0],pos[1]+gallop*.043*Math.sin(cycle*2.0+.5),pos[2]];
+   const riderPart=part.name.startsWith('rider-')||
+    part.name==='helmet'||part.name==='helmet-peak';
+   const neckPart=part.name==='neck'||part.name==='cheek'||part.name==='nose'||
+    part.name.startsWith('ear-')||part.name.startsWith('eye-')||
+    part.name.startsWith('bridle-')||part.name.startsWith('mane-');
+   if(riderPart){
+    pos=[pos[0],pos[1]+riderCompensation,pos[2]];
+    if(part.name==='rider-body'){
+     rot=[rot[0]-strength*.065*Math.sin(GALLOP_TAU*(phi+.21)),rot[1],rot[2]];
+    }
    }
-   if(part.name==='neck'||part.name==='cheek'||part.name==='nose'){
-    pos=[pos[0],pos[1]+gallop*.025*Math.sin(cycle+.75),pos[2]];
+   if(neckPart){
+    pos=[pos[0],pos[1]+headBob,pos[2]+strength*.023*Math.cos(GALLOP_TAU*phi)];
    }
-   if(part.anim && part.anim.kind==='tail'){
-    rot=[rot[0],rot[1],rot[2]+gallop*.13*Math.sin(cycle+.8)];
+   if(part.anim&&part.anim.kind==='tail'){
+    rot=[rot[0],rot[1],rot[2]+strength*.18*Math.sin(GALLOP_TAU*(phi+.25))];
    }
    writeHorsePart(part,i,root,pos,part.scale,rot);
   }
   for(const leg of horseLegDefs){
-   const phase=cycle+leg.phaseOffset;
-   const swing=gallop*(leg.front?.56:.66)*Math.sin(phase);
-   const flex=gallop*(leg.front?.37:.46)*Math.max(0,Math.cos(phase));
-   const knee=[leg.hip[0],leg.hip[1]-.54*Math.cos(swing),leg.hip[2]-.54*Math.sin(swing)];
-   const shinAngle=swing*.40+(leg.front?1:-1)*flex;
-   const ankle=[knee[0],knee[1]-.54*Math.cos(shinAngle),knee[2]-.54*Math.sin(shinAngle)];
+   const foot=gallopFootTarget(leg,phi,strength,bounce,leadingLeft);
+   const knee=horseKneePoint(leg.hip,foot,leg.front);
    writeHorseSegment(leg.upper,i,root,leg.hip,knee);
-   writeHorseSegment(leg.lower,i,root,knee,ankle);
+   writeHorseSegment(leg.lower,i,root,knee,foot);
    writeHorsePart(leg.hoof,i,root,
-    [ankle[0],ankle[1]-.07,ankle[2]+.08],[.16,.14,.24],[.15*swing,0,0]);
+    [foot[0],foot[1]-.012,foot[2]+.06],[.16,.14,.24],
+    [strength*.14*Math.sin(GALLOP_TAU*(phi+.2)),0,0]);
   }
  }
  for(const part of horsePartDefs)part.mesh.instanceMatrix.needsUpdate=true;
