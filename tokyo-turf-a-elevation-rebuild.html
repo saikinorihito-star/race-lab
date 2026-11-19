@@ -1422,7 +1422,7 @@ const FOUR_PACE_PROFILES=[
  {role:'差し',accel:3.32,early:16.10,kickStart:.25,kick:.52},
  {role:'追込',accel:3.10,early:15.95,kickStart:.36,kick:.82}
 ];
-const FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=2.65;
+const FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=2.9;
 function fourHorseDesiredSlot(h,snapshot){
  const current=h.slot??h.idx;
  const width=fieldCenterAt(activePlan,h.distance).width;
@@ -1456,8 +1456,9 @@ function fourHorseSafeStep(h,snapshot,dt,targetSpeed){
    nextLane=h.lane;
   }
  }
+ // Reserve an additional 5cm for the lane-width change during this tick.
  nextLane=THREE.MathUtils.clamp(nextLane,-width/2+1.6,
-  width/2-PAIR_RAIL_CENTER_CLEARANCE);
+  width/2-PAIR_RAIL_CENTER_CLEARANCE-.05);
  let newSpeed=Math.min(targetSpeed,h.speed+FOUR_PACE_PROFILES[h.idx].accel*dt);
  let newDistance=Math.min(activePlan.distance,h.distance+newSpeed*dt);
  // If following in nearly the same lane, maintain a nose-to-tail interval.
@@ -1520,7 +1521,8 @@ function stepOfficialPair(tick){
    raceFinished.push(h.number);
   }
  }
-}function updateRace(dt){
+}
+function updateRace(dt){
  // iPhoneのフレームレートに依存しない固定時間刻み。
  raceAccumulator+=Math.min(.3,dt*Number(rate.value));
  let count=0;
