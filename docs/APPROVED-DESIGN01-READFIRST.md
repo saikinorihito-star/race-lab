@@ -267,3 +267,13 @@
 - **テスト**：既存の正式2/4/8/18頭・カメラ検証42項目を維持。新たな `tests/official-design01-visuals.test.mjs` に、表示芝幅9m/他モード0m、全18枠のゲート中心一致（幅24〜41mと東京芝9距離の開始位置）、扉開閉・105m後非表示・リセット再表示、フレームバッファ自動再確保なし、モデル保持について5項目追加。 `.github/workflows/design01-regression.yml` で5テストファイルを実行。更新版の **計47テスト群**はGitHub関数によりJSを抽出して実行。別途GitHub Actionsの正式実行成功やiPhone Safariの見た目・フラッシュ発生有無は**未確認**。
 - デモURL：`https://saikinorihito-star.github.io/race-lab/tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&group=18&v=f38d216a`
 - 次：ユーザーは18頭版の最初のスタートゲート、外側に9m増えた芝・外ラチ、走行中のフラッシュ有無、FPSを一度だけまとめて確認する。フラッシュ継続時は自動画質以外の可能性（透明素材・WebGLコンテキスト・カメラクリッピング・iOSブラウザツールバー）を切り分ける。
+
+
+## 2026-11-19：18頭レースの全体的なぼやけとコース制作ボタンの整理
+
+- ユーザーからiPhoneのスクリーンショットあり（東京芝1400m、正式18頭、停止中、FPS37、最長間隔32ms、遅延0回）。「全体がぼやけています。スタンド側とかゴール前のボタンは必要ないです。コースを作成するときは入りますがレース中は必要ないです」と指摘。
+- 原因：直前のフラッシュ抑制版では18頭用の固定DPRを **0.82** にしており、馬・芝・ラチなど3D画面全体のラスタ解像度が低かった。
+- **18頭の初期画質を1.35に引き上げ**。`renderQuality` の18頭初期選択 `auto` は値を保持したまま、ユーザー表示を「高精細・固定（18頭推奨）」へ変更。`initialDpr` も `auto` の場合は1.35、`auto18Dpr=1.35`。フラッシュ抑制のためFPS監視 `autoTune18HorseResolution` による `renderer.setPixelRatio`・`renderer.setSize` は引き続き**使用しない**。ユーザーが選択した時のみ標準1.05・軽量0.90・鮮明1.35へ変更できる。高解像度化によるiPhone実機FPS低下の可能性はあり、未測定。
+- **レース用画面とコース制作・点検用画面を分離**：正式18頭 `isOfficialEighteenTest` のとき `#views` 内で表示するのは `side`（真横）、`front3q`（斜め前）、`chase`（後方）、`field`（自動追尾）の4つだけ。 `all`・`top`・`stand`・`goal`・`goalboard`・`first`・`third`・`hill`・`dirt` は隠す。ハロン棒位置確認の `#distanceViews` も隠す。ボタンのDOM要素は削除せず、他モードや通常のコース制作・点検画面では全13ボタンとハロン棒確認を従来どおり表示。18頭モードでもステージ上の「📷 視点・画質」から360度・倍率・追尾対象等の詳細操作が可能。
+- 検証：`tests/official-design01-eighteen.test.mjs`・`tests/official-design01-visuals.test.mjs` を1.35の安定DPRに合わせて更新。後者に、iPhone向けレース画面の4ボタンのみ表示と通常モードの13ボタン保持を実際のUI制御JSを抽出して確認する回帰テスト1項目を追加。**既存2/4/8/18頭の走行・カメラ・外ラチ・発馬ゲート等の合計48項目PASS**、JS構文/HTML ID重複検査PASS。GitHub Actions実行状態、iPhone実機FPS/見た目は未確認。
+- 修正ページのコードコミット：`e9edf0736cc2f41762194b5f49bbc6f5316eed57`。URL：`https://saikinorihito-star.github.io/race-lab/tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&group=18&v=e9edf073`
