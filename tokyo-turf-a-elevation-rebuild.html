@@ -71,7 +71,9 @@ a{color:#95e8df}
 <button data-view="third">3・4コーナー</button>
 <button data-view="hill">最後の坂（低い視点）</button>
 <button data-view="dirt">内側のダート</button>
-<button data-view="chase">1頭を追走</button>
+<button data-view="side">1頭の真横（走りの確認）</button>
+<button data-view="front3q">1頭の斜め前</button>
+<button data-view="chase">1頭の後方</button>
 <button data-view="field">18頭を追走</button>
 </div>
 <div class="tools" id="raceStarts">
@@ -124,7 +126,7 @@ a{color:#95e8df}
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
 <div id="raceOrder" aria-live="polite">18頭の順位とレース展開を準備しています。</div>
-<div id="message">以前承認済みのDesign 01・ギャロップV2（実際に採用する馬）の1頭走行確認に対応しました。専用リンクから開き、最初の1回だけGLBファイルを選んでください。18頭の仮モデルとコース・発馬機・カメラ・進路判断は変更していません。</div>
+<div id="message">承認済みDesign 01・ギャロップV2の馬を変更せず、1頭で走行を確認します。初期カメラは真横、切替で斜め前・後方も見られます。最初の1回だけGLBを選択してください。18頭の仮モデル・既存のレース判断は変更しません。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">18頭：毛色・勝負服を個別表示</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -1683,7 +1685,7 @@ async function loadApprovedHorse(buffer){
  runner.visible=fieldMode.value==='single';
  if(fieldMode.value==='single'&&isDesign01Review)demoBtn.disabled=false;
  setDesign01Status('Design 01・ギャロップV2 読込完了。コース上で1頭を確認できます。');
- if(fieldMode.value==='single')setView('chase');
+ if(fieldMode.value==='single')setView('side');
 }
 async function maybeLoadStoredHorse(){
  const generation=++horseLoaderGeneration;
@@ -1733,17 +1735,33 @@ design01File.addEventListener('change',async()=>{
  }
 });
 maybeLoadStoredHorse();
+// 承認済みの馬はそのまま。走りを確認しやすい真横・斜め前を主カメラにする。
+function oneHorseCameraShot(a,which){
+ const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
+ const target=a.p.clone().addScaledVector(a.t,.8).add(new THREE.Vector3(0,1.5,0));
+ let eye;
+ if(which==='side'){
+  // 進行方向とほぼ直交し、前後の脚・蹄の接地が見える低い視点。
+  eye=a.p.clone().addScaledVector(side,11.5).addScaledVector(a.t,1.7)
+   .add(new THREE.Vector3(0,3.1,0));
+ }else if(which==='front3q'){
+  eye=a.p.clone().addScaledVector(side,10.5).addScaledVector(a.t,9)
+   .add(new THREE.Vector3(0,3.7,0));
+ }else{
+  eye=a.p.clone().addScaledVector(a.t,-18).add(new THREE.Vector3(0,10,0));
+ }
+ return {eye,target};
+}
 function positionRunner(){
  if(!activePlan)return;
  const a=fieldMode.value==='single'&&isDesign01Review?
  fieldCenterAt(activePlan,travel):racePointAt(activePlan,travel);
- const pos=a.p;
- runner.position.copy(pos);
+ runner.position.copy(a.p);
  runner.rotation.y=Math.atan2(a.t.x,a.t.z);
- if(view==='chase'&&fieldMode.value==='single'){
-  const desired=pos.clone().addScaledVector(a.t,-18).add(new THREE.Vector3(0,10,0));
-  const target=pos.clone().addScaledVector(a.t,6).add(new THREE.Vector3(0,2,0));
-  camera.position.lerp(desired,.16);controls.target.lerp(target,.16);
+ if(fieldMode.value==='single'&&['side','front3q','chase'].includes(view)){
+  const shot=oneHorseCameraShot(a,view);
+  camera.position.lerp(shot.eye,.24);
+  controls.target.lerp(shot.target,.24);
  }
 }
 let view='all';
@@ -1831,10 +1849,10 @@ function setView(which){
   const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
   eye=a.p.clone().addScaledVector(side,-60).addScaledVector(a.t,-50).add(new THREE.Vector3(0,45,0));
   target=a.p.clone().add(new THREE.Vector3(0,6,0));
- }else if(which==='chase'&&activePlan){
-  const a=racePointAt(activePlan,travel);
-  eye=a.p.clone().addScaledVector(a.t,-18).add(new THREE.Vector3(0,11,0));
-  target=a.p.clone().add(new THREE.Vector3(0,2,0));
+ }else if(['side','front3q','chase'].includes(which)&&activePlan){
+  const a=fieldMode.value==='single'&&isDesign01Review?
+   fieldCenterAt(activePlan,travel):racePointAt(activePlan,travel);
+  ({eye,target}=oneHorseCameraShot(a,which));
  }else{eye=new THREE.Vector3(70,700*wide,-1025*wide);target=new THREE.Vector3(0,0,0)}
  controls.target.copy(target);camera.position.copy(eye);camera.lookAt(target);controls.update();
  updateSceneLabelVisibility();
@@ -1861,7 +1879,7 @@ function selectRace(){
   :activeDistance+'m：'+regionForS(activePlan.startStation)+'のSから発走'+(activeDistance===2600?'（仮配置）':'');
  startInfo.textContent=description+'／Gまで'+activeDistance+'m';
  drawElevationProfile();
- if(view==='chase'||view==='start'||view==='field')setView(fieldMode.value!=='single'?'start':'all');
+ if(view==='chase'||view==='start'||view==='field')setView(fieldMode.value!=='single'?'start':(isDesign01Review?'side':'all'));
 }
 raceSelector.addEventListener('change',selectRace);
 fieldMode.addEventListener('change',()=>{selectRace();updateDesign01Panel();if(fieldMode.value!=='single')setView('start')});
@@ -1872,7 +1890,7 @@ function resetDemo(){
  document.querySelector('#raceOrder').textContent=fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  positionRunner();positionFieldHorses();
  if(fieldMode.value!=='single')setView('start');
- else if(view==='chase')setView('chase');
+ else if(['side','front3q','chase'].includes(view))setView(view);
 }
 demoBtn.addEventListener('click',()=>{
  if(!activePlan)return;
@@ -1915,7 +1933,7 @@ function resize(){
  drawElevationProfile();
 }
 window.addEventListener('resize',resize);
-resize();setView('all');selectRace();updateDesign01Panel();setView(isDesign01Review?'chase':'start');
+resize();setView('all');selectRace();updateDesign01Panel();setView(isDesign01Review?'side':'start');
 function animate(time){
  requestAnimationFrame(animate);
  const dt=Math.min(clock.getDelta(),.05);
