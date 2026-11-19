@@ -1907,7 +1907,34 @@ function inspectMarker(){
  markerInfo.textContent=remain===0?'決勝線：残り距離の基準点':('ハロン棒「'+remain/100+'」＝残り'+remain+'m ／ '+regionForS(ss)+'（近似）');
 }
 markerFocus.addEventListener('change',inspectMarker);
-// 発走直後から全頭を追うカメラ。進行方向の前方から馬群を捉える。
+// 2頭用：近いときは両馬を写し、離れたら先頭とその後方8〜10mを主画角に。
+// 18頭の従来カメラは一切変更しない。
+function pairTrackingView(which){return ['field','side','front3q','chase'].includes(which)}
+function officialPairCameraShot(which='field'){
+ const a0=raceHorses[0],a1=raceHorses[1];
+ if(!a0||!a1||!activePlan)return fieldCameraShot();
+ const d0=a0.distance+(a0.postDistance||0),d1=a1.distance+(a1.postDistance||0);
+ const lead=d0>=d1?a0:a1,leadDistance=Math.max(d0,d1),tailDistance=Math.min(d0,d1);
+ const gap=leadDistance-tailDistance;
+ // 14m未満は中点、27m以上で先頭-5mに移行。段差を出さず連続的に切替。
+ const blend=THREE.MathUtils.smoothstep(gap,14,27);
+ const focusDistance=THREE.MathUtils.lerp((leadDistance+tailDistance)/2,leadDistance-5,blend);
+ const a=fieldCenterAt(activePlan,Math.max(0,focusDistance));
+ const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
+ const lane=THREE.MathUtils.lerp((a0.lane+a1.lane)/2,lead.lane,blend);
+ const focus=a.p.clone().addScaledVector(side,lane);
+ const aspect=Math.max(.5,stage.clientWidth/Math.max(1,stage.clientHeight));
+ const narrow=Math.max(0,1/aspect-1);
+ const lateral=which==='chase'?-12:which==='front3q'?-26:
+  -THREE.MathUtils.lerp(35,27,blend)-narrow*7;
+ const along=which==='chase'?-25:which==='front3q'?14:7;
+ const height=(which==='chase'?11:which==='front3q'?9.5:9)+narrow*2;
+ const eye=focus.clone().addScaledVector(side,lateral).addScaledVector(a.t,along)
+  .add(new THREE.Vector3(0,height,0));
+ const target=focus.clone().addScaledVector(a.t,1.4).add(new THREE.Vector3(0,2,0));
+ return {eye,target,gap,focusedOnLead:blend>=.8};
+}
+// 発走直後から全頭を追う従来のカメラ。進行方向の前方から馬群を捉える。
 function fieldCameraShot(){
  const sorted=fieldMode.value==='race18'&&raceHorses.length===FIELD_COUNT?
  (isOfficialPairTest?raceHorses.slice(0,2).sort((a,b)=>b.distance-a.distance):racePositions()):null;
@@ -1970,7 +1997,7 @@ function setView(which){
   target=gateAt.clone().addScaledVector(a.t,2).add(new THREE.Vector3(0,2.0,0));
  }
  else if(which==='field'&&activePlan){
-  ({eye,target}=fieldCameraShot());
+  ({eye,target}=isOfficialPairTest?officialPairCameraShot('field'):fieldCameraShot());
  }
  else if(which==='start'&&activePlan){
   const a=racePointAt(activePlan,0);
@@ -1978,9 +2005,12 @@ function setView(which){
   eye=a.p.clone().addScaledVector(side,-60).addScaledVector(a.t,-50).add(new THREE.Vector3(0,45,0));
   target=a.p.clone().add(new THREE.Vector3(0,6,0));
  }else if(['side','front3q','chase'].includes(which)&&activePlan){
-  const a=fieldMode.value==='single'&&isDesign01Review?
-   fieldCenterAt(activePlan,travel):racePointAt(activePlan,travel);
-  ({eye,target}=oneHorseCameraShot(a,which));
+  if(isOfficialPairTest)({eye,target}=officialPairCameraShot(which));
+  else{
+   const a=fieldMode.value==='single'&&isDesign01Review?
+    fieldCenterAt(activePlan,travel):racePointAt(activePlan,travel);
+   ({eye,target}=oneHorseCameraShot(a,which));
+  }
  }else{eye=new THREE.Vector3(70,700*wide,-1025*wide);target=new THREE.Vector3(0,0,0)}
  controls.target.copy(target);camera.position.copy(eye);camera.lookAt(target);controls.update();
  updateSceneLabelVisibility();
@@ -2009,7 +2039,9 @@ function selectRace(){
   :activeDistance+'m：'+regionForS(activePlan.startStation)+'のSから発走'+(activeDistance===2600?'（仮配置）':'');
  startInfo.textContent=description+'／Gまで'+activeDistance+'m';
  drawElevationProfile();
- if(view==='chase'||view==='start'||view==='field')setView(fieldMode.value!=='single'?'start':(isDesign01Review?'side':'all'));
+ if(isOfficialPairTest)setView(pairTrackingView(view)?view:'field');
+ else if(view==='chase'||view==='start'||view==='field')
+  setView(fieldMode.value!=='single'?'start':(isDesign01Review?'side':'all'));
 }
 raceSelector.addEventListener('change',selectRace);
 fieldMode.addEventListener('change',()=>{selectRace();updateDesign01Panel();if(fieldMode.value!=='single')setView('start')});
@@ -2021,7 +2053,8 @@ function resetDemo(){
  '正式モデル2頭を表示しています（レース計算は既存の18頭エンジンで継続）。':
  fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  positionRunner();positionFieldHorses();
- if(fieldMode.value!=='single')setView('start');
+ if(isOfficialPairTest)setView(pairTrackingView(view)?view:'field');
+ else if(fieldMode.value!=='single')setView('start');
  else if(['side','front3q','chase'].includes(view))setView(view);
 
 }
@@ -2029,13 +2062,15 @@ demoBtn.addEventListener('click',()=>{
  if(!activePlan)return;
  if(travel>=activePlan.distance||fieldMode.value==='race18'&&raceFinished.length===FIELD_COUNT){
   travel=0;gateOpening=0;initRaceHorses();updateGateDoors();positionFieldHorses();
-  if(fieldMode.value!=='single')setView('start');
+  if(isOfficialPairTest)setView('field');
+  else if(fieldMode.value!=='single')setView('start');
  }
  playing=!playing;
  demoBtn.textContent=playing?'一時停止':'再開';
  if(playing&&fieldMode.value==='single'&&view==='start')setView('chase');
  // ボタンを押した時点で馬群を追い始める。85mまで待たない。
- if(playing&&fieldMode.value!=='single'&&view!=='field')setView('field');
+ if(playing&&fieldMode.value!=='single'&&view!=='field'&&
+  !(isOfficialPairTest&&pairTrackingView(view)))setView('field');
 });
 document.querySelector('#reset').addEventListener('click',()=>{resetDemo();drawElevationProfile()});
 // 看板類は標準非表示。俯瞰でだけ任意に表示し、近景でコースを隠さない。
@@ -2066,6 +2101,13 @@ function resize(){
  drawElevationProfile();
 }
 window.addEventListener('resize',resize);
+if(isOfficialPairTest){
+ document.querySelector('[data-view="side"]').textContent='2頭の真横を追尾';
+ document.querySelector('[data-view="front3q"]').textContent='2頭の斜め前を追尾';
+ document.querySelector('[data-view="chase"]').textContent='2頭の後方を追尾';
+ document.querySelector('[data-view="field"]').textContent='2頭を自動追尾';
+ document.querySelector('#help').textContent='2頭追尾：近ければ両馬、離れたら先頭馬と後方の走路を表示';
+}
 resize();setView('all');selectRace();updateDesign01Panel();setView(isOfficialPairTest?'field':(isDesign01Review?'side':'start'));
 function animate(time){
  requestAnimationFrame(animate);
@@ -2083,14 +2125,24 @@ function animate(time){
   }
  }
  positionRunner();positionFieldHorses();updateOfficialPair(dt);
+ let pairTracking=false;
  if(fieldMode.value!=='single'){
   gateOpening=travel>0?Math.min(1,gateOpening+dt*4):0;updateGateDoors();
-  if(view==='field'&&activePlan){
+  if(isOfficialPairTest&&installedDesign01&&activePlan&&pairTrackingView(view)){
+   const shot=officialPairCameraShot(view);
+   // FPS変動に依存しない追尾。すべての2頭用ビューで毎フレーム更新する。
+   const alpha=1-Math.exp(-Math.min(.05,dt)*12);
+   camera.position.lerp(shot.eye,alpha);
+   controls.target.lerp(shot.target,alpha);
+   camera.lookAt(controls.target);
+   pairTracking=true;
+  }else if(view==='field'&&activePlan){
    const shot=fieldCameraShot();
    camera.position.lerp(shot.eye,.18);controls.target.lerp(shot.target,.18);
   }
  }
- controls.update();
+ // 追尾中の自動カメラの姿勢をOrbitControlsで上書きしない。
+ if(!pairTracking)controls.update();
  // ピンチ操作で屋根や床の内部に入ったときは、障害物の模型だけ一時的に隠す。
  for(const item of stadiumGroups){
   const insideX=Math.abs(camera.position.x-item.x)<item.len/2+16;
@@ -2109,6 +2161,13 @@ function animate(time){
   info.textContent='東京芝A '+activeDistance+'m｜'+(playing?'走行中':'停止中')+
    '\n'+modeName+'｜残り'+rest+'m｜FPS '+fps.toFixed(0);
   if(fieldMode.value==='race18'&&!isOfficialPairTest)document.querySelector('#raceOrder').textContent=raceOrderText();
+ if(isOfficialPairTest&&installedDesign01&&activePlan){
+  const shot=officialPairCameraShot(pairTrackingView(view)?view:'field');
+  document.querySelector('#officialPairStatus').textContent=
+   '2頭差 '+shot.gap.toFixed(1)+'m｜'+
+   (shot.focusedOnLead?'先頭と後方の走路を優先':'2頭の間隔に合わせて追尾')+
+   '｜内ラチまで中心3.7m以上';
+ }
   info.style.whiteSpace='pre-line';
  }
 }
