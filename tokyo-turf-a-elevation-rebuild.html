@@ -120,14 +120,14 @@ a{color:#95e8df}
 <label><input type="checkbox" id="showStands" checked/>スタンド建物を表示</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
-<div class="tools" id="design01OriginalInfo" hidden><strong>以前制作したDesign 01の馬で1頭走行</strong> <a href="./model-preview.html">元の馬を拡大して確認</a></div>
+<div class="tools" id="design01OriginalInfo" hidden><strong>正式モデル：BabylonJSで承認されたMeshy版 Design 01</strong> <span>元の馬体・顔・青白の勝負服・ゼッケン4をそのまま使用</span></div>
 <div class="tools" id="design01Loader" hidden>
- <label><strong>Design 01・承認済みギャロップV2</strong> <input id="design01File" type="file" accept=".glb,model/gltf-binary" aria-label="Design 01 ギャロップV2のGLBを選択"/></label>
- <span id="design01Status">承認済みGLBを読み込んでいません。最初の1回だけファイルを選択してください。次回から同じ端末で自動読み込みします。</span>
+ <label><strong>正式モデルのGLBを初回に1回だけ選択</strong> <input id="design01File" type="file" accept=".glb,model/gltf-binary" aria-label="正式Meshy Design01・オリジナル造形のギャロップV2 GLBを選択"/></label>
+ <span id="design01Status">正式版 RaceLab_OfficialDesign01_OriginalLook_GallopV2.glb を選択してください。旧版とは違います。最初の1回の選択後は端末に保存して自動読込します。</span>
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
 <div id="raceOrder" aria-live="polite">18頭の順位とレース展開を準備しています。</div>
-<div id="message">承認済みDesign 01・ギャロップV2の馬を変更せず、1頭で走行を確認します。初期カメラは真横、切替で斜め前・後方も見られます。最初の1回だけGLBを選択してください。18頭の仮モデル・既存のレース判断は変更しません。</div>
+<div id="message">正式な馬はBabylonJSで承認されたMeshy版のデザインだけです。元の馬体とテクスチャを保持した専用GLBを読み込み、横・斜め前・後ろから1頭走行を検証します。仮の馬を代わりに表示しません。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">18頭：毛色・勝負服を個別表示</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -165,7 +165,6 @@ a{color:#95e8df}
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {makeDesign01Builder} from './design01-race.mjs';
 
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
 const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate'),checkLabels=document.querySelector('#labels');
@@ -1644,50 +1643,16 @@ console.assert(layoutTests.every(t=>t.ok),'18頭の発馬枠幅検証',layoutTes
 runner=new THREE.Group();const fallback=fallbackHorse();runner.add(fallback);scene.add(runner);
 // 既に承認済みの実モデル Design01 ギャロップV2（36ボーン）の1頭走行確認用。
 // サンプル馬とは分離し、ユーザーの端末上にGLBを一度保存する。勝手に18頭へは複製しない。
-const DESIGN01_CACHE_KEY='design01-gallop-v2-approved';
+const DESIGN01_CACHE_KEY='official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119';
 let installedDesign01=false,installedScene=null,horseLoaderGeneration=0;
-// 実際に以前制作した1頭モデルを直接組み立てる。別デザインのGLBと混同しない。
-// もとの model-preview.mjs と同じ馬体寸法・騎手・ゼッケン4・装具。
-// model-preview.mjsの9.8rad/sのギャロップ姿勢も以下で移植。
-let originalDesign01=null,originalGaitTime=0;
-if(isDesign01Review){
- const builder=makeDesign01Builder(THREE,scene,
-  ()=>({coat:'#583930',helmet:'#194fd5'}));
- originalDesign01=builder.build(4);
- runner.remove(fallback);
- // 元モデルの前方は+X、コースのrunner前方は+Z。
- originalDesign01.group.rotation.y=-Math.PI/2;
- runner.add(originalDesign01.group);
- installedDesign01=true;
- runner.visible=true;
- msg.textContent='以前制作したDesign 01の馬をそのまま使用。横から脚の動きを確認できます。GLBの読み込みは不要です。';
-}
-function animateOriginalDesign01(dt){
- if(!originalDesign01)return;
- originalGaitTime+=dt*Math.min(2,Number(rate.value));
- const ph=originalGaitTime*9.8;
- for(const leg of originalDesign01.legs){
-  const offset=leg.front?(leg.side>0?0:.30):(leg.side>0?Math.PI:Math.PI+.30);
-  const k=ph+offset;
-  leg.hip.rotation.z=.57*Math.sin(k);
-  leg.knee.rotation.z=-.28-.40*Math.max(0,Math.sin(k+.68));
- }
- originalDesign01.neckPivot.rotation.z=.05*Math.sin(ph);
- originalDesign01.headPivot.rotation.z=.06*Math.sin(ph+.5);
- originalDesign01.riderPivot.position.y=originalDesign01.riderRestY+.035*Math.sin(ph*2);
- originalDesign01.riderPivot.rotation.z=-.047+.027*Math.sin(ph+.7);
- originalDesign01.tailPivot.rotation.y=.12*Math.sin(ph*.60);
- originalDesign01.tailPivot.rotation.z=.08*Math.sin(ph*.77);
- originalDesign01.group.position.y=.055+.070*Math.abs(Math.sin(ph));
- // 既存の進路追従yawを上書きせず、元と同じ上下の揺れを加える。
-}
 function setDesign01Status(message){design01Status.textContent=message}
 function updateDesign01Panel(){
- design01Loader.hidden=isDesign01Review||fieldMode.value!=='single';
+ design01Loader.hidden=fieldMode.value!=='single';
  demoBtn.disabled=fieldMode.value==='single'&&isDesign01Review&&!installedDesign01;
  if(fieldMode.value==='single'){
-  if(installedDesign01)setDesign01Status('承認済みDesign 01・ギャロップV2を読み込み済み。1頭走行を確認できます。');
-  else setDesign01Status('Design 01・ギャロップV2未読込。下のGLBを選ぶと、この端末に保存します。');
+  if(installedDesign01)setDesign01Status('正式なMeshy Design 01を読込済み。1頭の動きを確認できます。');
+  else if(isDesign01Review)setDesign01Status('正式版RaceLab_OfficialDesign01_OriginalLook_GallopV2.glbを選択してください。元の造形・テクスチャを保持した専用ファイルです。');
+  else setDesign01Status('1頭モデルのGLBを選択してください。');
  }
 }
 function openHorseCache(){
@@ -1706,7 +1671,15 @@ async function loadApprovedHorse(buffer){
  const gltf=await new Promise((resolve,reject)=>new GLTFLoader().parse(buffer,'',resolve,reject));
  if(!gltf.scene||!gltf.animations?.length)throw Error('アニメーション付きのGLBではありません');
  if(!gltf.animations.some(a=>a.name==='Design01_RightLead_TransverseGallop_v2'))
-  throw Error('承認済みDesign 01・ギャロップV2のGLBを選択してください');
+  throw Error('正式モデルのV2走行アニメーションがありません');
+ if(isDesign01Review){
+  let exactSourceGeometry=false;
+  gltf.scene.traverse(object=>{
+   if(object.isSkinnedMesh && object.geometry?.getAttribute('position')?.count===484459 &&
+      object.geometry?.getIndex()?.count===2733876)exactSourceGeometry=true;
+  });
+  if(!exactSourceGeometry)throw Error('旧版または別デザインのGLBです。正式版 OriginalLook_GallopV2.glbを選択してください');
+ }
  const horse=gltf.scene;
  const bounds=new THREE.Box3().setFromObject(horse),size=new THREE.Vector3();
  bounds.getSize(size);
@@ -1724,7 +1697,7 @@ async function loadApprovedHorse(buffer){
  installedDesign01=true;usedStoredGLB=true;
  runner.visible=fieldMode.value==='single';
  if(fieldMode.value==='single'&&isDesign01Review)demoBtn.disabled=false;
- setDesign01Status('Design 01・ギャロップV2 読込完了。コース上で1頭を確認できます。');
+ setDesign01Status('正式な馬の造形・テクスチャとギャロップV2を読込完了。横から1頭走行を確認できます。');
  if(fieldMode.value==='single')setView('side');
 }
 async function maybeLoadStoredHorse(){
@@ -1763,7 +1736,7 @@ design01File.addEventListener('change',async()=>{
     tx.objectStore('glb').put({blob:new Blob([buf],{type:'model/gltf-binary'})},DESIGN01_CACHE_KEY);
     tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
    });db.close();
-   setDesign01Status('Design 01・ギャロップV2を端末に保存しました。次回から自動読み込みします。');
+   setDesign01Status('正式なMeshy Design01をこの端末に保存しました。次回から自動読み込みします。');
   }catch(cacheError){
    console.warn('Design01 cache unavailable',cacheError);
    setDesign01Status('走行モデルは読み込み済みです。ただし端末への保存はできませんでした。');
@@ -1774,7 +1747,7 @@ design01File.addEventListener('change',async()=>{
   updateDesign01Panel();
  }
 });
-if(!isDesign01Review)maybeLoadStoredHorse();
+maybeLoadStoredHorse();
 // 承認済みの馬はそのまま。走りを確認しやすい真横・斜め前を主カメラにする。
 function oneHorseCameraShot(a,which){
  const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
@@ -1931,7 +1904,7 @@ function resetDemo(){
  positionRunner();positionFieldHorses();
  if(fieldMode.value!=='single')setView('start');
  else if(['side','front3q','chase'].includes(view))setView(view);
- if(originalDesign01)originalGaitTime=0;
+
 }
 demoBtn.addEventListener('click',()=>{
  if(!activePlan)return;
@@ -1984,10 +1957,7 @@ function animate(time){
   }else{
    const step=16.7*Number(rate.value)*dt;
    travel=Math.min(activePlan?.distance||LAP,travel+step);
-   if(fieldMode.value==='single'){
-    if(originalDesign01)animateOriginalDesign01(dt);
-    else if(runnerMixer)runnerMixer.update(dt*Math.min(2,Number(rate.value)));
-   }
+   if(fieldMode.value==='single'&&runnerMixer)runnerMixer.update(dt*Math.min(2,Number(rate.value)));
    if(activePlan&&travel>=activePlan.distance){
     playing=false;demoBtn.textContent=fieldMode.value==='field18'?'18頭ゴール・もう一度':'ゴール到達・もう一度';
    }
