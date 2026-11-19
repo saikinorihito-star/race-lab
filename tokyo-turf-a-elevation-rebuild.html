@@ -41,6 +41,13 @@ a{color:#95e8df}
 #raceOrder{margin:0 12px 9px;padding:9px 11px;border-radius:9px;background:#1d3540;border:1px solid #35555e;color:#dcefe9;font-size:12px;line-height:1.6}
 #raceOrder strong{color:#f2e8b0}
 #design01Loader{padding-top:5px;padding-bottom:5px}
+#design01Overlay{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:18px;pointer-events:none}
+#design01Overlay[hidden]{display:none}
+#design01OverlayPanel{width:min(100%,470px);padding:19px 18px;border-radius:16px;background:#112734ee;border:1px solid #78a8aa;color:#f0f9f9;box-shadow:0 14px 36px #0b1415bb;pointer-events:auto}
+#design01OverlayPanel strong{font-size:16px;display:block;margin-bottom:8px}
+#design01OverlayPanel p{font-size:13px;line-height:1.65;margin:6px 0 14px;color:#d5e8ea}
+#design01OverlayPanel input[type=file]{display:block;width:100%;font-size:14px;padding:12px 8px;border:1px solid #8ddccc;border-radius:10px;background:#26555a;color:#fff}
+#design01OverlayStatus{font-size:12px;line-height:1.6;color:#daedf1;margin-top:10px;overflow-wrap:anywhere}
 #design01Loader[hidden]{display:none}
 #design01Loader input[type=file]{font-size:12px;max-width:min(100%,320px)}
 #design01Status{font-size:12px;line-height:1.55;color:#d7ebf0}
@@ -60,6 +67,14 @@ a{color:#95e8df}
 <div id="stage">
  <div id="telemetry">3Dコースを準備中…</div>
  <div id="help">1本指ドラッグ：回転　2本指：拡大縮小・移動　Mac：ドラッグ／ホイール</div>
+ <div id="design01Overlay" hidden>
+  <div id="design01OverlayPanel">
+   <strong>正式な馬の3Dデータが未読込です</strong>
+   <p>BabylonJSで承認したDesign 01の走行モデルだけを使用します。初回だけ、保存した <b>RaceLab_OfficialDesign01_OriginalLook_GallopV2.glb</b>（約36.7MB）を選んでください。</p>
+   <input id="design01File" type="file" accept=".glb,model/gltf-binary" aria-label="正式Design01の走行GLBファイルを選択" />
+   <div id="design01OverlayStatus" role="status" aria-live="polite">ファイルを選択するとコースに馬を表示します。旧モデルは使用できません。</div>
+  </div>
+ </div>
 </div>
 <div class="tools" id="views">
 <button data-view="all" class="selected">全景</button>
@@ -122,7 +137,7 @@ a{color:#95e8df}
 </div>
 <div class="tools" id="design01OriginalInfo" hidden><strong>正式モデル：BabylonJSで承認されたMeshy版 Design 01</strong> <span>元の馬体・顔・青白の勝負服・ゼッケン4をそのまま使用</span></div>
 <div class="tools" id="design01Loader" hidden>
- <label><strong>正式モデルのGLBを初回に1回だけ選択</strong> <input id="design01File" type="file" accept=".glb,model/gltf-binary" aria-label="正式Meshy Design01・オリジナル造形のギャロップV2 GLBを選択"/></label>
+ <strong>正式モデルのファイルは3D画面の中央から選択できます</strong>
  <span id="design01Status">正式版 RaceLab_OfficialDesign01_OriginalLook_GallopV2.glb を選択してください。旧版とは違います。最初の1回の選択後は端末に保存して自動読込します。</span>
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
@@ -1645,9 +1660,15 @@ runner=new THREE.Group();const fallback=fallbackHorse();runner.add(fallback);sce
 // サンプル馬とは分離し、ユーザーの端末上にGLBを一度保存する。勝手に18頭へは複製しない。
 const DESIGN01_CACHE_KEY='official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119';
 let installedDesign01=false,installedScene=null,horseLoaderGeneration=0;
-function setDesign01Status(message){design01Status.textContent=message}
+function setDesign01Status(message){
+ design01Status.textContent=message;
+ const overlayStatus=document.querySelector('#design01OverlayStatus');
+ if(overlayStatus&&isDesign01Review)overlayStatus.textContent=message;
+}
 function updateDesign01Panel(){
  design01Loader.hidden=fieldMode.value!=='single';
+ document.querySelector('#design01Overlay').hidden=
+  !(isDesign01Review&&fieldMode.value==='single'&&!installedDesign01);
  demoBtn.disabled=fieldMode.value==='single'&&isDesign01Review&&!installedDesign01;
  if(fieldMode.value==='single'){
   if(installedDesign01)setDesign01Status('正式なMeshy Design 01を読込済み。1頭の動きを確認できます。');
@@ -1696,6 +1717,7 @@ async function loadApprovedHorse(buffer){
  action.setLoop(THREE.LoopRepeat,Infinity);action.play();
  installedDesign01=true;usedStoredGLB=true;
  runner.visible=fieldMode.value==='single';
+ document.querySelector('#design01Overlay').hidden=true;
  if(fieldMode.value==='single'&&isDesign01Review)demoBtn.disabled=false;
  setDesign01Status('正式な馬の造形・テクスチャとギャロップV2を読込完了。横から1頭走行を確認できます。');
  if(fieldMode.value==='single')setView('side');
@@ -1717,13 +1739,14 @@ async function maybeLoadStoredHorse(){
   await loadApprovedHorse(buf);
  }catch(err){
   console.warn('Design 01のキャッシュ読込に失敗',err);
-  if(fieldMode.value==='single')setDesign01Status('保存モデルを読めませんでした。GLBをもう一度選択してください。');
+  if(fieldMode.value==='single')setDesign01Status('保存モデルを読めませんでした。正式なGLBをもう一度選択してください。');
+  updateDesign01Panel();
  }
 }
 design01File.addEventListener('change',async()=>{
  const file=design01File.files?.[0];if(!file)return;
  const generation=++horseLoaderGeneration;
- setDesign01Status('GLBを読み込み中…');
+ setDesign01Status('正式な3Dモデルを読み込み中…');
  if(isDesign01Review)demoBtn.disabled=true;
  try{
   const buf=await file.arrayBuffer();
