@@ -135,6 +135,11 @@ a{color:#95e8df}
 <label><input type="checkbox" id="showStands" checked/>スタンド建物を表示</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
+<div class="tools" id="officialPairTools" hidden>
+ <strong>正式Design 01｜2頭走行テスト</strong>
+ <span>馬体・テクスチャは元のデザインを共有し、骨格とギャロップは馬ごとに独立。既存の18頭試作は変更しません。</span>
+ <span id="officialPairStatus" role="status">1頭テストで保存したGLBを読み込みます。</span>
+</div>
 <div class="tools" id="design01OriginalInfo" hidden><strong>正式モデル：BabylonJSで承認されたMeshy版 Design 01</strong> <span>元の馬体・顔・青白の勝負服・ゼッケン4をそのまま使用</span></div>
 <div class="tools" id="design01Loader" hidden>
  <strong>正式モデルのファイルは3D画面の中央から選択できます</strong>
@@ -180,16 +185,21 @@ a{color:#95e8df}
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
 const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate'),checkLabels=document.querySelector('#labels');
 const courseSigns=document.querySelector('#courseSigns');
 const showStands=document.querySelector('#showStands');
 const fieldMode=document.querySelector('#fieldMode'),gridStatus=document.querySelector('#gridStatus');
-const isDesign01Review=new URLSearchParams(window.location.search).get('model')==='design01';
+const qs=new URLSearchParams(window.location.search);
+const isDesign01Review=qs.get('model')==='design01';
+const isOfficialPairTest=isDesign01Review&&qs.get('pair')==='1';
 if(isDesign01Review){
- fieldMode.value='single';
+ fieldMode.value=isOfficialPairTest?'race18':'single';
+ fieldMode.disabled=isOfficialPairTest;
  document.querySelector('#design01OriginalInfo').hidden=false;
+ document.querySelector('#officialPairTools').hidden=!isOfficialPairTest;
 }
 const design01Loader=document.querySelector('#design01Loader'),design01File=document.querySelector('#design01File');
 const design01Status=document.querySelector('#design01Status');
@@ -1461,7 +1471,7 @@ function horseKneePoint(hip,hoof,front){
   hip[2]+unitZ*along-direction*unitY*bend];
 }
 function positionFieldHorses(){
- if(!activePlan||fieldMode.value==='single')return;
+ if(!activePlan||fieldMode.value==='single'||isOfficialPairTest)return;
  // 停止状態の43×18インスタンス行列を毎フレーム再転送しない。
  let stamp=0;
  if(fieldMode.value==='race18'){
@@ -1660,17 +1670,45 @@ runner=new THREE.Group();const fallback=fallbackHorse();runner.add(fallback);sce
 // サンプル馬とは分離し、ユーザーの端末上にGLBを一度保存する。勝手に18頭へは複製しない。
 const DESIGN01_CACHE_KEY='official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119';
 let installedDesign01=false,installedScene=null,horseLoaderGeneration=0;
+const pairRoot=new THREE.Group();scene.add(pairRoot);
+const officialPair=[];
+function initializeOfficialPair(source,clip){
+ for(const h of officialPair){h.mixer.stopAllAction();pairRoot.remove(h.group)}
+ officialPair.length=0;
+ for(let i=0;i<2;i++){
+  // ジオメトリやテクスチャは共有し、スキンとボーンだけ独立させる。
+  const model=cloneSkeleton(source);
+  const group=new THREE.Group();group.add(model);pairRoot.add(group);
+  const mixer=new THREE.AnimationMixer(model);
+  const action=mixer.clipAction(clip);
+  action.setLoop(THREE.LoopRepeat,Infinity);action.play();
+  action.time=i*.07;
+  officialPair.push({group,mixer});
+ }
+ document.querySelector('#officialPairStatus').textContent='正式モデル2頭を読み込みました。走行開始でギャロップと進路を個別に確認できます。';
+}
+function updateOfficialPair(dt){
+ if(!isOfficialPairTest||!installedDesign01||!activePlan)return;
+ for(let i=0;i<2;i++){
+  const h=officialPair[i],state=raceHorses[i];
+  if(!h||!state)continue;
+  const a=raceHorsePosition(state);
+  h.group.position.copy(a.p);
+  h.group.rotation.y=Math.atan2(a.t.x,a.t.z)+Math.atan2(state.sideSpeed||0,Math.max(3,state.speed||0));
+  if(playing)h.mixer.update(dt*Math.min(2,Number(rate.value)));
+ }
+}
 function setDesign01Status(message){
  design01Status.textContent=message;
  const overlayStatus=document.querySelector('#design01OverlayStatus');
  if(overlayStatus&&isDesign01Review)overlayStatus.textContent=message;
 }
 function updateDesign01Panel(){
- design01Loader.hidden=fieldMode.value!=='single';
+ design01Loader.hidden=fieldMode.value!=='single'&&!isOfficialPairTest;
  document.querySelector('#design01Overlay').hidden=
-  !(isDesign01Review&&fieldMode.value==='single'&&!installedDesign01);
- demoBtn.disabled=fieldMode.value==='single'&&isDesign01Review&&!installedDesign01;
- if(fieldMode.value==='single'){
+  !(isDesign01Review&&(fieldMode.value==='single'||isOfficialPairTest)&&!installedDesign01);
+ demoBtn.disabled=isDesign01Review&&(fieldMode.value==='single'||isOfficialPairTest)&&!installedDesign01;
+ if(fieldMode.value==='single'||isOfficialPairTest){
   if(installedDesign01)setDesign01Status('正式なMeshy Design 01を読込済み。1頭の動きを確認できます。');
   else if(isDesign01Review)setDesign01Status('正式版RaceLab_OfficialDesign01_OriginalLook_GallopV2.glbを選択してください。元の造形・テクスチャを保持した専用ファイルです。');
   else setDesign01Status('1頭モデルのGLBを選択してください。');
@@ -1718,9 +1756,14 @@ async function loadApprovedHorse(buffer){
  installedDesign01=true;usedStoredGLB=true;
  runner.visible=fieldMode.value==='single';
  document.querySelector('#design01Overlay').hidden=true;
- if(fieldMode.value==='single'&&isDesign01Review)demoBtn.disabled=false;
- setDesign01Status('正式な馬の造形・テクスチャとギャロップV2を読込完了。横から1頭走行を確認できます。');
- if(fieldMode.value==='single')setView('side');
+ if(isOfficialPairTest){
+  initializeOfficialPair(horse,gltf.animations.find(a=>a.name==='Design01_RightLead_TransverseGallop_v2'));
+  fieldRoot.visible=false;setView('field');
+ }else if(fieldMode.value==='single')setView('side');
+ demoBtn.disabled=false;
+ setDesign01Status(isOfficialPairTest?
+  '正式モデル2頭の読み込み完了。走行開始して確認できます。':
+  '正式な馬の造形・テクスチャとギャロップV2を読込完了。横から1頭走行を確認できます。');
 }
 async function maybeLoadStoredHorse(){
  const generation=++horseLoaderGeneration;
@@ -1821,21 +1864,25 @@ function inspectMarker(){
 markerFocus.addEventListener('change',inspectMarker);
 // 発走直後から全頭を追うカメラ。進行方向の前方から馬群を捉える。
 function fieldCameraShot(){
- const sorted=fieldMode.value==='race18'&&raceHorses.length===FIELD_COUNT?racePositions():null;
+ const sorted=fieldMode.value==='race18'&&raceHorses.length===FIELD_COUNT?
+ (isOfficialPairTest?raceHorses.slice(0,2).sort((a,b)=>b.distance-a.distance):racePositions()):null;
  const leader=sorted?sorted[0].distance:travel;
- const tail=sorted?sorted[FIELD_COUNT-1].distance:travel;
+ const tail=sorted?sorted[sorted.length-1].distance:travel;
  const packLength=Math.max(0,leader-tail);
  const middle=(leader+tail)/2;
  const a=fieldCenterAt(activePlan,middle),side=new THREE.Vector3(a.t.z,0,-a.t.x);
+ const laneOffset=isOfficialPairTest&&raceHorses.length===FIELD_COUNT?
+  (raceHorses[0].lane+raceHorses[1].lane)/2:0;
+ const cameraCenter=a.p.clone().addScaledVector(side,laneOffset);
  const aspect=Math.max(.45,stage.clientWidth/Math.max(1,stage.clientHeight));
  const portrait=aspect<.9?(0.9/aspect-1)*26:0;
  // 横幅と先頭～最後尾の距離に応じてカメラを引き、縦画面でも馬群を見失いにくくする。
- const ahead=Math.max(59,packLength/2+43)+portrait;
- const outside=Math.max(23,a.width/2+12);
- const height=29+Math.min(26,packLength*.14)+portrait*.33;
- const eye=a.p.clone().addScaledVector(a.t,ahead).addScaledVector(side,-outside)
+ const ahead=isOfficialPairTest?Math.max(25,packLength/2+20)+portrait*.50:Math.max(59,packLength/2+43)+portrait;
+ const outside=isOfficialPairTest?17:Math.max(23,a.width/2+12);
+ const height=(isOfficialPairTest?12:29)+Math.min(26,packLength*.14)+portrait*.33;
+ const eye=cameraCenter.clone().addScaledVector(a.t,ahead).addScaledVector(side,-outside)
   .add(new THREE.Vector3(0,height,0));
- const target=a.p.clone().add(new THREE.Vector3(0,2.0,0));
+ const target=cameraCenter.clone().add(new THREE.Vector3(0,2.0,0));
  return {eye,target};
 }
 function setView(which){
@@ -1902,7 +1949,7 @@ function selectRace(){
  demoBtn.textContent=initialDemoText();
  document.querySelector('#raceOrder').textContent=fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  highlightRace(activePlan);drawFieldGate(activePlan);
- fieldRoot.visible=fieldMode.value!=='single';
+ fieldRoot.visible=fieldMode.value!=='single'&&!isOfficialPairTest;
  gateRoot.visible=fieldMode.value!=='single';
  runner.visible=fieldMode.value==='single'&&(!isDesign01Review||installedDesign01);
  positionRunner();positionFieldHorses();updateGateDoors();
@@ -1970,7 +2017,7 @@ function resize(){
  drawElevationProfile();
 }
 window.addEventListener('resize',resize);
-resize();setView('all');selectRace();updateDesign01Panel();setView(isDesign01Review?'side':'start');
+resize();setView('all');selectRace();updateDesign01Panel();setView(isOfficialPairTest?'field':(isDesign01Review?'side':'start'));
 function animate(time){
  requestAnimationFrame(animate);
  const dt=Math.min(clock.getDelta(),.05);
@@ -1986,7 +2033,7 @@ function animate(time){
    }
   }
  }
- positionRunner();positionFieldHorses();
+ positionRunner();positionFieldHorses();updateOfficialPair(dt);
  if(fieldMode.value!=='single'){
   gateOpening=travel>0?Math.min(1,gateOpening+dt*4):0;updateGateDoors();
   if(view==='field'&&activePlan){
