@@ -1422,57 +1422,57 @@ const FOUR_PACE_PROFILES=[
  {role:'差し',accel:3.32,early:16.10,kickStart:.25,kick:.52},
  {role:'追込',accel:3.10,early:15.95,kickStart:.36,kick:.82}
 ];
-const FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=2.9;
+// 四頭のスタート後は全馬が「最内の安全な進路」を目指す。
+// 進路が空いているなら中間レーンで止まらない。近くの馬がいれば
+// 横断を待ち、スピードを調節して前後の安全な間隔を作る。
+const FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=3.05;
+const FOUR_INWARD_RATE=4.4;
 function fourHorseDesiredSlot(h,snapshot){
- const current=h.slot??h.idx;
- const width=fieldCenterAt(activePlan,h.distance).width;
- const others=snapshot.filter(x=>x.idx!==h.idx&&!x.finished);
- function slotOpen(slot){
-  const proposed=officialReviewLane(width,slot,h.distance);
-  for(const x of others){
-   if(Math.abs(x.distance-h.distance)<FOUR_MIN_LONGITUDINAL+.5 &&
-    Math.abs(x.lane-proposed)<FOUR_LATERAL_SHARED+.25)return false;
-  }
-  return true;
- }
- // A late closer uses the outside path until the pack is established.
- const minSlot=h.idx===3&&h.distance<300?2:0;
- // Hold the original outside lane until a genuine inward slot opens.
- // Once merged, do not zigzag back outside just because another horse
- // comes near; braking / waiting safely is preferable to abrupt weaving.
- for(let slot=minSlot;slot<current;slot++)if(slotOpen(slot))return slot;
- return current;
+ // 最内への進路目標を全4頭で共有。安全判定は実際の横移動側で行う。
+ return 0;
 }
 function fourHorseSafeStep(h,snapshot,dt,targetSpeed){
  const width=fieldCenterAt(activePlan,h.distance).width;
- const desired=officialReviewLane(width,h.slot??h.idx,h.distance);
- // Smooth side movement up to 1.2m/s; no sudden sideways teleport.
- let nextLane=h.lane+THREE.MathUtils.clamp(desired-h.lane,-1.2*dt,1.2*dt);
+ const inner=pairRailLane(width,fourHorseDesiredSlot(h,snapshot));
+ // スタートから最内へ押し寄せる。最初の約15mだけ横移動を滑らかに加速。
+ const lateralRate=FOUR_INWARD_RATE*(.62+.38*THREE.MathUtils.clamp(h.distance/15,0,1));
+ let nextLane=Math.min(inner,h.lane+
+  Math.min(lateralRate*dt,Math.max(0,inner-h.lane)));
+ let yieldSpeed=null;
+ // 横切る経路に他馬がいる場合だけ止める。遠いレーンの馬まで
+ // 不要にブロックせず、前後5mほどの近距離だけ慎重に扱う。
  for(const x of snapshot){
   if(x.idx===h.idx||x.finished)continue;
-  if(Math.abs(x.distance-h.distance)<FOUR_MIN_LONGITUDINAL+1.0 &&
-   Math.abs(nextLane-x.lane)<FOUR_LATERAL_SHARED &&
-   Math.abs(nextLane-x.lane)<Math.abs(h.lane-x.lane)-1e-5){
-   nextLane=h.lane;
+  const gap=x.distance-h.distance;
+  if(Math.abs(gap)>7.0)continue;
+  if(x.lane<=h.lane-FOUR_LATERAL_SHARED)continue;
+  if(x.lane-nextLane<FOUR_LATERAL_SHARED){
+   nextLane=Math.min(nextLane,x.lane-FOUR_LATERAL_SHARED);
+   if(gap>-1.0&&gap<FOUR_MIN_LONGITUDINAL+1.0)
+    yieldSpeed=Math.min(yieldSpeed??Infinity,Math.max(11,x.speed-2.3));
   }
  }
- // Reserve an additional 5cm for the lane-width change during this tick.
- nextLane=THREE.MathUtils.clamp(nextLane,-width/2+1.6,
-  width/2-PAIR_RAIL_CENTER_CLEARANCE-.05);
- let newSpeed=Math.min(targetSpeed,h.speed+FOUR_PACE_PROFILES[h.idx].accel*dt);
- let newDistance=Math.min(activePlan.distance,h.distance+newSpeed*dt);
- // If following in nearly the same lane, maintain a nose-to-tail interval.
+ // 柵からの余裕を維持。コース幅の変化に対する5cmの補正を加える。
+ nextLane=THREE.MathUtils.clamp(Math.max(h.lane,nextLane),
+  -width/2+1.6,inner-.05);
+ let nextSpeed=h.speed;
+ const target=yieldSpeed===null?targetSpeed:Math.min(targetSpeed,yieldSpeed);
+ const longitudinalRate=target>h.speed?FOUR_PACE_PROFILES[h.idx].accel:3.3;
+ nextSpeed+=THREE.MathUtils.clamp(target-h.speed,
+  -longitudinalRate*dt,longitudinalRate*dt);
+ let nextDistance=Math.min(activePlan.distance,h.distance+nextSpeed*dt);
+ // 同じ進路に先行馬がいる場合は4.8mの前後間隔を優先する。
  for(const x of snapshot){
   if(x.idx===h.idx||x.finished)continue;
   const ahead=x.distance-h.distance;
-  if(ahead>.0001&&ahead<FOUR_MIN_LONGITUDINAL+2.0 &&
+  if(ahead>.0001&&ahead<FOUR_MIN_LONGITUDINAL+2 &&
    Math.abs(x.lane-nextLane)<FOUR_LATERAL_SHARED){
    const allowed=x.distance+x.speed*dt-FOUR_MIN_LONGITUDINAL;
-   newDistance=Math.min(newDistance,Math.max(h.distance,allowed));
+   nextDistance=Math.min(nextDistance,Math.max(h.distance,allowed));
   }
  }
- newSpeed=Math.min(newSpeed,Math.max(0,(newDistance-h.distance)/dt));
- return {distance:newDistance,lane:nextLane,speed:newSpeed};
+ nextSpeed=Math.min(nextSpeed,Math.max(0,(nextDistance-h.distance)/dt));
+ return {distance:nextDistance,lane:nextLane,speed:nextSpeed};
 }
 function stepOfficialPair(tick){
  if(!activePlan||raceFinished.length>=OFFICIAL_TEST_COUNT)return;
@@ -1504,17 +1504,16 @@ function stepOfficialPair(tick){
    const late=THREE.MathUtils.clamp((progress-profile.kickStart)/.24,0,1);
    const targetSpeed=profile.early+profile.kick*launch+
     (i===3?late*.22:0);
-   // Deliberate lane decisions, at most once every 1.2–3.5 seconds.
-   if(h.distance>=115&&raceElapsed>=h.nextLaneReviewTime){
-    const selected=fourHorseDesiredSlot(h,previous);
-    if(selected!==h.slot){
-     h.slot=selected;h.nextLaneReviewTime=raceElapsed+3.5;
-    }else h.nextLaneReviewTime=raceElapsed+1.2;
-   }
+   // 発走直後から最内を目指す。進路が塞がるときだけ一時的に待つ。
    const result=fourHorseSafeStep(h,previous,tick,targetSpeed);
    h.distance=result.distance;h.speed=result.speed;
    h.sideSpeed=(result.lane-h.lane)/tick;
    h.lane=result.lane;h.targetLane=result.lane;
+   // 現在位置からおおよそのレーンを表示。目標は常に最内0。
+   const widthNow=fieldCenterAt(activePlan,h.distance).width;
+   const currentSlot=THREE.MathUtils.clamp(Math.round(
+    (pairRailLane(widthNow,0)-h.lane)/PAIR_LANE_SPACING),0,3);
+   h.slot=Math.min(h.slot,currentSlot);
   }
   if(h.distance>=activePlan.distance){
    h.finished=true;h.finishTime=raceElapsed;h.postDistance=0;
