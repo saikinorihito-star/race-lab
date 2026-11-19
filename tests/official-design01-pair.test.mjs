@@ -302,7 +302,7 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
   assert.ok(r.stackedFrames>100,'Must visibly queue nose-to-tail at some stage');
   const start=r.snapshots[100].map(h=>h.d);
   assert.ok(Math.max(...start)-Math.min(...start)<25,
-   'All horses should stay in the lead camera's visible formation at 100m');
+   'All horses should stay visible near the lead at 100m');
   const widthAtStart=36+5*Math.sin(.5);
   const outsideStart=makeReviewLane(true)(widthAtStart,3,0);
   assert.ok(r.snapshots[100][3].lane-outsideStart>12,
