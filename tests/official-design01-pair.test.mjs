@@ -465,8 +465,11 @@ test('approved 2-horse mode still uses its original independent finish-out behav
 
 function runActualTokyoWidthFourHorseSimulation(distance){
  const profiles=html.match(/const FOUR_PACE_PROFILES=\[[\s\S]*?\];/)?.[0];
- const code=['widthAt','pairRailLane','officialReviewLane','fourHorseDesiredSlot',
-  'fourHorseSafeStep','stepOfficialPair'].map(extract).join('\n');
+ // widthAt is a one-line declaration; extract() targets multi-line functions.
+ const widthSource=html.match(/function widthAt\(s\)\{[^\n]*\}/)?.[0];
+ assert.ok(widthSource,'Actual racecourse widthAt function missing');
+ const code=[widthSource,...['pairRailLane','officialReviewLane','fourHorseDesiredSlot',
+  'fourHorseSafeStep','stepOfficialPair'].map(extract)].join('\n');
  assert.ok(profiles,'Tactical pace profiles must exist');
  const source=`(()=>{
  const THREE={MathUtils:{clamp:(v,lo,hi)=>Math.max(lo,Math.min(hi,v))}};
