@@ -76,3 +76,5 @@
 - `tests/official-design01-pair.test.mjs` に補間時の連続移動試験を追加し、既存のカメラ構図・ラチ余裕・2頭進路試験と合わせて**5テスト群PASS**（JavaScriptの機能を抽出した擬似環境での実行）。GitHub PagesとiPhone Safariでの映像・端末の実測負荷は引き続き未確認。
 - 2頭モードURL: `tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&pair=1&v=7c340c`。
 - **次の判断**: この補間後も引っかかりが続く場合は、iPhoneのFPSと「馬の脚だけか、背景のカメラ移動もか」の差を確認し、GPU/アニメーションの原因を切り分ける。描画品質を改善するため別デザインの馬に置き換えることは禁止。
+
+- 続くiPhoneの実機切り分けのため、2頭モードの情報欄へ「平均FPS / 最大フレーム間隔ms / 33.4ms超の回数（約1.2秒間）」を追加。高FPS表示でも一瞬の引っ掛かりを検出する目的。変更後リンクに `&v=b47746a` を指定。
