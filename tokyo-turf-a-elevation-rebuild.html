@@ -2859,7 +2859,7 @@ function officialBroadcastCameraShot(context){
  const {leadDistance,tailDistance,meanLane,lead,gap}=context;
  const remaining=activePlan.distance-leadDistance;
  const stageShot=officialBroadcastStage(remaining,leadDistance);
- const ranked=(context.horses||[lead]).map((h,i)=>({...h,number:h.number??i+1}))
+ const ranked=(context.horses||[{...lead,distance:leadDistance,postDistance:0}]).map((h,i)=>({...h,number:h.number??i+1}))
   .sort((a,b)=>(b.distance+(b.postDistance||0))-(a.distance+(a.postDistance||0))||a.number-b.number);
  const leader=ranked[0]||lead;
  const third=ranked[Math.min(2,ranked.length-1)]||leader;
