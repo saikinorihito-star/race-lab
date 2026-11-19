@@ -1098,6 +1098,15 @@ function initialDemoText(){
  fieldMode.value==='race18'?'18頭のレースを開始':
   fieldMode.value==='field18'?'18頭を一斉にスタート':'SからGへ走らせる';
 }
+// 正式馬2頭テスト専用。内ラチはfieldCenterAtから+width/2。
+// 馬体中心と内ラチ間を3.7m取り、2頭目はさらに外側へ3.35m。
+const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35;
+function pairRailLane(width,index){
+ return width/2-PAIR_RAIL_CENTER_CLEARANCE-index*PAIR_LANE_SPACING;
+}
+console.assert([24,28,31,36,41].every(w=>[0,1].every(i=>
+ w/2-pairRailLane(w,i)>=PAIR_RAIL_CENTER_CLEARANCE-.001 &&
+ pairRailLane(w,i)>-w/2+1.5)),'正式2頭の内外ラチ余裕');
 function initRaceHorses(){
  raceElapsed=0;raceFinished=[];raceAccumulator=0;raceContactWarnings=0;
  const width=activePlan?fieldCenterAt(activePlan,0).width:31;
@@ -1114,6 +1123,13 @@ function initRaceHorses(){
   lastKick:((i*5+3)%11)*.082,
   moveCooldown:0
  }));
+ if(isOfficialPairTest){
+  // 2頭だけ最初から安全な内ラチ沿いの並走レーンへ配置。
+  for(let i=0;i<2;i++){
+   const h=raceHorses[i],lane=pairRailLane(width,i);
+   h.startLane=lane;h.lane=lane;h.targetLane=lane;h.sideSpeed=0;
+  }
+ }
 }
 function raceHorsePosition(horse){
  const a=fieldCenterAt(activePlan,horse.distance+(horse.postDistance||0));
@@ -1298,12 +1314,40 @@ function stepRace(tick){
  }
  // 終了した馬の順位は初回のゴール時刻で固定。同時刻なら枠番号で安定化。
 }
+// 正式2頭の足運び・表示テスト用。従来18頭の追い抜きAIを作用させない。
+// 馬ごとに巡航速度を持ち、内ラチからの余裕を保った平行経路を使う。
+function stepOfficialPair(tick){
+ if(!activePlan||raceFinished.length>=2)return;
+ raceElapsed+=tick;
+ for(let i=0;i<2;i++){
+  const h=raceHorses[i];
+  if(h.finished){
+   h.postDistance=Math.min(24,h.postDistance+12*tick);
+   continue;
+  }
+  const targetSpeed=i===0?16.25:15.85;
+  h.speed=Math.min(targetSpeed,h.speed+3*tick);
+  h.distance=Math.min(activePlan.distance,h.distance+h.speed*tick);
+  const width=fieldCenterAt(activePlan,h.distance).width;
+  const lane=pairRailLane(width,i);
+  h.lane=lane;h.targetLane=lane;h.sideSpeed=0;
+  if(h.distance>=activePlan.distance){
+   h.finished=true;h.finishTime=raceElapsed;h.postDistance=0;
+   raceFinished.push(h.number);
+  }
+ }
+}
 function updateRace(dt){
- // 高速再生でも刻み幅を固定し、画面FPSで追突判定が変わりにくいようにする。
+ // iPhoneのフレームレートに依存しない固定時間刻み。
  raceAccumulator+=Math.min(.3,dt*Number(rate.value));
  let count=0;
  while(raceAccumulator>=RACE_TICK&&count<25){
-  stepRace(RACE_TICK);raceAccumulator-=RACE_TICK;count++;
+  if(isOfficialPairTest)stepOfficialPair(RACE_TICK);else stepRace(RACE_TICK);
+  raceAccumulator-=RACE_TICK;count++;
+ }
+ if(isOfficialPairTest){
+  travel=Math.max(raceHorses[0]?.distance||0,raceHorses[1]?.distance||0);
+  return raceFinished.length>=2;
  }
  const lead=racePositions()[0];travel=Math.max(0,lead?.distance||0);
  return raceFinished.length===FIELD_COUNT;
