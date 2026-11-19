@@ -1,0 +1,31 @@
+name: Design01 official horse regression tests
+
+on:
+  push:
+    paths:
+      - 'tokyo-turf-a-elevation-rebuild.html'
+      - 'tests/official-design01-pair.test.mjs'
+      - '.github/workflows/design01-regression.yml'
+  pull_request:
+    paths:
+      - 'tokyo-turf-a-elevation-rebuild.html'
+      - 'tests/official-design01-pair.test.mjs'
+      - '.github/workflows/design01-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-design01:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out race-lab
+        uses: actions/checkout@v4
+      - name: Install Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate official horse camera, formation, clearance, performance settings and UI
+        run: node --test tests/official-design01-pair.test.mjs
