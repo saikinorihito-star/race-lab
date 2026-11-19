@@ -43,6 +43,18 @@ a{color:#95e8df}
 #design01Loader{padding-top:5px;padding-bottom:5px}
 #design01Overlay{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:18px;pointer-events:none}
 #design01Overlay[hidden]{display:none}
+#stageDock{position:absolute;z-index:5;left:9px;right:9px;bottom:42px;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;pointer-events:none}
+#stageDock[hidden],#cameraAdjustPanel[hidden]{display:none}
+#stageDock button,#stageDock select{pointer-events:auto;touch-action:manipulation}
+#stageStartBtn{min-width:132px;min-height:53px;background:#b5ef54;border:2px solid #e3ff98;color:#183015;border-radius:13px;font-size:16px;font-weight:800;box-shadow:0 4px 16px #06181ab0;white-space:nowrap}
+#stageStartBtn[disabled]{opacity:.7}
+#cameraAdjustToggle{min-height:44px;background:#132f40ed;border-color:#83cfc3;font-weight:750}
+#cameraAdjustPanel{position:absolute;bottom:55px;left:0;width:min(300px,calc(100vw - 20px));max-width:calc(100vw - 20px);background:#102a39f5;border:1px solid #6eb1b6;border-radius:12px;padding:10px;box-shadow:0 10px 28px #07151cbb}
+#cameraAdjustPanel .camGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:7px 0}
+#cameraAdjustPanel .camGrid button{min-height:40px;padding:5px;font-size:14px}
+#cameraAdjustPanel label{color:#e1f3f7;font-size:12px}
+#renderQuality{min-width:110px;background:#244e54}
+#cameraAdjustHint{font-size:11px;line-height:1.45;color:#c8e2eb}
 #design01OverlayPanel{width:min(100%,470px);padding:19px 18px;border-radius:16px;background:#112734ee;border:1px solid #78a8aa;color:#f0f9f9;box-shadow:0 14px 36px #0b1415bb;pointer-events:auto}
 #design01OverlayPanel strong{font-size:16px;display:block;margin-bottom:8px}
 #design01OverlayPanel p{font-size:13px;line-height:1.65;margin:6px 0 14px;color:#d5e8ea}
@@ -67,6 +79,30 @@ a{color:#95e8df}
 <div id="stage">
  <div id="telemetry">3Dコースを準備中…</div>
  <div id="help">1本指ドラッグ：回転　2本指：拡大縮小・移動　Mac：ドラッグ／ホイール</div>
+ <div id="stageDock" hidden>
+  <div id="cameraAdjustTools">
+   <button id="cameraAdjustToggle" type="button" aria-expanded="false" aria-controls="cameraAdjustPanel">📷 視点・画質</button>
+   <div id="cameraAdjustPanel" hidden>
+    <strong>追尾しながら角度調整</strong>
+    <div id="cameraAdjustHint">映像を1本指で動かすと角度変更、2本指で拡大縮小できます。</div>
+    <div class="camGrid">
+     <button type="button" data-cam-adjust="left" aria-label="左へ回転">↶ 左</button>
+     <button type="button" data-cam-adjust="right" aria-label="右へ回転">右 ↷</button>
+     <button type="button" data-cam-adjust="up" aria-label="視点を高く">↑ 高</button>
+     <button type="button" data-cam-adjust="down" aria-label="視点を低く">↓ 低</button>
+     <button type="button" data-cam-adjust="near" aria-label="拡大">＋ 寄る</button>
+     <button type="button" data-cam-adjust="far" aria-label="縮小">－ 引く</button>
+     <button type="button" data-cam-adjust="reset" style="grid-column:span 2">↺ 視点を戻す</button>
+    </div>
+    <label>画質 <select id="renderQuality" aria-label="4頭テストの画質">
+     <option value="sharp" selected>鮮明（推奨）</option>
+     <option value="standard">標準</option>
+     <option value="light">軽量</option>
+    </select></label>
+   </div>
+  </div>
+  <button id="stageStartBtn" type="button" aria-label="レースをスタート">▶ スタート</button>
+ </div>
  <div id="design01Overlay" hidden>
   <div id="design01OverlayPanel">
    <strong>正式な馬の3Dデータが未読込です</strong>
@@ -197,6 +233,12 @@ const isDesign01Review=qs.get('model')==='design01';
 const isOfficialFourTest=isDesign01Review&&qs.get('group')==='4';
 const isOfficialPairTest=isDesign01Review&&(qs.get('pair')==='1'||isOfficialFourTest);
 const OFFICIAL_TEST_COUNT=isOfficialFourTest?4:2;
+const stageDock=document.querySelector('#stageDock');
+const stageStartBtn=document.querySelector('#stageStartBtn');
+const cameraAdjustToggle=document.querySelector('#cameraAdjustToggle');
+const cameraAdjustPanel=document.querySelector('#cameraAdjustPanel');
+const renderQuality=document.querySelector('#renderQuality');
+if(isOfficialPairTest){stageDock.hidden=false;renderQuality.value=isOfficialFourTest?'sharp':'standard'}
 if(isDesign01Review){
  fieldMode.value=isOfficialPairTest?'race18':'single';
  fieldMode.disabled=isOfficialPairTest;
@@ -447,14 +489,17 @@ function dirtPoint(s,offset,lift=0){
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x9ec8dd);
-scene.fog=new THREE.FogExp2(0x9ec8dd,.00011); // 遠景を見通せるように減霧
+scene.fog=new THREE.FogExp2(0x9ec8dd,isOfficialFourTest?.000055:.00011); // 4頭では遠景をより鮮明に
 const camera=new THREE.PerspectiveCamera(43,1,.15,6000);
-const renderer=new THREE.WebGLRenderer({antialias:!isOfficialFourTest,powerPreference:'high-performance'});
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
 // The approved Meshy horse's meshes and textures are untouched. On iPhone,
 // reduce the pair-test fill rate only; original 1/18-horse modes are unchanged.
-renderer.setPixelRatio(isOfficialFourTest?Math.min(.95,window.devicePixelRatio||1):
- isOfficialPairTest?Math.min(1.05,window.devicePixelRatio||1):
- Math.min(1.4,window.devicePixelRatio||1));
+// Higher internal raster resolution cures 4-horse background blur without
+// modifying the approved 3D horse or textures. A visible quality switch lets
+// iPhone users choose a faster render if the frame interval grows.
+const renderDprLevels={sharp:1.35,standard:1.05,light:.90};
+const initialDpr=isOfficialPairTest?renderDprLevels[renderQuality.value]:1.4;
+renderer.setPixelRatio(Math.min(initialDpr,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
@@ -462,6 +507,16 @@ renderer.toneMappingExposure=1.09;
 stage.prepend(renderer.domElement);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=.075;controls.minDistance=7;controls.maxDistance=3300;controls.maxPolarAngle=Math.PI*.49;
+// The approved group camera follows a moving horse; user input is handled as
+// persistent *offsets* to this tracking rig instead of OrbitControls (which
+// otherwise gets overwritten by the next frame).
+if(isOfficialPairTest)controls.enabled=false;
+function applyRenderQuality(){
+ if(!isOfficialPairTest)return;
+ renderer.setPixelRatio(Math.min(renderDprLevels[renderQuality.value]||1.05,window.devicePixelRatio||1));
+ renderer.setSize(stage.clientWidth,stage.clientHeight,false);
+}
+renderQuality.addEventListener('change',applyRenderQuality);
 scene.add(new THREE.HemisphereLight(0xeaf7ff,0x4e6450,1.42));
 const sun=new THREE.DirectionalLight(0xfff4e6,1.95);
 sun.position.set(-400,640,-260);scene.add(sun);
