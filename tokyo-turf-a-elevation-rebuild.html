@@ -2745,6 +2745,7 @@ fieldMode.addEventListener('change',()=>{selectRace();updateDesign01Panel();if(f
 document.querySelector('#startView').addEventListener('click',()=>setView('start'));
 function resetDemo(){
  travel=0;playing=false;gateOpening=0;initRaceHorses();updateGateDoors();
+ if(isOfficialEighteenTest)gateRoot.visible=true;
  demoBtn.textContent=initialDemoText();
  document.querySelector('#raceOrder').textContent=isOfficialPairTest?
  '正式モデル'+OFFICIAL_TEST_COUNT+'頭：逃げ・先行・差し・追込の隊列、内側への進路選択と接触回避を確認。':
@@ -2760,6 +2761,7 @@ demoBtn.addEventListener('click',()=>{
  if(isOfficialPairTest?raceFinished.length>=OFFICIAL_TEST_COUNT:
  (travel>=activePlan.distance||fieldMode.value==='race18'&&raceFinished.length===FIELD_COUNT)){
   travel=0;gateOpening=0;initRaceHorses();updateGateDoors();positionFieldHorses();
+  if(isOfficialEighteenTest)gateRoot.visible=true;
   if(isOfficialPairTest)setView('field');
   else if(fieldMode.value!=='single')setView('start');
  }
