@@ -2278,9 +2278,8 @@ function officialFrameIndex(horseNumber){
 // Keep the 36-bone original Design01 GLB, body, rider, skin, mesh, texture and
 // approved gallop unmodified. Visible frame-coloured number-cloth markers are
 // separate accessories on each clone; never recolour the original horse coat.
-function addOfficialFrameCloth(group,model,horseNumber){
+function addOfficialFrameCloth(group,horseNumber,bounds){
  const frame=RACE_FRAME_COLORS[officialFrameIndex(horseNumber)];
- const bounds=new THREE.Box3().setFromObject(model);
  const size=bounds.getSize(new THREE.Vector3());
  const center=bounds.getCenter(new THREE.Vector3());
  if(!Number.isFinite(size.x*size.y*size.z)||
@@ -2330,11 +2329,15 @@ function addOfficialFrameCloth(group,model,horseNumber){
 async function initializeOfficialPair(source,clip){
  for(const h of officialPair){h.mixer.stopAllAction();pairRoot.remove(h.group)}
  officialPair.length=0;
+ // Bounds of the approved GLB are identical across all cloned horse rigs.
+ // Compute this only once; never recalculate 484k-vertex geometry 18 times.
+ const originalFrameBounds=isOfficialEighteenTest?
+  new THREE.Box3().setFromObject(source):null;
  for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
   // ジオメトリやテクスチャは共有し、スキンとボーンだけ独立させる。
   const model=cloneSkeleton(source);
   const group=new THREE.Group();group.add(model);
-  if(isOfficialEighteenTest)addOfficialFrameCloth(group,model,i+1);
+  if(isOfficialEighteenTest)addOfficialFrameCloth(group,i+1,originalFrameBounds);
   pairRoot.add(group);
   const mixer=new THREE.AnimationMixer(model);
   const action=mixer.clipAction(clip);
