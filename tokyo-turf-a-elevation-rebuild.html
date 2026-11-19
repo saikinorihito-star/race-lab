@@ -2117,6 +2117,8 @@ checkLabels.addEventListener('change',updateSceneLabelVisibility);
 courseSigns.addEventListener('change',updateSceneLabelVisibility);
 const clock=new THREE.Clock();
 let lastTime=0,fpsCount=0,fps=0;
+// Average FPS can hide rare long frames in iPhone Safari.
+let lastFrameStamp=0,maxFrameMs=0,slowFrames=0;
 function resize(){
  const w=stage.clientWidth,h=stage.clientHeight;
  camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();renderer.setSize(w,h,false);
@@ -2134,6 +2136,12 @@ if(isOfficialPairTest){
 resize();setView('all');selectRace();updateDesign01Panel();setView(isOfficialPairTest?'field':(isDesign01Review?'side':'start'));
 function animate(time){
  requestAnimationFrame(animate);
+ if(lastFrameStamp&&time>lastFrameStamp){
+  const frameMs=time-lastFrameStamp;
+  maxFrameMs=Math.max(maxFrameMs,frameMs);
+  if(frameMs>33.4)slowFrames++;
+ }
+ lastFrameStamp=time;
  const dt=Math.min(clock.getDelta(),.05);
  if(playing){
   if(fieldMode.value==='race18'){
@@ -2182,7 +2190,8 @@ function animate(time){
   const modeName=isOfficialPairTest?'正式Design 01・2頭テスト':fieldMode.value==='race18'?'18頭レース':
    fieldMode.value==='field18'?'18頭等速':'1頭デモ';
   info.textContent='東京芝A '+activeDistance+'m｜'+(playing?'走行中':'停止中')+
-   '\n'+modeName+'｜残り'+rest+'m｜FPS '+fps.toFixed(0);
+   '\n'+modeName+'｜残り'+rest+'m｜FPS '+fps.toFixed(0)+
+   (isOfficialPairTest?'｜最長間隔 '+Math.round(maxFrameMs)+'ms｜遅延 '+slowFrames+'回':'');
   if(fieldMode.value==='race18'&&!isOfficialPairTest)document.querySelector('#raceOrder').textContent=raceOrderText();
  if(isOfficialPairTest&&installedDesign01&&activePlan){
   const shot=officialPairCameraShot(pairTrackingView(view)?view:'field');
@@ -2192,6 +2201,7 @@ function animate(time){
    '｜内ラチまで中心3.7m以上';
  }
   info.style.whiteSpace='pre-line';
+  maxFrameMs=0;slowFrames=0;
  }
 }
 animate(0);
