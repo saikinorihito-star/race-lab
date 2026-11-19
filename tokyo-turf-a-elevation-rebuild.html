@@ -1506,6 +1506,11 @@ const EIGHT_PACE_PROFILES=[
 ];
 // Eight-horse experiment keeps its own lane and pace rules to avoid changing
 // the approved 4-horse test. No dummy geometry, no cheaper replacement horses.
+// The old 7.4m crossing exclusion kept most outside starters in rigid lanes.
+// A 4m longitudinal corridor lets a horse merge if it is already well ahead
+// or behind the inner horse. Lateral clearance remains 3.16m, with measured
+// pairwise center separation validated across the Tokyo width profile.
+const EIGHT_MERGE_LONGITUDINAL_BUFFER=4.0;
 function eightHorseSafeStep(h,snapshot,dt,targetSpeed){
  const width=fieldCenterAt(activePlan,h.distance).width;
  const rail=fourHorseInnerLane(width);
@@ -1529,12 +1534,15 @@ function eightHorseSafeStep(h,snapshot,dt,targetSpeed){
  const inwardStep=Math.max(0,distance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD;
  let lane=Math.min(rail-.05,h.lane+Math.min(
   lateralRate*dt,inwardStep,Math.max(0,rail-.05-h.lane)));
- // Commit to the outer side until there is a longitudinal gap; merge only
- // through a free corridor. The more crowded 8-horse pack uses 3.1m spacing.
+ // Merge diagonally whenever the inner lane offers a genuine front/rear gap.
+ // Unlike the previous overly conservative 7.4m test, do not freeze the
+ // entire inward approach because an inside horse is several metres away.
+ // For nearby traffic preserve 3.16m of lateral center clearance; never
+ // clip forward travel to zero just to change lanes.
  for(const other of snapshot){
   if(other.idx===h.idx||other.finished)continue;
   const gap=other.distance+other.speed*dt-distance;
-  if(Math.abs(gap)<7.4&&other.lane>h.lane)
+  if(Math.abs(gap)<EIGHT_MERGE_LONGITUDINAL_BUFFER&&other.lane>h.lane)
    lane=Math.min(lane,other.lane-3.16);
  }
  lane=THREE.MathUtils.clamp(Math.max(h.lane,lane),-width/2+1.5,rail-.05);
