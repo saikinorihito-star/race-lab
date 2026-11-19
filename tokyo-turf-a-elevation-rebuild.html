@@ -2489,7 +2489,51 @@ if(isOfficialPairTest){
 }
 // 2頭/4頭用：近ければ全頭、離れたら先頭優先でカメラが移動する。
 // 18頭の従来カメラは一切変更しない。
-function pairTrackingView(which){return ['field','side','front3q','chase'].includes(which)}
+function pairTrackingView(which){return ['field','side','insideSide','front3q','chase'].includes(which)}
+// The full field is followed in the local track coordinate system.
+// For side/insideSide presets, the camera is exactly perpendicular to the
+// running tangent and the eye/target have identical Y coordinates.
+function officialEighteenCameraShot(which,context){
+ const {horses,lead,leadDistance,tailDistance,meanLane,gap,blend}=context;
+ const choice=camera18Follow.value;
+ let distance=THREE.MathUtils.lerp((leadDistance+tailDistance)/2,leadDistance-5,blend);
+ let lane=THREE.MathUtils.lerp(meanLane,lead.lane,blend);
+ if(choice==='pack'){
+  distance=(leadDistance+tailDistance)/2;lane=meanLane;
+ }else if(choice==='leader'){
+  distance=leadDistance;lane=lead.lane;
+ }else if(choice==='tail'){
+  const last=horses.reduce((a,b)=>
+   (a.distance+(a.postDistance||0))<=(b.distance+(b.postDistance||0))?a:b);
+  distance=last.distance+(last.postDistance||0);lane=last.lane;
+ }else if(/^\d+$/.test(choice)){
+  const horse=horses[Number(choice)-1];
+  if(horse){distance=horse.distance+(horse.postDistance||0);lane=horse.lane}
+ }
+ const a=fieldCenterAt(activePlan,Math.max(0,distance));
+ const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
+ const focus=a.p.clone().addScaledVector(side,lane);
+ const baseYaw=which==='insideSide'?Math.PI:
+  which==='front3q'?Math.PI/3:which==='chase'?-Math.PI/2:
+  which==='field'?.22:0;
+ const baseElevation=which==='field'?.34:which==='chase'?.16:
+  which==='front3q'?.09:0;
+ const yaw=baseYaw+camera18.yaw;
+ const elevation=THREE.MathUtils.clamp(baseElevation+camera18.pitch,-.34,1.38);
+ const baseRadius=which==='field'?Math.min(145,57+gap*.85):
+  choice==='pack'?Math.max(34,Math.min(135,gap*1.60)):
+  which==='chase'?32:which==='front3q'?34:29;
+ const radius=THREE.MathUtils.clamp(baseRadius*camera18.zoom,8,500);
+ // A 0-degree side view has neither along-course nor upward component.
+ const outward=side.clone().multiplyScalar(-Math.cos(yaw))
+  .addScaledVector(a.t,Math.sin(yaw)).normalize();
+ const screenRight=new THREE.Vector3(outward.z,0,-outward.x).normalize();
+ const target=focus.clone().addScaledVector(screenRight,camera18.pan)
+  .add(new THREE.Vector3(0,2+camera18.lift,0));
+ const eye=target.clone().addScaledVector(outward,radius*Math.cos(elevation))
+  .add(new THREE.Vector3(0,radius*Math.sin(elevation),0));
+ return {eye,target,gap,focusedOnLead:blend>=.8};
+}
 function officialPairCameraShot(which='field'){
  const horses=Array.from({length:OFFICIAL_TEST_COUNT},(_,i)=>officialPairVisualState(i));
  if(!activePlan||horses.some(h=>!h))return fieldCameraShot();
@@ -2504,6 +2548,9 @@ function officialPairCameraShot(which='field'){
  const gap=leadDistance-tailDistance;
  // 14m未満は中点、27m以上で先頭-5mに移行。段差を出さず連続的に切替。
  const blend=THREE.MathUtils.smoothstep(gap,14,27);
+ if(isOfficialEighteenTest)
+  return officialEighteenCameraShot(which,{
+   horses,lead,leadDistance,tailDistance,meanLane,gap,blend});
  const focusDistance=THREE.MathUtils.lerp((leadDistance+tailDistance)/2,leadDistance-5,blend);
  const a=fieldCenterAt(activePlan,Math.max(0,focusDistance));
  const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
@@ -2608,7 +2655,7 @@ function setView(which){
   const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
   eye=a.p.clone().addScaledVector(side,-60).addScaledVector(a.t,-50).add(new THREE.Vector3(0,45,0));
   target=a.p.clone().add(new THREE.Vector3(0,6,0));
- }else if(['side','front3q','chase'].includes(which)&&activePlan){
+ }else if(['side','insideSide','front3q','chase'].includes(which)&&activePlan){
   if(isOfficialPairTest)({eye,target}=officialPairCameraShot(which));
   else{
    const a=fieldMode.value==='single'&&isDesign01Review?
@@ -2619,7 +2666,10 @@ function setView(which){
  controls.target.copy(target);camera.position.copy(eye);camera.lookAt(target);controls.update();
  updateSceneLabelVisibility();
 }
-document.querySelectorAll('#views button').forEach(button=>button.addEventListener('click',()=>setView(button.dataset.view)));
+document.querySelectorAll('#views button').forEach(button=>button.addEventListener('click',()=>{
+ if(isOfficialEighteenTest&&pairTrackingView(button.dataset.view))resetCamera18();
+ setView(button.dataset.view);
+}));
 function syncStageStartButton(){
  if(!isOfficialPairTest)return;
  const completed=raceFinished.length>=OFFICIAL_TEST_COUNT;
@@ -2730,7 +2780,9 @@ if(isOfficialPairTest){
  document.querySelector('[data-view="front3q"]').textContent=OFFICIAL_TEST_COUNT+'頭の斜め前を追尾';
  document.querySelector('[data-view="chase"]').textContent=OFFICIAL_TEST_COUNT+'頭の後方を追尾';
  document.querySelector('[data-view="field"]').textContent=OFFICIAL_TEST_COUNT+'頭を自動追尾';
- document.querySelector('#help').textContent='1本指：角度調整｜2本指：拡大縮小｜自動追尾は継続';
+ document.querySelector('#help').textContent=isOfficialEighteenTest?
+  '1本指：360°回転・上下｜2本指：ズーム・視点移動｜📷から詳細調整':
+  '1本指：角度調整｜2本指：拡大縮小｜自動追尾は継続';
 }
 resize();setView('all');selectRace();updateDesign01Panel();setView(isOfficialPairTest?'field':(isDesign01Review?'side':'start'));
 function animate(time){
