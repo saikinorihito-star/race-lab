@@ -7,6 +7,7 @@ on:
       - 'tests/official-design01-pair.test.mjs'
       - 'tests/official-design01-eight.test.mjs'
       - 'tests/official-design01-eighteen.test.mjs'
+      - 'tests/official-design01-camera.test.mjs'
       - '.github/workflows/design01-regression.yml'
   pull_request:
     paths:
@@ -14,6 +15,7 @@ on:
       - 'tests/official-design01-pair.test.mjs'
       - 'tests/official-design01-eight.test.mjs'
       - 'tests/official-design01-eighteen.test.mjs'
+      - 'tests/official-design01-camera.test.mjs'
       - '.github/workflows/design01-regression.yml'
   workflow_dispatch:
 
@@ -32,4 +34,4 @@ jobs:
         with:
           node-version: '20'
       - name: Validate official 2/4/8/18 Design01 horse positions, headways, cameras, performance and rail clearance
-        run: node --test tests/official-design01-pair.test.mjs tests/official-design01-eight.test.mjs tests/official-design01-eighteen.test.mjs
+        run: node --test tests/official-design01-pair.test.mjs tests/official-design01-eight.test.mjs tests/official-design01-eighteen.test.mjs tests/official-design01-camera.test.mjs
