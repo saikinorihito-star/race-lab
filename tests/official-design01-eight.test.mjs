@@ -56,6 +56,7 @@ function simulateEight(distance,variant='tokyo'){
  FOUR_INWARD_SETTLE_DISTANCE=160,FOUR_MIN_LONGITUDINAL=4.8,
  FOUR_LATERAL_SHARED=3.05,FOUR_INWARD_RATE=4.4,
  FOUR_MAX_LATERAL_PER_FORWARD=.30,
+ EIGHT_MERGE_LONGITUDINAL_BUFFER=4.0,
  isOfficialEightTest=true,isOfficialFourTest=false,isOfficialMultiTest=true,OFFICIAL_TEST_COUNT=8;
  ${profiles4}
  ${profiles8}
@@ -78,14 +79,19 @@ function simulateEight(distance,variant='tokyo'){
  const lowestSpeed=Array(8).fill(Infinity),stops=Array(8).fill(0);
  let minRail=Infinity,minOuter=Infinity,minSeparation=Infinity,maxSideToForward=0,
   crossovers=0,finishStalls=0,closedPackFrames=0;
- const snapshots={};
+ const snapshots={},innerFormation={};
  for(let t=0;t<30000&&raceFinished.length<8;t++){
   const before=raceHorses.map(h=>({d:h.distance,l:h.lane,p:h.postDistance||0,finished:h.finished}));
   stepOfficialPair(1/60);
   const lead=Math.max(...raceHorses.map(h=>h.distance));
-  for(const marker of [30,45,100,200,400]){
-   if(!snapshots[marker]&&lead>=marker)
+  for(const marker of [30,45,100,200,300,400]){
+   if(!snapshots[marker]&&lead>=marker){
     snapshots[marker]=raceHorses.map(h=>({distance:h.distance,lane:h.lane,speed:h.speed}));
+    // Report the number of test horses within two standard lane widths of
+    // the innermost safe turf line, to detect renewed outer-lane lockup.
+    const inside=fourHorseInnerLane(fieldCenterAt(activePlan,lead).width);
+    innerFormation[marker]=raceHorses.filter(h=>inside-h.lane<=6.7).length;
+   }
   }
   const active=raceHorses.filter(h=>!h.finished);
   for(const h of raceHorses){
@@ -115,7 +121,7 @@ function simulateEight(distance,variant='tokyo'){
  }
  return {distance:trackDistance,variant:trackVariant,finished:raceFinished.length,
   minRail,minOuter,minSeparation,lowestSpeed,stops,crossovers,maxSideToForward,
-  finishStalls,closedPackFrames,snapshots,
+  finishStalls,closedPackFrames,snapshots,innerFormation,
   finishTimes:raceHorses.map(h=>h.finishTime)};
  })()`;
  return runInNewContext(program,{trackDistance:distance,trackVariant:variant});
@@ -186,4 +192,19 @@ test('8-horse camera tracks the pack and prioritizes the leader after the field 
   if(gap<=14)assert.ok(Math.abs(d-(200-gap/2))<1e-7);
   if(gap>=27)assert.ok(Math.abs(d-195)<1e-7,'Leader-framing at long separation');
  }
+});
+
+test('eight outer-drawn horses use open front/back gaps to join the inner pack by 200m',()=>{
+ assert.match(html,/const EIGHT_MERGE_LONGITUDINAL_BUFFER=4\.0/);
+ assert.match(extract('eightHorseSafeStep'),
+  /Math\.abs\(gap\)<EIGHT_MERGE_LONGITUDINAL_BUFFER/);
+ const r=simulateEight(1400,'tokyo');
+ assert.ok(r.innerFormation[100]>=5,
+  'At least five of eight have moved to within two inner lanes by 100m');
+ assert.ok(r.innerFormation[200]>=7,
+  'At least seven of eight have merged into the inside two lanes by 200m');
+ assert.equal(r.innerFormation[300],8,
+  'All eight should join the inner two-lane pack by 300m on Tokyo 1400m');
+ assert.ok(r.minSeparation>=3.1,'Maintain center clearance during rapid convergence');
+ assert.equal(r.stops.reduce((a,b)=>a+b,0),0,'Do not revive the 45m stoppage');
 });
