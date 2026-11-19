@@ -241,7 +241,13 @@ const stageStartBtn=document.querySelector('#stageStartBtn');
 const cameraAdjustToggle=document.querySelector('#cameraAdjustToggle');
 const cameraAdjustPanel=document.querySelector('#cameraAdjustPanel');
 const renderQuality=document.querySelector('#renderQuality');
-if(isOfficialPairTest){stageDock.hidden=false;renderQuality.value=isOfficialEighteenTest?'light':isOfficialEightTest?'standard':isOfficialFourTest?'sharp':'standard'}
+if(isOfficialPairTest){
+ stageDock.hidden=false;
+ if(isOfficialEighteenTest){
+  renderQuality.add(new Option('自動（18頭推奨）','auto'),0);
+  renderQuality.value='auto';
+ }else renderQuality.value=isOfficialEightTest?'standard':isOfficialFourTest?'sharp':'standard';
+}
 if(isDesign01Review){
  fieldMode.value=isOfficialPairTest?'race18':'single';
  fieldMode.disabled=isOfficialPairTest;
@@ -501,7 +507,7 @@ const renderer=new THREE.WebGLRenderer({antialias:!(isOfficialEightTest||isOffic
 // modifying the approved 3D horse or textures. A visible quality switch lets
 // iPhone users choose a faster render if the frame interval grows.
 const renderDprLevels={sharp:1.35,standard:1.05,light:.90};
-const initialDpr=isOfficialPairTest?renderDprLevels[renderQuality.value]:1.4;
+const initialDpr=isOfficialPairTest?(renderDprLevels[renderQuality.value]||1.05):1.4;
 renderer.setPixelRatio(Math.min(initialDpr,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
 renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -516,10 +522,28 @@ controls.enableDamping=true;controls.dampingFactor=.075;controls.minDistance=7;c
 if(isOfficialPairTest)controls.enabled=false;
 function applyRenderQuality(){
  if(!isOfficialPairTest)return;
- renderer.setPixelRatio(Math.min(renderDprLevels[renderQuality.value]||1.05,window.devicePixelRatio||1));
+ renderer.setPixelRatio(Math.min(renderQuality.value==='auto'?auto18Dpr:
+  renderDprLevels[renderQuality.value]||1.05,window.devicePixelRatio||1));
  renderer.setSize(stage.clientWidth,stage.clientHeight,false);
 }
-renderQuality.addEventListener('change',applyRenderQuality);
+let auto18Dpr=1.05,auto18SlowWindows=0,auto18FastWindows=0;
+renderQuality.addEventListener('change',()=>{
+ auto18Dpr=1.05;auto18SlowWindows=0;auto18FastWindows=0;
+ applyRenderQuality();
+});
+function autoTune18HorseResolution(fps){
+ if(!isOfficialEighteenTest||renderQuality.value!=='auto'||!playing||!installedDesign01)return;
+ auto18SlowWindows=fps<32?auto18SlowWindows+1:0;
+ auto18FastWindows=fps>49?auto18FastWindows+1:0;
+ let next=auto18Dpr;
+ if(auto18SlowWindows>=2){next=Math.max(.78,auto18Dpr-.07);auto18SlowWindows=0}
+ if(auto18FastWindows>=3){next=Math.min(1.05,auto18Dpr+.05);auto18FastWindows=0}
+ if(Math.abs(next-auto18Dpr)>.005){
+  auto18Dpr=next;
+  renderer.setPixelRatio(Math.min(auto18Dpr,window.devicePixelRatio||1));
+  renderer.setSize(stage.clientWidth,stage.clientHeight,false);
+ }
+}
 scene.add(new THREE.HemisphereLight(0xeaf7ff,0x4e6450,1.42));
 const sun=new THREE.DirectionalLight(0xfff4e6,1.95);
 sun.position.set(-400,640,-260);scene.add(sun);
@@ -2047,7 +2071,7 @@ const DESIGN01_CACHE_KEY='official-meshy-blue-ribbon-original-geometry-gallop-v2
 let installedDesign01=false,installedScene=null,horseLoaderGeneration=0;
 const pairRoot=new THREE.Group();scene.add(pairRoot);
 const officialPair=[];
-function initializeOfficialPair(source,clip){
+async function initializeOfficialPair(source,clip){
  for(const h of officialPair){h.mixer.stopAllAction();pairRoot.remove(h.group)}
  officialPair.length=0;
  for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
@@ -2059,6 +2083,11 @@ function initializeOfficialPair(source,clip){
   action.setLoop(THREE.LoopRepeat,Infinity);action.play();
   action.time=i*.07;
   officialPair.push({group,mixer});
+  if(isOfficialEighteenTest&&(i+1)%3===0&&i+1<OFFICIAL_TEST_COUNT){
+   document.querySelector('#officialPairStatus').textContent=
+    '正式Design 01を準備中：'+(i+1)+' / '+OFFICIAL_TEST_COUNT+'頭';
+   await new Promise(resolve=>requestAnimationFrame(resolve));
+  }
  }
  document.querySelector('#officialPairStatus').textContent='正式モデル'+OFFICIAL_TEST_COUNT+'頭を読み込みました。骨格と走行アニメーションは個別です。';
 }
@@ -2151,7 +2180,7 @@ async function loadApprovedHorse(buffer){
  runner.visible=fieldMode.value==='single';
  document.querySelector('#design01Overlay').hidden=true;
  if(isOfficialPairTest){
-  initializeOfficialPair(horse,gltf.animations.find(a=>a.name==='Design01_RightLead_TransverseGallop_v2'));
+  await initializeOfficialPair(horse,gltf.animations.find(a=>a.name==='Design01_RightLead_TransverseGallop_v2'));
   fieldRoot.visible=false;setView('field');
  }else if(fieldMode.value==='single')setView('side');
  demoBtn.disabled=false;
@@ -2449,7 +2478,8 @@ function syncStageStartButton(){
  const label=playing?'⏸ 一時停止':completed?'↻ もう一度':
   raceElapsed>0?'▶ 再開':'▶ スタート';
  if(stageStartBtn.textContent!==label)stageStartBtn.textContent=label;
- stageStartBtn.disabled=!installedDesign01;
+ stageStartBtn.disabled=!installedDesign01||
+  (isOfficialEighteenTest&&officialPair.length!==OFFICIAL_TEST_COUNT);
  stageStartBtn.setAttribute('aria-label',label);
 }
 stageStartBtn.addEventListener('click',()=>{
@@ -2607,6 +2637,7 @@ function animate(time){
  fpsCount++;
  if(time-lastTime>1200){
   fps=fpsCount*1000/(time-lastTime||1);fpsCount=0;lastTime=time;
+   autoTune18HorseResolution(fps);
   const rest=Math.max(0,Math.round((activePlan?.distance||1400)-travel));
   drawElevationProfile();
   const modeName=isOfficialPairTest?'正式Design 01・'+OFFICIAL_TEST_COUNT+'頭テスト':fieldMode.value==='race18'?'18頭レース':
