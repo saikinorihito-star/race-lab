@@ -15,7 +15,7 @@ const palette=runInNewContext('(()=>{'+paletteCode+'return RACE_FRAME_COLORS})()
 
 test('JRA 18-runner allocation and white-black-red-blue-yellow-green-orange-pink colours',()=>{
  assert.equal(palette.length,8);
- assert.deepEqual(palette.map(x=>x.name),['白','黒','赤','青','黄','緑','橙','桃']);
+ assert.deepEqual(Array.from(palette,x=>x.name),['白','黒','赤','青','黄','緑','橙','桃']);
  const actual=Array.from({length:18},(_,i)=>frameIndex(i+1)+1);
  assert.deepEqual(actual,[1,1,2,2,3,3,4,4,5,5,6,6,7,7,7,8,8,8]);
 });
@@ -39,8 +39,8 @@ test('race scene includes three tree silhouettes with 36 instanced trees of each
  assert.match(html,/const RACE_TREE_TYPES=\[/);
  const src=html.match(/const RACE_TREE_TYPES=\[[\s\S]*?\];/)?.[0];
  const items=runInNewContext('(()=>{'+src+'return RACE_TREE_TYPES})()',{});
- assert.deepEqual(items.map(x=>x.name),['広葉樹','針葉樹','高木']);
- assert.deepEqual(items.map(x=>x.shape),['round','pine','tall']);
+ assert.deepEqual(Array.from(items,x=>x.name),['広葉樹','針葉樹','高木']);
+ assert.deepEqual(Array.from(items,x=>x.shape),['round','pine','tall']);
  assert.match(html,/const perType=36/);
  assert.match(html,/const segment=i%RACE_TREE_SITES.length/);
  assert.match(html,/const outside=34\+\(\(i\+type\*3\)%5\)\*6/);
