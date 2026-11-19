@@ -81,11 +81,11 @@ test('race playback shows only the four useful views; course construction retain
  const end=html.indexOf("\n}\nif(isDesign01Review)",start);
  assert.ok(start>0&&end>start,'18-only camera filtering must be independent of course mode');
  const code=html.slice(start,end+2);
- const names=['all','top','stand','goal','goalboard','first','third',
+ const names=['broadcast','all','top','stand','goal','goalboard','first','third',
   'hill','dirt','side','front3q','chase','field'];
- const expected=['side','front3q','chase','field'];
+ const expected=['broadcast','side','front3q','chase','field'];
  for(const official of [true,false]){
-  const buttons=names.map(name=>({dataset:{view:name},hidden:false}));
+  const buttons=names.map(name=>({dataset:{view:name},hidden:name==='broadcast'}));
   const distanceViews={hidden:false};
   const document={
    querySelectorAll(selector){
@@ -101,8 +101,8 @@ test('race playback shows only the four useful views; course construction retain
    document,isOfficialEighteenTest:official
   });
   assert.deepEqual(buttons.filter(b=>!b.hidden).map(b=>b.dataset.view),
-   official?expected:names,'Only racing views appear in official 18 mode');
+   official?expected:names.filter(name=>name!=='broadcast'),'Only racing views appear in official 18 mode');
   assert.equal(distanceViews.hidden,official,'Construction markers stay in construction mode');
  }
- assert.match(html,/#views button\[hidden\],#distanceViews\[hidden\]\{display:none!important\}/);
+ assert.match(html,/#views button\[hidden\],#distanceViews\[hidden\],#broadcastCameraLabel\[hidden\]\{display:none!important\}/);
 });
