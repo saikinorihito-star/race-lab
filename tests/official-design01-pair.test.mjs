@@ -305,3 +305,11 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
    'Stalker should merge behind the lead into the inner lane by 200m');
  }
 });
+
+test('four-horse role order displays independently of the approved source saddlecloth',()=>{
+ assert.match(html,/現在の隊列：/);
+ assert.match(html,/ゼッケン4は正式デザインのままです。/);
+ assert.match(html,/h\.role=\['逃げ','先行','差し','追込'\]\[i\]/);
+ assert.match(html,/const FOUR_PACE_PROFILES=\[/);
+ assert.match(html,/FOUR_MIN_LONGITUDINAL=4\.8,FOUR_LATERAL_SHARED=2\.9/);
+});
