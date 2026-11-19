@@ -159,7 +159,7 @@ test('persistent in-video run control reflects play, pause, resume and completio
   setAttribute(k,v){this.attributes[k]=v}};
  const ctx={isOfficialPairTest:true,OFFICIAL_TEST_COUNT:4,raceFinished:[],
   raceElapsed:0,playing:false,installedDesign01:false,stageStartBtn:button};
- const sync=runInNewContext('('+extract('syncStageStartButton')+')',ctx);
+ const sync=()=>runInNewContext('('+extract('syncStageStartButton')+')',ctx)();
  sync();assert.equal(button.textContent,'▶ スタート');assert.equal(button.disabled,true);
  ctx.installedDesign01=true;ctx.playing=true;sync();
  assert.equal(button.textContent,'⏸ 一時停止');assert.equal(button.disabled,false);
