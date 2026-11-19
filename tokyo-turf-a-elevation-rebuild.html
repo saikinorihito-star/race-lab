@@ -49,12 +49,25 @@ a{color:#95e8df}
 #stageStartBtn{min-width:132px;min-height:53px;background:#b5ef54;border:2px solid #e3ff98;color:#183015;border-radius:13px;font-size:16px;font-weight:800;box-shadow:0 4px 16px #06181ab0;white-space:nowrap}
 #stageStartBtn[disabled]{opacity:.7}
 #cameraAdjustToggle{min-height:44px;background:#132f40ed;border-color:#83cfc3;font-weight:750}
-#cameraAdjustPanel{position:absolute;bottom:55px;left:0;width:min(300px,calc(100vw - 20px));max-width:calc(100vw - 20px);background:#102a39f5;border:1px solid #6eb1b6;border-radius:12px;padding:10px;box-shadow:0 10px 28px #07151cbb}
+#cameraAdjustPanel{position:absolute;bottom:55px;left:0;width:min(340px,calc(100vw - 20px));max-width:calc(100vw - 20px);max-height:min(62svh,520px);overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;pointer-events:auto;background:#102a39f5;border:1px solid #6eb1b6;border-radius:12px;padding:10px;box-shadow:0 10px 28px #07151cbb}
 #cameraAdjustPanel .camGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:7px 0}
 #cameraAdjustPanel .camGrid button{min-height:40px;padding:5px;font-size:14px}
 #cameraAdjustPanel label{color:#e1f3f7;font-size:12px}
 #renderQuality{min-width:110px;background:#244e54}
 #cameraAdjustHint{font-size:11px;line-height:1.45;color:#c8e2eb}
+#cam18Extras[hidden]{display:none}
+#cam18Extras{display:grid;gap:7px;padding-top:7px}
+#cam18Extras .camPreset{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+#cam18Extras .camPreset button{min-height:40px;padding:6px 3px;font-size:12px}
+#cam18Extras .camPreset button.selected{background:#237f71;border-color:#a9e8c4}
+#cam18Extras label{display:grid;grid-template-columns:74px minmax(0,1fr) 39px;gap:6px;align-items:center;font-size:12px;min-width:0}
+#cam18Extras label.camFollowLabel{grid-template-columns:74px minmax(0,1fr)}
+#cam18Extras input[type=range]{width:100%;min-width:0;accent-color:#90e7cd;touch-action:pan-x;pointer-events:auto}
+#cam18Extras select{min-width:0;max-width:100%;pointer-events:auto}
+#cam18Extras output{color:#c5fbf3;font-variant-numeric:tabular-nums;text-align:right;font-size:11px}
+#cam18Extras .camNote{font-size:11px;line-height:1.55;color:#aadddd}
+#cam18Extras .camReset{min-height:39px;border-color:#85aabb}
+#stage canvas{touch-action:none}
 #design01OverlayPanel{width:min(100%,470px);padding:19px 18px;border-radius:16px;background:#112734ee;border:1px solid #78a8aa;color:#f0f9f9;box-shadow:0 14px 36px #0b1415bb;pointer-events:auto}
 #design01OverlayPanel strong{font-size:16px;display:block;margin-bottom:8px}
 #design01OverlayPanel p{font-size:13px;line-height:1.65;margin:6px 0 14px;color:#d5e8ea}
@@ -85,6 +98,28 @@ a{color:#95e8df}
    <div id="cameraAdjustPanel" hidden>
     <strong>追尾しながら角度調整</strong>
     <div id="cameraAdjustHint">映像を1本指で動かすと角度変更、2本指で拡大縮小できます。</div>
+    <div id="cam18Extras" hidden>
+     <div class="camPreset">
+      <button type="button" data-cam18-view="side">真横</button>
+      <button type="button" data-cam18-view="insideSide">反対側</button>
+      <button type="button" data-cam18-view="front3q">斜め前</button>
+      <button type="button" data-cam18-view="chase">真後ろ</button>
+      <button type="button" data-cam18-view="field">自動追尾</button>
+     </div>
+     <label class="camFollowLabel">追う対象<select id="cam18Follow" aria-label="追う馬や馬群を選択">
+      <option value="auto">自動（馬群→先頭）</option>
+      <option value="pack">馬群の中央</option>
+      <option value="leader">先頭</option>
+      <option value="tail">最後尾</option>
+     </select></label>
+     <label>左右回転<input id="cam18Yaw" type="range" min="-180" max="180" step="1" value="0" aria-label="左右360度回転"/><output id="cam18YawValue">0°</output></label>
+     <label>上下角度<input id="cam18Pitch" type="range" min="-20" max="75" step="1" value="0" aria-label="カメラの仰角"/><output id="cam18PitchValue">0°</output></label>
+     <label>拡大縮小<input id="cam18Zoom" type="range" min="0.30" max="4" step="0.05" value="1" aria-label="カメラのズーム倍率"/><output id="cam18ZoomValue">1.0×</output></label>
+     <label>左右移動<input id="cam18Pan" type="range" min="-100" max="100" step="1" value="0" aria-label="視点の注視位置を左右に移動"/><output id="cam18PanValue">0m</output></label>
+     <label>上下移動<input id="cam18Lift" type="range" min="-24" max="24" step="0.5" value="0" aria-label="視点の注視位置を上下に移動"/><output id="cam18LiftValue">0m</output></label>
+     <button type="button" class="camReset" id="cam18Reset">↺ 視点調整を初期化</button>
+     <div class="camNote">1本指で360°回転・上下角度変更。2本指でつまむとズーム、2本指で同方向へ動かすと注視位置を移動します。追尾は続きます。</div>
+    </div>
     <div class="camGrid">
      <button type="button" data-cam-adjust="left" aria-label="左へ回転">↶ 左</button>
      <button type="button" data-cam-adjust="right" aria-label="右へ回転">右 ↷</button>
@@ -241,6 +276,12 @@ const stageStartBtn=document.querySelector('#stageStartBtn');
 const cameraAdjustToggle=document.querySelector('#cameraAdjustToggle');
 const cameraAdjustPanel=document.querySelector('#cameraAdjustPanel');
 const renderQuality=document.querySelector('#renderQuality');
+const cam18Extras=document.querySelector('#cam18Extras');
+if(isOfficialEighteenTest){
+ cam18Extras.hidden=false;
+ const follow=document.querySelector('#cam18Follow');
+ for(let i=1;i<=18;i++)follow.add(new Option('試験馬'+i,i+''));
+}
 if(isOfficialPairTest){
  stageDock.hidden=false;
  if(isOfficialEighteenTest){
