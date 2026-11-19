@@ -1094,7 +1094,8 @@ const RACE_CLEARANCE=.96;     // 近い位置にいる馬同士の横方向中�
 const RACE_FRONT_GAP=2.65;    // 同一進路で追突しないための前後中心間隔の目標
 let raceHorses=[],raceElapsed=0,raceFinished=[],raceAccumulator=0,raceContactWarnings=0;
 function initialDemoText(){
- return fieldMode.value==='race18'?'18頭のレースを開始':
+ return isOfficialPairTest?'正式モデル2頭を走らせる':
+ fieldMode.value==='race18'?'18頭のレースを開始':
   fieldMode.value==='field18'?'18頭を一斉にスタート':'SからGへ走らせる';
 }
 function initRaceHorses(){
@@ -1947,10 +1948,12 @@ function selectRace(){
  activePlan=racePlan(activeDistance);
  playing=false;travel=0;gateOpening=0;initRaceHorses();
  demoBtn.textContent=initialDemoText();
- document.querySelector('#raceOrder').textContent=fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
+ document.querySelector('#raceOrder').textContent=isOfficialPairTest?
+ '正式モデル2頭を表示しています（レース計算は既存の18頭エンジンで継続）。':
+ fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  highlightRace(activePlan);drawFieldGate(activePlan);
  fieldRoot.visible=fieldMode.value!=='single'&&!isOfficialPairTest;
- gateRoot.visible=fieldMode.value!=='single';
+ gateRoot.visible=fieldMode.value!=='single'&&!isOfficialPairTest;
  runner.visible=fieldMode.value==='single'&&(!isDesign01Review||installedDesign01);
  positionRunner();positionFieldHorses();updateGateDoors();
  const test=fieldLayoutCheck(activePlan);
@@ -1970,7 +1973,9 @@ document.querySelector('#startView').addEventListener('click',()=>setView('start
 function resetDemo(){
  travel=0;playing=false;gateOpening=0;initRaceHorses();updateGateDoors();
  demoBtn.textContent=initialDemoText();
- document.querySelector('#raceOrder').textContent=fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
+ document.querySelector('#raceOrder').textContent=isOfficialPairTest?
+ '正式モデル2頭を表示しています（レース計算は既存の18頭エンジンで継続）。':
+ fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  positionRunner();positionFieldHorses();
  if(fieldMode.value!=='single')setView('start');
  else if(['side','front3q','chase'].includes(view))setView(view);
@@ -2023,7 +2028,7 @@ function animate(time){
  const dt=Math.min(clock.getDelta(),.05);
  if(playing){
   if(fieldMode.value==='race18'){
-   if(updateRace(dt)){playing=false;demoBtn.textContent='18頭ゴール・もう一度'}
+   if(updateRace(dt)){playing=false;demoBtn.textContent=isOfficialPairTest?'2頭テストをもう一度':'18頭ゴール・もう一度'}
   }else{
    const step=16.7*Number(rate.value)*dt;
    travel=Math.min(activePlan?.distance||LAP,travel+step);
@@ -2055,11 +2060,11 @@ function animate(time){
   fps=fpsCount*1000/(time-lastTime||1);fpsCount=0;lastTime=time;
   const rest=Math.max(0,Math.round((activePlan?.distance||1400)-travel));
   drawElevationProfile();
-  const modeName=fieldMode.value==='race18'?'18頭レース':
+  const modeName=isOfficialPairTest?'正式Design 01・2頭テスト':fieldMode.value==='race18'?'18頭レース':
    fieldMode.value==='field18'?'18頭等速':'1頭デモ';
   info.textContent='東京芝A '+activeDistance+'m｜'+(playing?'走行中':'停止中')+
    '\n'+modeName+'｜残り'+rest+'m｜FPS '+fps.toFixed(0);
-  if(fieldMode.value==='race18')document.querySelector('#raceOrder').textContent=raceOrderText();
+  if(fieldMode.value==='race18'&&!isOfficialPairTest)document.querySelector('#raceOrder').textContent=raceOrderText();
   info.style.whiteSpace='pre-line';
  }
 }
