@@ -1063,6 +1063,7 @@ function initRaceHorses(){
   lane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
   targetLane:fieldGateCenterShift(width)+(8.5-i)*FIELD_STALL_WIDTH,
   innerTendency:11.4+(i%4)*.9,
+  freeInward:false,
   pace:16.2+((i*7+3)%18)*.087,
   acceleration:2.5+((i*5+1)%9)*.11,
   stamina:.89+((i*11+2)%17)*.008,
@@ -1159,7 +1160,13 @@ function stepRace(tick){
   if(openToRail){
    h.targetLane=innerRailLane;
    h.moveCooldown=0;
-  }else if(h.distance>3&&h.moveCooldown===0){
+   h.freeInward=true;
+  }else{
+   // 内側に馬が現れたら、直前の「内ラチまで一気に向かう」指示を取り消す。
+   if(h.freeInward){h.targetLane=lane;h.moveCooldown=0;}
+   h.freeInward=false;
+  }
+  if(!openToRail&&h.distance>3&&h.moveCooldown===0){
    const settle=Math.min(1,(h.distance-3)/115);
    const desired=Math.min(at.width/2-1.25,
     h.startLane+(h.number-1)/17*h.innerTendency*settle);
