@@ -2680,8 +2680,15 @@ function resetCamera18(){
  camera18.pan=0;camera18.lift=0;
  syncCamera18Controls();
 }
+function leaveBroadcastForManualCamera(){
+ if(isOfficialEighteenTest&&view==='broadcast'){
+  resetCamera18();
+  setView('field');
+ }
+}
 function adjustGroupCamera(kind){
  if(isOfficialEighteenTest){
+  leaveBroadcastForManualCamera();
   if(kind==='left')camera18.yaw=wrapCameraAngle(camera18.yaw-.21);
   if(kind==='right')camera18.yaw=wrapCameraAngle(camera18.yaw+.21);
   if(kind==='up')camera18.pitch=THREE.MathUtils.clamp(camera18.pitch+.10,-.35,1.31);
@@ -2706,12 +2713,14 @@ if(isOfficialPairTest){
    '1本指：360°回転と上下角度｜2本指：つまんで拡大縮小、動かして注視点移動';
   for(const [name,control] of Object.entries(camera18Inputs)){
    control.addEventListener('input',()=>{
+    leaveBroadcastForManualCamera();
     const value=Number(control.value);
     camera18[name]=(name==='yaw'||name==='pitch')?value*Math.PI/180:value;
     syncCamera18Controls();
    });
   }
   camera18Follow.addEventListener('change',()=>{
+   leaveBroadcastForManualCamera();
    camera18FixedAnchor=camera18Follow.value==='fixed'&&camera18LatestAnchor?
     {...camera18LatestAnchor}:null;
    syncCamera18Controls();
@@ -2752,6 +2761,8 @@ if(isOfficialPairTest){
   const previous=pointers.get(event.pointerId);
   const current={x:event.clientX,y:event.clientY};
   if(isOfficialEighteenTest){
+   if(Math.abs(current.x-previous.x)+Math.abs(current.y-previous.y)>0)
+    leaveBroadcastForManualCamera();
    if(pointers.size===1){
     if(event.pointerType==='mouse'&&(previous.pan||event.shiftKey)){
      camera18.pan=THREE.MathUtils.clamp(camera18.pan-
@@ -2808,6 +2819,7 @@ if(isOfficialEighteenTest){
  const stageCanvas=renderer.domElement;
  stageCanvas.addEventListener('wheel',event=>{
   if(event.cancelable)event.preventDefault();
+  leaveBroadcastForManualCamera();
   camera18.zoom=THREE.MathUtils.clamp(
    camera18.zoom*Math.exp(event.deltaY*.0013),.30,4);
   syncCamera18Controls();
