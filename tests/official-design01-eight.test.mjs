@@ -32,9 +32,9 @@ test('8 starting horses fit both the narrow 24m turf pocket and the standard tur
 
 test('official eight uses original full-detail GLB with independent bones, its own camera and GPU settings',()=>{
  assert.match(html,/const isOfficialEightTest=isDesign01Review&&qs\.get\('group'\)==='8'/);
- assert.match(html,/const OFFICIAL_TEST_COUNT=isOfficialEightTest\?8:isOfficialFourTest\?4:2/);
- assert.match(html,/renderQuality\.value=isOfficialEightTest\?'standard'/);
- assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:!isOfficialEightTest,/);
+ assert.match(html,/const OFFICIAL_TEST_COUNT=isOfficialEighteenTest\?18:isOfficialEightTest\?8:isOfficialFourTest\?4:2/);
+ assert.match(html,/renderQuality\.value=isOfficialEighteenTest\?'light':isOfficialEightTest\?'standard'/);
+ assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:!\(isOfficialEightTest\|\|isOfficialEighteenTest\),/);
  assert.match(extract('initializeOfficialPair'),/cloneSkeleton\(source\)/);
  assert.match(extract('initializeOfficialPair'),/for\(let i=0;i<OFFICIAL_TEST_COUNT;i\+\+\)/);
  assert.match(extract('updateOfficialPair'),/h\.mixer\.setTime\(gaitTime\)/);
@@ -57,7 +57,7 @@ function simulateEight(distance,variant='tokyo'){
  FOUR_LATERAL_SHARED=3.05,FOUR_INWARD_RATE=4.4,
  FOUR_MAX_LATERAL_PER_FORWARD=.30,
  EIGHT_MERGE_LONGITUDINAL_BUFFER=4.0,
- isOfficialEightTest=true,isOfficialFourTest=false,isOfficialMultiTest=true,OFFICIAL_TEST_COUNT=8;
+ isOfficialEightTest=true,isOfficialEighteenTest=false,isOfficialFourTest=false,isOfficialMultiTest=true,OFFICIAL_TEST_COUNT=8;
  ${profiles4}
  ${profiles8}
  ${widthSource}
@@ -174,7 +174,7 @@ test('8-horse camera tracks the pack and prioritizes the leader after the field 
  for(const aspect of [.58,.85,1.7])for(const mode of ['field','side','front3q','chase'])
  for(const gap of [0,7,14,20,27,40,75]){
   const ctx={THREE:fakeThree,OFFICIAL_TEST_COUNT:8,
-   isOfficialPairTest:true,isOfficialFourTest:false,isOfficialEightTest:true,isOfficialMultiTest:true,
+   isOfficialPairTest:true,isOfficialFourTest:false,isOfficialEightTest:true,isOfficialEighteenTest:false,isOfficialMultiTest:true,
    activePlan:{distance:1400},playing:false,RACE_TICK:1/60,raceAccumulator:0,
    groupCameraOffset:{yaw:0,pitch:0,zoom:1},
    stage:{clientWidth:800*aspect,clientHeight:800},
