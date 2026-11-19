@@ -1175,6 +1175,13 @@ function officialReviewLane(width,index,distance){
  const eased=t*t*(3-2*t);
  return inside-FOUR_START_OUTSIDE_OFFSET*(1-eased);
 }
+// The inward heading follows the lane trajectory (about 4 degrees maximum),
+// rather than making the original high-detail horse slide sideways.
+function fourHorseInwardSlope(distance){
+ if(!isOfficialFourTest||distance<=0||distance>=FOUR_INWARD_SETTLE_DISTANCE)return 0;
+ const t=distance/FOUR_INWARD_SETTLE_DISTANCE;
+ return FOUR_START_OUTSIDE_OFFSET*6*t*(1-t)/FOUR_INWARD_SETTLE_DISTANCE;
+}
 console.assert([24,28,31,36,41].every(w=>
  Array.from({length:OFFICIAL_TEST_COUNT},(_,i)=>i).every(i=>
  w/2-pairRailLane(w,i)>=PAIR_RAIL_CENTER_CLEARANCE-.001 &&
@@ -1829,7 +1836,14 @@ function updateOfficialPair(dt){
   // Both the official model and following camera use this same render-time pose.
   const a=raceHorsePosition(state);
   h.group.position.copy(a.p);
-  h.group.rotation.y=Math.atan2(a.t.x,a.t.z);
+  const inwardSlope=fourHorseInwardSlope(state.distance);
+  if(inwardSlope){
+   const left=new THREE.Vector3(a.t.z,0,-a.t.x);
+   const direction=a.t.clone().addScaledVector(left,inwardSlope).normalize();
+   h.group.rotation.y=Math.atan2(direction.x,direction.z);
+  }else{
+   h.group.rotation.y=Math.atan2(a.t.x,a.t.z);
+  }
   // Rig animation shares interpolated physics time. The clip and assets remain unchanged.
   const shownTime=Math.max(0,raceElapsed-
    (playing?RACE_TICK*(1-state.alpha):0));
