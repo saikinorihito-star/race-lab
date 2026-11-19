@@ -240,7 +240,7 @@ test('4-horse inward heading follows the actual lateral speed without allowing e
  assert.match(extract('updateOfficialPair'),/isOfficialFourTest\?/);
 });
 
-function runActualFourHorseSimulation(distance){
+function runActualFourHorseSimulation(distance,widthMode='standard'){
  const profiles=html.match(/const FOUR_PACE_PROFILES=\[[\s\S]*?\];/)?.[0];
  assert.ok(profiles,'Four-horse profiles missing');
  const code=['pairRailLane','officialReviewLane','fourHorseDesiredSlot',
@@ -255,7 +255,13 @@ function runActualFourHorseSimulation(distance){
  ${profiles}
  ${code}
  const activePlan={distance:trackDistance};
- const fieldCenterAt=(_p,d)=>({width:36+5*Math.sin(d/2083.1*Math.PI*2+.5)});
+ const fieldCenterAt=(_p,d)=>({
+  width:widthMode==='pocket24'?
+   (d<240?24:d<300?24+12*(d-240)/60:36):
+   widthMode==='pocket28'?
+    (d<240?28:d<300?28+8*(d-240)/60:36):
+    36+5*Math.sin(d/2083.1*Math.PI*2+.5)
+ });
  let raceElapsed=0,raceFinished=[];
  const raceHorses=Array.from({length:4},(_,i)=>({
   idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,
@@ -265,13 +271,26 @@ function runActualFourHorseSimulation(distance){
  const snapshots={},mark=[100,200,400,800];
  let minActiveCenterDistance=Infinity,minRailClearance=Infinity,
   maxLateralSpeed=0,stackedFrames=0,outwardSlotChanges=0,maxFrontGap=0,
-  maxInwardToForwardRatio=0,sidewaysWhileStopped=0;
+  maxInwardToForwardRatio=0,sidewaysWhileStopped=0,
+  frozenEarlyFinishers=0,lowInRaceSpeedFrames=0,minimumInRaceSpeed=Infinity,
+  longestPostFinishDistance=0,postFinishForwardFrames=0;
  const lastSlots=[0,1,2,3];
  for(let t=0;t<24000&&raceFinished.length<4;t++){
-  const before=raceHorses.map(h=>({distance:h.distance,lane:h.lane,finished:h.finished}));
+  const before=raceHorses.map(h=>({distance:h.distance,lane:h.lane,
+   postDistance:h.postDistance||0,finished:h.finished}));
   stepOfficialPair(1/60);
   const leader=Math.max(...raceHorses.map(h=>h.distance));
   for(const [i,h] of raceHorses.entries()){
+   if(before[i].finished&&raceFinished.length<4){
+    const coast=h.postDistance-before[i].postDistance;
+    if(coast<.01)frozenEarlyFinishers++;
+    else postFinishForwardFrames++;
+   }
+   longestPostFinishDistance=Math.max(longestPostFinishDistance,h.postDistance||0);
+   if(!h.finished&&h.distance>20){
+    minimumInRaceSpeed=Math.min(minimumInRaceSpeed,h.speed);
+    if(h.speed<8)lowInRaceSpeedFrames++;
+   }
    if(before[i].finished||h.finished)continue;
    const forward=h.distance-before[i].distance;
    const inward=Math.max(0,h.lane-before[i].lane);
@@ -301,9 +320,11 @@ function runActualFourHorseSimulation(distance){
  return {finished:raceFinished.length,minActiveCenterDistance,
   minRailClearance,maxLateralSpeed,stackedFrames,outwardSlotChanges,
   maxInwardToForwardRatio,sidewaysWhileStopped,
+  frozenEarlyFinishers,lowInRaceSpeedFrames,minimumInRaceSpeed,
+  longestPostFinishDistance,postFinishForwardFrames,
   snapshots,finishTimes:raceHorses.map(h=>h.finishTime)};
  })()`;
- return runInNewContext(source,{trackDistance:distance});
+ return runInNewContext(source,{trackDistance:distance,widthMode});
 }
 
 test('actual four-horse formation creates nose-to-tail stacking, safe overtakes and no weaving',()=>{
@@ -315,6 +336,16 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
   assert.ok(r.maxLateralSpeed<=4.401,'Sideways speed capped at 4.4m/s');
   assert.ok(r.maxInwardToForwardRatio<=.300001,'Diagonal path cannot exceed a 0.30 inward/forward slope');
   assert.equal(r.sidewaysWhileStopped,0,'No stationary sideways sliding');
+  assert.equal(r.frozenEarlyFinishers,0,
+   'No finished horse may freeze while any of the four is still racing');
+  assert.equal(r.lowInRaceSpeedFrames,0,
+   'Horses must not suddenly stop or crawl before the goal after 20m');
+  assert.ok(r.minimumInRaceSpeed>10,
+   'Maintain smooth forward progression before the finish');
+  assert.ok(r.postFinishForwardFrames>0,
+   'At least one early finisher must keep moving while other horses race');
+  assert.ok(r.longestPostFinishDistance>24,
+   'Four-horse race must not have the former 24m post-finish stop');
   assert.equal(r.outwardSlotChanges,0,'No rapid outward-inward lane oscillation');
   assert.ok(r.stackedFrames>100,'Must visibly queue nose-to-tail at some stage');
   const start=r.snapshots[100].map(h=>h.d);
@@ -406,4 +437,28 @@ test('traffic stop also stops lateral movement on the same tick',()=>{
  assert.ok(moved.distance>=h.distance,'Never reverse');
  assert.ok(moved.lane-h.lane<=.30*(moved.distance-h.distance)+1e-9,
   'Blocked forward motion may not produce independent sideways motion');
+});
+
+test('four-horse finish runout stays smooth on narrow pocket courses as well as normal widths',()=>{
+ for(const widthMode of ['standard','pocket24','pocket28']){
+  for(const distance of [1400,1600,1800,2000,2300,2400,2500,2600,3400]){
+   const r=runActualFourHorseSimulation(distance,widthMode);
+   assert.equal(r.finished,4,'All horses finish '+distance+'m, '+widthMode);
+   assert.equal(r.frozenEarlyFinishers,0,'No early finisher stops while competitors race, '+widthMode);
+   assert.equal(r.lowInRaceSpeedFrames,0,'No horse stalls before finish, '+widthMode);
+   assert.ok(r.minimumInRaceSpeed>10,'Minimum in-race speed above 10m/s, '+widthMode);
+   assert.ok(r.longestPostFinishDistance>24,'No legacy 24m stop, '+widthMode);
+   assert.ok(r.longestPostFinishDistance<85,'Do not exceed drawn 90m finish runout, '+widthMode);
+   assert.ok(r.minRailClearance>=3.7-1e-8,'Keep the inner rail clearance, '+widthMode);
+   assert.ok(r.minActiveCenterDistance>=3.0,'Horses must not overlap, '+widthMode);
+  }
+ }
+});
+
+test('approved 2-horse mode still uses its original independent finish-out behavior',()=>{
+ const step=extract('stepOfficialPair');
+ assert.match(step,/if\(isOfficialFourTest\)\{/);
+ assert.match(step,/h\.postDistance\+=h\.postSpeed\*tick/);
+ assert.match(step,/h\.postDistance=Math\.min\(24,h\.postDistance\+12\*tick\)/);
+ assert.match(step,/h\.postSpeed=Math\.max\(10\.5,/);
 });
