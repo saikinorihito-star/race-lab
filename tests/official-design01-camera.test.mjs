@@ -32,6 +32,7 @@ function rig(angle=0){
  const tangent=new Vec3(Math.cos(angle),0,Math.sin(angle));
  const shot=runInNewContext('('+extract('officialEighteenCameraShot')+')',{
   THREE,camera18:state,camera18Follow:focus,
+  camera18FixedAnchor:null,camera18LatestAnchor:null,
   activePlan:{distance:1400},
   fieldCenterAt:(_p,d)=>({p:new Vec3(d*tangent.x,3,d*tangent.z),t:tangent})
  });
@@ -86,6 +87,25 @@ test('zoom ranges from close-up to wide framing without affecting follow state',
  const wide=offset(r.shot('side',race));
  assert.ok(magnitude(wide)>magnitude(close)*10);
  assert.equal(r.focus.value,'auto');
+});
+
+test('stationary camera keeps its world focus while horses pass, then normal tracking resumes',()=>{
+ const r=rig();
+ r.focus.value='fixed';
+ const first=r.shot('side',race);
+ const later={...race,
+  horses:race.horses.map(h=>({...h,distance:h.distance+170})),
+  lead:{...race.lead,distance:570},
+  leadDistance:570,tailDistance:536,gap:34,blend:1};
+ const second=r.shot('side',later);
+ small(first.target.x,second.target.x);
+ small(first.target.z,second.target.z);
+ r.focus.value='auto';
+ const resumed=r.shot('side',later);
+ assert.ok(resumed.target.x>first.target.x+150,'Auto follow resumes moving with horses');
+ assert.match(html,/value="fixed">現在位置に固定/);
+ assert.match(html,/camera18FixedAnchor=camera18Follow\.value==='fixed'/);
+ assert.match(extract('officialEighteenCameraShot'),/camera18FixedAnchor=\{distance,lane\}/);
 });
 
 test('target panning and individual-horse focus work independently of view rotation',()=>{
