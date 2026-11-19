@@ -1097,6 +1097,91 @@ for(let i=0;i<TREE_COUNT;i++){
 }
 trunks.instanceMatrix.needsUpdate=true;crowns.instanceMatrix.needsUpdate=true;
 caps.instanceMatrix.needsUpdate=true;scene.add(trunks);scene.add(crowns);scene.add(caps);
+// Official 18-runner backgrounds use three distinct trees: broadleaf, conifer
+// and tall oval-canopy. Instanced meshes keep this to nine draw calls rather
+// than hundreds of individually rendered detailed trees.
+const RACE_TREE_TYPES=[
+ {name:'広葉樹',trunk:6,shape:'round',crown:0x397441},
+ {name:'針葉樹',trunk:8,shape:'pine',crown:0x27663e},
+ {name:'高木',trunk:9,shape:'tall',crown:0x5b8b52}
+];
+const RACE_TREE_SITES=[
+ [STRAIGHT+115,BACK_START-65], // first turn: well behind the outer rail
+ [BACK_START+40,BACK_END-50],   // back straight: visible in distant tracking
+ [BACK_END+75,LAP-35]          // turn into home, away from the stands
+];
+const raceForest=new THREE.Group();
+raceForest.name='Design01_18_ThreeTreeSpecies';
+if(isOfficialEighteenTest){
+ // Hide the older single broadleaf rows ONLY in the approved 18 test.
+ trunks.visible=false;crowns.visible=false;caps.visible=false;
+ const trunkGeoRace=new THREE.CylinderGeometry(.42,.68,1,7);
+ const trunkMatRace=new THREE.MeshStandardMaterial({color:0x6a5040,roughness:.96});
+ const forestDummy=new THREE.Object3D();
+ const perType=36;
+ for(let type=0;type<RACE_TREE_TYPES.length;type++){
+  const spec=RACE_TREE_TYPES[type];
+  const lowerGeo=type===1?new THREE.ConeGeometry(4.0,7.4,8):
+   new THREE.IcosahedronGeometry(1,1);
+  const upperGeo=type===1?new THREE.ConeGeometry(3.1,6.5,8):
+   new THREE.IcosahedronGeometry(1,1);
+  const leafMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,flatShading:true});
+  const trunkMesh=new THREE.InstancedMesh(trunkGeoRace,trunkMatRace,perType);
+  const lower=new THREE.InstancedMesh(lowerGeo,leafMat,perType);
+  const upper=new THREE.InstancedMesh(upperGeo,leafMat,perType);
+  trunkMesh.name=spec.name+'_trunks';
+  lower.name=spec.name+'_canopy';
+  upper.name=spec.name+'_top';
+  for(let i=0;i<perType;i++){
+   const segment=i%RACE_TREE_SITES.length,[start,end]=RACE_TREE_SITES[segment];
+   const indexWithin=Math.floor(i/RACE_TREE_SITES.length);
+   const fraction=(indexWithin+.30+((i*7+type*3)%5)*.09)/12;
+   const station=start+(end-start)*Math.min(.98,fraction);
+   const outside=34+((i+type*3)%5)*6;
+   const p=offsetAt(station,MEASURE_OFFSET-renderedTurfWidthAt(station)-outside);
+   const scale=.82+((i*11+type*7)%9)*.055;
+   forestDummy.rotation.set(0,(i*2.2+type*.9)%6.28,0);
+   forestDummy.position.set(p.x,p.y+spec.trunk*scale/2,p.z);
+   forestDummy.scale.set(scale,spec.trunk*scale,scale);
+   forestDummy.updateMatrix();trunkMesh.setMatrixAt(i,forestDummy.matrix);
+   if(type===0){
+    forestDummy.position.set(p.x,p.y+(spec.trunk+1.7)*scale,p.z);
+    forestDummy.scale.set(5.8*scale,4.2*scale,5.3*scale);
+   }else if(type===1){
+    forestDummy.position.set(p.x,p.y+(spec.trunk+1.25)*scale,p.z);
+    forestDummy.scale.set(scale,scale,scale);
+   }else{
+    forestDummy.position.set(p.x,p.y+(spec.trunk+2.15)*scale,p.z);
+    forestDummy.scale.set(4.25*scale,6.2*scale,3.8*scale);
+   }
+   forestDummy.updateMatrix();lower.setMatrixAt(i,forestDummy.matrix);
+   if(type===0){
+    forestDummy.position.set(p.x+1.1*scale,p.y+(spec.trunk+4.6)*scale,p.z-.5*scale);
+    forestDummy.scale.set(4.3*scale,3.5*scale,4.3*scale);
+   }else if(type===1){
+    forestDummy.position.set(p.x,p.y+(spec.trunk+5.5)*scale,p.z);
+    forestDummy.scale.set(.84*scale,.85*scale,.84*scale);
+   }else{
+    forestDummy.position.set(p.x-.8*scale,p.y+(spec.trunk+5.9)*scale,p.z+.4*scale);
+    forestDummy.scale.set(3.5*scale,4.7*scale,3.45*scale);
+   }
+   forestDummy.updateMatrix();upper.setMatrixAt(i,forestDummy.matrix);
+   const palette=type===0?[0x357344,0x427c46,0x508652]:
+    type===1?[0x245d3c,0x2e7044,0x386d41]:
+    [0x5b8746,0x66914c,0x51814c];
+   lower.setColorAt(i,new THREE.Color(palette[i%palette.length]));
+   upper.setColorAt(i,new THREE.Color(palette[(i+1)%palette.length]));
+  }
+  for(const mesh of [trunkMesh,lower,upper]){
+   mesh.instanceMatrix.needsUpdate=true;
+   if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+   mesh.frustumCulled=false;
+   raceForest.add(mesh);
+  }
+ }
+ scene.add(raceForest);
+}
+
 
 // 芝9距離のS→G走行経路。コース外形・専用ポケットの座標は参考図に基づく近似。
 const RACE_DISTANCES=[1400,1600,1800,2000,2300,2400,2500,2600,3400];
