@@ -2318,12 +2318,12 @@ function tintOriginalHelmetAndCloth(model,horseNumber){
    shader.uniforms.raceFrameTint={value:tint};
    shader.vertexShader=shader.vertexShader.replace(
     '#include <common>',
-    '#include <common>\\nattribute float raceTintZone;\\nvarying float vRaceTintZone;')
+    '#include <common>\nattribute float raceTintZone;\nvarying float vRaceTintZone;')
     .replace('#include <begin_vertex>',
-    '#include <begin_vertex>\\nvRaceTintZone=raceTintZone;');
+    '#include <begin_vertex>\nvRaceTintZone=raceTintZone;');
    shader.fragmentShader=shader.fragmentShader.replace(
     '#include <common>',
-    '#include <common>\\nuniform vec3 raceFrameTint;\\nvarying float vRaceTintZone;')
+    '#include <common>\nuniform vec3 raceFrameTint;\nvarying float vRaceTintZone;')
     .replace('#include <color_fragment>',`#include <color_fragment>
     if(vRaceTintZone>.30){
      // Use BLUE from the original texture as the gate; leave reins,
@@ -2331,7 +2331,7 @@ function tintOriginalHelmetAndCloth(model,horseNumber){
      float originalBlue=diffuseColor.b-max(diffuseColor.r,diffuseColor.g);
      float blueMask=smoothstep(.018,.085,originalBlue);
      float brightMask=vRaceTintZone>.87?
-      smoothstep(.55,.85,min(min(diffuseColor.r,diffuseColor.g),diffuseColor.b)):.0;
+      smoothstep(.55,.85,min(min(diffuseColor.r,diffuseColor.g),diffuseColor.b)):0.0;
      float mask=max(blueMask,brightMask*.88);
      float lightness=dot(diffuseColor.rgb,vec3(.2126,.7152,.0722));
      vec3 shaded=raceFrameTint*(.55+min(.55,lightness*.95));
