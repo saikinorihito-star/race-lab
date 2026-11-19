@@ -67,7 +67,7 @@ test('horse name bubbles reveal leader then second then third and disappear betw
   group:{
    visible:true,
    updateWorldMatrix(){},
-   localToWorld(v){v.x=-.75+i*.65;v.y=0;v.z=0;return v}
+   localToWorld(v){v.x=-.75+(i%3)*.65;v.y=0;v.z=0;return v}
   }
  }));
  const ranked=Array.from({length:18},(_,i)=>({index:i,name:'試験馬'+(i+1)}));
