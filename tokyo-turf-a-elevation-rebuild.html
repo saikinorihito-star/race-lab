@@ -2439,9 +2439,34 @@ if(isOfficialPairTest){
  });
  canvas.addEventListener('pointermove',event=>{
   if(!pointers.has(event.pointerId))return;
+  if(isOfficialEighteenTest&&event.cancelable)event.preventDefault();
   const previous=pointers.get(event.pointerId);
   const current={x:event.clientX,y:event.clientY};
-  if(pointers.size===1){
+  if(isOfficialEighteenTest){
+   if(pointers.size===1){
+    camera18.yaw=wrapCameraAngle(camera18.yaw+
+     (current.x-previous.x)/Math.max(240,stage.clientWidth)*Math.PI*1.9);
+    camera18.pitch=THREE.MathUtils.clamp(camera18.pitch-
+     (current.y-previous.y)/Math.max(240,stage.clientHeight)*1.6,
+     -.35,1.31);
+   }else if(pointers.size===2){
+    const other=[...pointers.entries()].find(([id])=>id!==event.pointerId)?.[1];
+    if(other){
+     const before=Math.hypot(previous.x-other.x,previous.y-other.y);
+     const after=Math.hypot(current.x-other.x,current.y-other.y);
+     if(before>9&&after>9)
+      camera18.zoom=THREE.MathUtils.clamp(
+       camera18.zoom*before/after,.30,4);
+     // Moving both fingers together pans the focus while the horse group
+     // keeps moving. The target offset never resets at the next frame.
+     camera18.pan=THREE.MathUtils.clamp(camera18.pan-
+      (current.x-previous.x)*.13*camera18.zoom,-100,100);
+     camera18.lift=THREE.MathUtils.clamp(camera18.lift+
+      (current.y-previous.y)*.10*camera18.zoom,-24,24);
+    }
+   }
+   syncCamera18Controls();
+  }else if(pointers.size===1){
    groupCameraOffset.yaw+=(current.x-previous.x)/Math.max(240,stage.clientWidth)*1.7;
    groupCameraOffset.pitch=THREE.MathUtils.clamp(
     groupCameraOffset.pitch-(current.y-previous.y)/Math.max(240,stage.clientHeight)*1.05,
@@ -2449,11 +2474,11 @@ if(isOfficialPairTest){
   }else if(pointers.size===2){
    const other=[...pointers.entries()].find(([id])=>id!==event.pointerId)?.[1];
    if(other){
-    const previousDistance=Math.hypot(previous.x-other.x,previous.y-other.y);
-    const nextDistance=Math.hypot(current.x-other.x,current.y-other.y);
-    if(previousDistance>9&&nextDistance>9)
+    const before=Math.hypot(previous.x-other.x,previous.y-other.y);
+    const after=Math.hypot(current.x-other.x,current.y-other.y);
+    if(before>9&&after>9)
      groupCameraOffset.zoom=THREE.MathUtils.clamp(
-      groupCameraOffset.zoom*previousDistance/nextDistance,.5,2.5);
+      groupCameraOffset.zoom*before/after,.5,2.5);
    }
   }
   pointers.set(event.pointerId,current);
