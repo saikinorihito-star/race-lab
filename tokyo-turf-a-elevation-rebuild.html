@@ -3162,11 +3162,15 @@ function officialEighteenCameraShot(which,context){
  const screenRight=new THREE.Vector3(outward.z,0,-outward.x).normalize();
  const target=focus.clone().addScaledVector(screenRight,camera18.pan)
   .add(new THREE.Vector3(0,2+camera18.lift,0));
- // Negative camera lift may aim underground and black out the whole field.
- target.y=Math.max(a.p.y+2.6,target.y);
+ // Track height varies by up to 2.7m. Ground clearance must be checked
+ // at the camera AND at the panned aim point, not just at the tracked horse.
+ const tangent=a.t.clone().normalize();
+ const groundAt=point=>fieldCenterAt(activePlan,THREE.MathUtils.clamp(
+  distance+point.clone().sub(focus).dot(tangent),0,activePlan.distance)).p.y;
+ target.y=Math.max(target.y,a.p.y+2.6,groundAt(target)+2.6);
  const eye=target.clone().addScaledVector(outward,radius*Math.cos(elevation))
   .add(new THREE.Vector3(0,radius*Math.sin(elevation),0));
- eye.y=Math.max(a.p.y+2.25,eye.y);
+ eye.y=Math.max(eye.y,a.p.y+2.25,groundAt(eye)+2.25);
  return {eye,target,gap,focusedOnLead:blend>=.8};
 }
 function officialPairCameraShot(which='field'){
