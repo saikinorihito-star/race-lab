@@ -1435,55 +1435,45 @@ function fourHorseDesiredSlot(h,snapshot){
 }
 function fourHorseSafeStep(h,snapshot,dt,targetSpeed){
  const width=fieldCenterAt(activePlan,h.distance).width;
- const inner=pairRailLane(width,fourHorseDesiredSlot(h,snapshot));
- // スタートから最内へ押し寄せる。最初の約15mだけ横移動を滑らかに加速。
+ const inner=pairRailLane(width,0);
  const lateralRate=FOUR_INWARD_RATE*(.62+.38*THREE.MathUtils.clamp(h.distance/15,0,1));
- let nextLane=Math.min(inner,h.lane+
-  Math.min(lateralRate*dt,Math.max(0,inner-h.lane)));
- let yieldSpeed=null;
- // 横切る経路に他馬がいる場合だけ止める。遠いレーンの馬まで
- // 不要にブロックせず、前後5mほどの近距離だけ慎重に扱う。
- for(const x of snapshot){
-  if(x.idx===h.idx||x.finished)continue;
-  const gap=x.distance-h.distance;
-  if(Math.abs(gap)>7.0)continue;
-  if(x.lane<=h.lane-FOUR_LATERAL_SHARED)continue;
-  if(x.lane-nextLane<FOUR_LATERAL_SHARED){
-   nextLane=Math.min(nextLane,x.lane-FOUR_LATERAL_SHARED);
-   if(gap>-1.0&&gap<FOUR_MIN_LONGITUDINAL+1.0)
-    yieldSpeed=Math.min(yieldSpeed??Infinity,Math.max(11,x.speed-2.3));
+ // Look ahead to a slower horse BEFORE reaching the minimum headway.
+ // The former hard clip newDistance=Math.max(h.distance,allowed) froze horses
+ // at the 1400m start after ~45m when their lateral paths converged.
+ let target=targetSpeed;
+ for(const other of snapshot){
+  if(other.idx===h.idx||other.finished)continue;
+  const ahead=other.distance-h.distance;
+  if(ahead>0&&ahead<16&&Math.abs(other.lane-h.lane)<3.25){
+   target=Math.min(target,other.speed+Math.max(-1.6,(ahead-5.1)*.75));
   }
  }
- // 柵からの余裕を維持。コース幅の変化に対する5cmの補正を加える。
+ const acceleration=FOUR_PACE_PROFILES[h.idx].accel;
+ const changing=target>=h.speed?acceleration:4.8;
+ let nextSpeed=h.speed+THREE.MathUtils.clamp(target-h.speed,
+  -changing*dt,changing*dt);
+ // Once galloping, adapt to traffic at speed rather than abruptly braking to
+ // a standstill. While launching, do not artificially jump to cruising speed.
+ nextSpeed=Math.max(Math.min(11,Math.max(0,h.speed)),nextSpeed);
+ const nextDistance=Math.min(activePlan.distance,h.distance+nextSpeed*dt);
+ // The inward surge must stay diagonal: no forward movement => no side shift.
+ const inwardBudget=Math.max(0,nextDistance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD;
+ let nextLane=Math.min(inner-.05,h.lane+Math.min(
+  lateralRate*dt,inwardBudget,Math.max(0,inner-.05-h.lane)));
+ // A nearby horse in the lane we are moving INTO takes priority.
+ // Stay outside until a real longitudinal gap exists; never force a freeze
+ // by clamping the forward distance to the other horse's distance.
+ for(const other of snapshot){
+  if(other.idx===h.idx||other.finished)continue;
+  const relative=(other.distance+other.speed*dt)-nextDistance;
+  if(Math.abs(relative)<6.8&&other.lane>h.lane){
+   nextLane=Math.min(nextLane,other.lane-3.17);
+  }
+ }
  nextLane=THREE.MathUtils.clamp(Math.max(h.lane,nextLane),
   -width/2+1.6,inner-.05);
- let nextSpeed=h.speed;
- const target=yieldSpeed===null?targetSpeed:Math.min(targetSpeed,yieldSpeed);
- const longitudinalRate=target>h.speed?FOUR_PACE_PROFILES[h.idx].accel:3.3;
- nextSpeed+=THREE.MathUtils.clamp(target-h.speed,
-  -longitudinalRate*dt,longitudinalRate*dt);
- let nextDistance=Math.min(activePlan.distance,h.distance+nextSpeed*dt);
- // 内側へ寄る動きは前進と連動させる。発馬直後に横だけ動かない。
- // 同時に、この時点の安全判定を実際の斜め進行位置で行う。
- nextLane=Math.min(nextLane,
-  h.lane+Math.max(0,nextDistance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD);
- // 同じ進路に先行馬がいる場合は4.8mの前後間隔を優先する。
- for(const x of snapshot){
-  if(x.idx===h.idx||x.finished)continue;
-  const ahead=x.distance-h.distance;
-  if(ahead>.0001&&ahead<FOUR_MIN_LONGITUDINAL+2 &&
-   Math.abs(x.lane-nextLane)<FOUR_LATERAL_SHARED){
-   const allowed=x.distance+x.speed*dt-FOUR_MIN_LONGITUDINAL;
-   nextDistance=Math.min(nextDistance,Math.max(h.distance,allowed));
-  }
- }
- // 他馬を避けるために前進が遅れた場合は、横移動も同じ割合で抑える。
- nextLane=Math.min(nextLane,
-  h.lane+Math.max(0,nextDistance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD);
- nextSpeed=Math.min(nextSpeed,Math.max(0,(nextDistance-h.distance)/dt));
  return {distance:nextDistance,lane:nextLane,speed:nextSpeed};
-}
-function stepOfficialPair(tick){
+}function stepOfficialPair(tick){
  if(!activePlan||raceFinished.length>=OFFICIAL_TEST_COUNT)return;
  const previous=raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>({
   idx:h.idx,distance:h.distance,lane:h.lane,speed:h.speed,finished:h.finished
@@ -2503,7 +2493,9 @@ function animate(time){
   document.querySelector('#officialPairStatus').textContent=
    '先頭・最後尾差 '+shot.gap.toFixed(1)+'m｜'+
    (shot.focusedOnLead?'先頭と後方の走路を優先':'馬群の間隔に合わせて追尾')+
-   '｜内ラチまで中心3.7m以上';
+   '｜内ラチまで中心3.7m以上'+
+   (isOfficialFourTest?'｜速度(m/s) '+raceHorses.slice(0,4).map((h,i)=>
+    (i+1)+':'+(h.speed||0).toFixed(1)).join('／'):'');
  }
   info.style.whiteSpace='pre-line';
   maxFrameMs=0;slowFrames=0;
