@@ -2794,8 +2794,14 @@ const clock=new THREE.Clock();
 let lastTime=0,fpsCount=0,fps=0;
 // Average FPS can hide rare long frames in iPhone Safari.
 let lastFrameStamp=0,maxFrameMs=0,slowFrames=0;
+let lastStageWidth=0,lastStageHeight=0;
 function resize(){
  const w=stage.clientWidth,h=stage.clientHeight;
+ // Safari may fire resize events as address/tool bars animate even if the
+ // WebGL stage size is unchanged. Avoid reallocating the drawing buffer,
+ // a potential cause of sporadic full-canvas flashes on iPhone.
+ if(isOfficialEighteenTest&&w===lastStageWidth&&h===lastStageHeight)return;
+ lastStageWidth=w;lastStageHeight=h;
  camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();renderer.setSize(w,h,false);
  if(view==='all'||view==='top'||view==='start'||view==='field')setView(view);
  drawElevationProfile();
