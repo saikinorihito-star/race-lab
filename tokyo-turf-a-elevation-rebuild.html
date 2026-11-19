@@ -120,6 +120,7 @@ a{color:#95e8df}
 <label><input type="checkbox" id="showStands" checked/>スタンド建物を表示</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
+<div class="tools" id="design01OriginalInfo" hidden><strong>以前制作したDesign 01の馬で1頭走行</strong> <a href="./model-preview.html">元の馬を拡大して確認</a></div>
 <div class="tools" id="design01Loader" hidden>
  <label><strong>Design 01・承認済みギャロップV2</strong> <input id="design01File" type="file" accept=".glb,model/gltf-binary" aria-label="Design 01 ギャロップV2のGLBを選択"/></label>
  <span id="design01Status">承認済みGLBを読み込んでいません。最初の1回だけファイルを選択してください。次回から同じ端末で自動読み込みします。</span>
@@ -164,6 +165,7 @@ a{color:#95e8df}
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {makeDesign01Builder} from './design01-race.mjs';
 
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
 const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate'),checkLabels=document.querySelector('#labels');
@@ -171,7 +173,10 @@ const courseSigns=document.querySelector('#courseSigns');
 const showStands=document.querySelector('#showStands');
 const fieldMode=document.querySelector('#fieldMode'),gridStatus=document.querySelector('#gridStatus');
 const isDesign01Review=new URLSearchParams(window.location.search).get('model')==='design01';
-if(isDesign01Review)fieldMode.value='single';
+if(isDesign01Review){
+ fieldMode.value='single';
+ document.querySelector('#design01OriginalInfo').hidden=false;
+}
 const design01Loader=document.querySelector('#design01Loader'),design01File=document.querySelector('#design01File');
 const design01Status=document.querySelector('#design01Status');
 const LAP=2083.1,STRAIGHT=560,BACK_STRAIGHT=542,RIGHT_TURN_LEN=449,MEASURE_OFFSET=1;
@@ -1641,9 +1646,44 @@ runner=new THREE.Group();const fallback=fallbackHorse();runner.add(fallback);sce
 // サンプル馬とは分離し、ユーザーの端末上にGLBを一度保存する。勝手に18頭へは複製しない。
 const DESIGN01_CACHE_KEY='design01-gallop-v2-approved';
 let installedDesign01=false,installedScene=null,horseLoaderGeneration=0;
+// 実際に以前制作した1頭モデルを直接組み立てる。別デザインのGLBと混同しない。
+// もとの model-preview.mjs と同じ馬体寸法・騎手・ゼッケン4・装具。
+// model-preview.mjsの9.8rad/sのギャロップ姿勢も以下で移植。
+let originalDesign01=null,originalGaitTime=0;
+if(isDesign01Review){
+ const builder=makeDesign01Builder(THREE,scene,
+  ()=>({coat:'#583930',helmet:'#194fd5'}));
+ originalDesign01=builder.build(4);
+ runner.remove(fallback);
+ // 元モデルの前方は+X、コースのrunner前方は+Z。
+ originalDesign01.group.rotation.y=-Math.PI/2;
+ runner.add(originalDesign01.group);
+ installedDesign01=true;
+ runner.visible=true;
+ msg.textContent='以前制作したDesign 01の馬をそのまま使用。横から脚の動きを確認できます。GLBの読み込みは不要です。';
+}
+function animateOriginalDesign01(dt){
+ if(!originalDesign01)return;
+ originalGaitTime+=dt*Math.min(2,Number(rate.value));
+ const ph=originalGaitTime*9.8;
+ for(const leg of originalDesign01.legs){
+  const offset=leg.front?(leg.side>0?0:.30):(leg.side>0?Math.PI:Math.PI+.30);
+  const k=ph+offset;
+  leg.hip.rotation.z=.57*Math.sin(k);
+  leg.knee.rotation.z=-.28-.40*Math.max(0,Math.sin(k+.68));
+ }
+ originalDesign01.neckPivot.rotation.z=.05*Math.sin(ph);
+ originalDesign01.headPivot.rotation.z=.06*Math.sin(ph+.5);
+ originalDesign01.riderPivot.position.y=originalDesign01.riderRestY+.035*Math.sin(ph*2);
+ originalDesign01.riderPivot.rotation.z=-.047+.027*Math.sin(ph+.7);
+ originalDesign01.tailPivot.rotation.y=.12*Math.sin(ph*.60);
+ originalDesign01.tailPivot.rotation.z=.08*Math.sin(ph*.77);
+ originalDesign01.group.position.y=.055+.070*Math.abs(Math.sin(ph));
+ // 既存の進路追従yawを上書きせず、元と同じ上下の揺れを加える。
+}
 function setDesign01Status(message){design01Status.textContent=message}
 function updateDesign01Panel(){
- design01Loader.hidden=fieldMode.value!=='single';
+ design01Loader.hidden=isDesign01Review||fieldMode.value!=='single';
  demoBtn.disabled=fieldMode.value==='single'&&isDesign01Review&&!installedDesign01;
  if(fieldMode.value==='single'){
   if(installedDesign01)setDesign01Status('承認済みDesign 01・ギャロップV2を読み込み済み。1頭走行を確認できます。');
@@ -1734,18 +1774,18 @@ design01File.addEventListener('change',async()=>{
   updateDesign01Panel();
  }
 });
-maybeLoadStoredHorse();
+if(!isDesign01Review)maybeLoadStoredHorse();
 // 承認済みの馬はそのまま。走りを確認しやすい真横・斜め前を主カメラにする。
 function oneHorseCameraShot(a,which){
  const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
- const target=a.p.clone().addScaledVector(a.t,.8).add(new THREE.Vector3(0,1.5,0));
+ const target=a.p.clone().addScaledVector(a.t,.8).add(new THREE.Vector3(0,1.65,0));
  let eye;
  if(which==='side'){
   // 進行方向とほぼ直交し、前後の脚・蹄の接地が見える低い視点。
-  eye=a.p.clone().addScaledVector(side,11.5).addScaledVector(a.t,1.7)
+  eye=a.p.clone().addScaledVector(side,9).addScaledVector(a.t,1.2)
    .add(new THREE.Vector3(0,3.1,0));
  }else if(which==='front3q'){
-  eye=a.p.clone().addScaledVector(side,10.5).addScaledVector(a.t,9)
+  eye=a.p.clone().addScaledVector(side,9.5).addScaledVector(a.t,7)
    .add(new THREE.Vector3(0,3.7,0));
  }else{
   eye=a.p.clone().addScaledVector(a.t,-18).add(new THREE.Vector3(0,10,0));
@@ -1891,6 +1931,7 @@ function resetDemo(){
  positionRunner();positionFieldHorses();
  if(fieldMode.value!=='single')setView('start');
  else if(['side','front3q','chase'].includes(view))setView(view);
+ if(originalDesign01)originalGaitTime=0;
 }
 demoBtn.addEventListener('click',()=>{
  if(!activePlan)return;
@@ -1943,8 +1984,9 @@ function animate(time){
   }else{
    const step=16.7*Number(rate.value)*dt;
    travel=Math.min(activePlan?.distance||LAP,travel+step);
-   if(fieldMode.value==='single'&&runnerMixer){
-    runnerMixer.update(dt*Math.min(2,Number(rate.value)));
+   if(fieldMode.value==='single'){
+    if(originalDesign01)animateOriginalDesign01(dt);
+    else if(runnerMixer)runnerMixer.update(dt*Math.min(2,Number(rate.value)));
    }
    if(activePlan&&travel>=activePlan.distance){
     playing=false;demoBtn.textContent=fieldMode.value==='field18'?'18頭ゴール・もう一度':'ゴール到達・もう一度';
