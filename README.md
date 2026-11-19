@@ -1,5 +1,8 @@
 # Race Lab — 競馬レース展開シミュレーター（試作 v0.1）
 
+> **正式採用モデルの厳守事項（2026-11-19）**：BabylonJSでユーザーが承認した茶色の馬・青ゼッケン4・青白菱形勝負服は、**元Meshyモデル `Meshy_AI_Blue_Ribbon_Racer_1117140038_texture.glb`** が唯一の正解。球体から制作した似た別モデル・旧UV破損GLBは採用不可。元の外観を保持して1頭のギャロップ確認を先に完成させ、ユーザー承認後に18頭へ。検証事項・SHA-256は **[docs/APPROVED-DESIGN01-READFIRST.md](docs/APPROVED-DESIGN01-READFIRST.md)** を必ず先に読むこと。
+
+
 18頭の脚質・スピード・スタミナ・末脚を設定し、架空の競馬レースを再生する **iPhone向けPWA** です。
 
 ## できること
