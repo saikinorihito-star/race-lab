@@ -1989,7 +1989,61 @@ function inspectMarker(){
  markerInfo.textContent=remain===0?'決勝線：残り距離の基準点':('ハロン棒「'+remain/100+'」＝残り'+remain+'m ／ '+regionForS(ss)+'（近似）');
 }
 markerFocus.addEventListener('change',inspectMarker);
-// 2頭用：近いときは両馬を写し、離れたら先頭とその後方8〜10mを主画角に。
+// 追尾中のカメラでも、利用者が指定した微調整を上書きしない。
+const groupCameraOffset={yaw:0,pitch:0,zoom:1};
+function adjustGroupCamera(kind){
+ if(kind==='left')groupCameraOffset.yaw-=.14;
+ if(kind==='right')groupCameraOffset.yaw+=.14;
+ if(kind==='up')groupCameraOffset.pitch=Math.min(.48,groupCameraOffset.pitch+.085);
+ if(kind==='down')groupCameraOffset.pitch=Math.max(-.40,groupCameraOffset.pitch-.085);
+ if(kind==='near')groupCameraOffset.zoom=Math.max(.5,groupCameraOffset.zoom*.84);
+ if(kind==='far')groupCameraOffset.zoom=Math.min(2.5,groupCameraOffset.zoom*1.19);
+ if(kind==='reset'){groupCameraOffset.yaw=0;groupCameraOffset.pitch=0;groupCameraOffset.zoom=1}
+}
+if(isOfficialPairTest){
+ cameraAdjustToggle.addEventListener('click',()=>{
+  const opening=cameraAdjustPanel.hidden;
+  cameraAdjustPanel.hidden=!opening;
+  cameraAdjustToggle.setAttribute('aria-expanded',String(opening));
+ });
+ for(const btn of document.querySelectorAll('[data-cam-adjust]')){
+  btn.addEventListener('click',()=>adjustGroupCamera(btn.dataset.camAdjust));
+ }
+ // One-finger drag: camera yaw/pitch. Two-finger pinch: follow distance.
+ // Pointer capture keeps the gesture from dropping when crossing the canvas edge.
+ const pointers=new Map();
+ const canvas=renderer.domElement;
+ canvas.addEventListener('pointerdown',event=>{
+  if(event.pointerType==='mouse'&&event.button!==0)return;
+  pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+  try{canvas.setPointerCapture(event.pointerId)}catch(_){}
+ });
+ canvas.addEventListener('pointermove',event=>{
+  if(!pointers.has(event.pointerId))return;
+  const previous=pointers.get(event.pointerId);
+  const current={x:event.clientX,y:event.clientY};
+  if(pointers.size===1){
+   groupCameraOffset.yaw+=(current.x-previous.x)/Math.max(240,stage.clientWidth)*1.7;
+   groupCameraOffset.pitch=THREE.MathUtils.clamp(
+    groupCameraOffset.pitch-(current.y-previous.y)/Math.max(240,stage.clientHeight)*1.05,
+    -.40,.48);
+  }else if(pointers.size===2){
+   const other=[...pointers.entries()].find(([id])=>id!==event.pointerId)?.[1];
+   if(other){
+    const previousDistance=Math.hypot(previous.x-other.x,previous.y-other.y);
+    const nextDistance=Math.hypot(current.x-other.x,current.y-other.y);
+    if(previousDistance>9&&nextDistance>9)
+     groupCameraOffset.zoom=THREE.MathUtils.clamp(
+      groupCameraOffset.zoom*previousDistance/nextDistance,.5,2.5);
+   }
+  }
+  pointers.set(event.pointerId,current);
+ });
+ for(const eventName of ['pointerup','pointercancel','lostpointercapture']){
+  canvas.addEventListener(eventName,event=>pointers.delete(event.pointerId));
+ }
+}
+// 2頭/4頭用：近ければ全頭、離れたら先頭優先でカメラが移動する。
 // 18頭の従来カメラは一切変更しない。
 function pairTrackingView(which){return ['field','side','front3q','chase'].includes(which)}
 function officialPairCameraShot(which='field'){
@@ -2022,6 +2076,20 @@ function officialPairCameraShot(which='field'){
  const eye=focus.clone().addScaledVector(side,lateral).addScaledVector(a.t,along)
   .add(new THREE.Vector3(0,height,0));
  const target=focus.clone().addScaledVector(a.t,1.4).add(new THREE.Vector3(0,2,0));
+ if(isOfficialPairTest){
+  // Apply manual orbit / height / zoom in TRACKING coordinates, preserving
+  // smooth follower positioning and leader-priority framing.
+  const dx=eye.x-target.x,dy=eye.y-target.y,dz=eye.z-target.z;
+  const planar=Math.max(.001,Math.hypot(dx,dz));
+  const radius=Math.hypot(planar,dy)*groupCameraOffset.zoom;
+  const azimuth=Math.atan2(dz,dx)+groupCameraOffset.yaw;
+  const elevation=THREE.MathUtils.clamp(
+   Math.atan2(dy,planar)+groupCameraOffset.pitch,.05,1.23);
+  const horizontal=radius*Math.cos(elevation);
+  eye.set(target.x+horizontal*Math.cos(azimuth),
+   target.y+radius*Math.sin(elevation),
+   target.z+horizontal*Math.sin(azimuth));
+ }
  return {eye,target,gap,focusedOnLead:blend>=.8};
 }
 // 発走直後から全頭を追う従来のカメラ。進行方向の前方から馬群を捉える。
@@ -2106,6 +2174,20 @@ function setView(which){
  updateSceneLabelVisibility();
 }
 document.querySelectorAll('#views button').forEach(button=>button.addEventListener('click',()=>setView(button.dataset.view)));
+function syncStageStartButton(){
+ if(!isOfficialPairTest)return;
+ const completed=raceFinished.length>=OFFICIAL_TEST_COUNT;
+ const label=playing?'⏸ 一時停止':completed?'↻ もう一度':
+  raceElapsed>0?'▶ 再開':'▶ スタート';
+ if(stageStartBtn.textContent!==label)stageStartBtn.textContent=label;
+ stageStartBtn.disabled=!installedDesign01;
+ stageStartBtn.setAttribute('aria-label',label);
+}
+stageStartBtn.addEventListener('click',()=>{
+ if(!isOfficialPairTest)return;
+ demoBtn.click();
+ syncStageStartButton();
+});
 const raceSelector=document.querySelector('#raceDistance'),startInfo=document.querySelector('#startInfo');
 function selectRace(){
  activeDistance=Number(raceSelector.value);
@@ -2150,7 +2232,8 @@ function resetDemo(){
 }
 demoBtn.addEventListener('click',()=>{
  if(!activePlan)return;
- if(travel>=activePlan.distance||fieldMode.value==='race18'&&raceFinished.length===FIELD_COUNT){
+ if(isOfficialPairTest?raceFinished.length>=OFFICIAL_TEST_COUNT:
+ (travel>=activePlan.distance||fieldMode.value==='race18'&&raceFinished.length===FIELD_COUNT)){
   travel=0;gateOpening=0;initRaceHorses();updateGateDoors();positionFieldHorses();
   if(isOfficialPairTest)setView('field');
   else if(fieldMode.value!=='single')setView('start');
@@ -2194,12 +2277,13 @@ function resize(){
 }
 window.addEventListener('resize',resize);
 if(isOfficialPairTest){
+ demoBtn.hidden=true; // The persistent bright in-video button is the only start control.
  document.querySelector('#officialGroupHeading').textContent='正式Design 01｜'+OFFICIAL_TEST_COUNT+'頭走行テスト';
  document.querySelector('[data-view="side"]').textContent=OFFICIAL_TEST_COUNT+'頭の真横を追尾';
  document.querySelector('[data-view="front3q"]').textContent=OFFICIAL_TEST_COUNT+'頭の斜め前を追尾';
  document.querySelector('[data-view="chase"]').textContent=OFFICIAL_TEST_COUNT+'頭の後方を追尾';
  document.querySelector('[data-view="field"]').textContent=OFFICIAL_TEST_COUNT+'頭を自動追尾';
- document.querySelector('#help').textContent='正式モデル'+OFFICIAL_TEST_COUNT+'頭追尾：近ければ馬群、離れたら先頭とその後方を表示';
+ document.querySelector('#help').textContent='1本指：角度調整｜2本指：拡大縮小｜自動追尾は継続';
 }
 resize();setView('all');selectRace();updateDesign01Panel();setView(isOfficialPairTest?'field':(isDesign01Review?'side':'start'));
 function animate(time){
@@ -2224,6 +2308,7 @@ function animate(time){
   }
  }
  positionRunner();positionFieldHorses();updateOfficialPair(dt);
+ syncStageStartButton();
  let pairTracking=false;
  if(fieldMode.value!=='single'){
   gateOpening=travel>0?Math.min(1,gateOpening+dt*4):0;updateGateDoors();
