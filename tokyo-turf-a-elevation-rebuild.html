@@ -232,15 +232,16 @@ const qs=new URLSearchParams(window.location.search);
 const isDesign01Review=qs.get('model')==='design01';
 const isOfficialFourTest=isDesign01Review&&qs.get('group')==='4';
 const isOfficialEightTest=isDesign01Review&&qs.get('group')==='8';
-const isOfficialMultiTest=isOfficialFourTest||isOfficialEightTest;
+const isOfficialEighteenTest=isDesign01Review&&qs.get('group')==='18';
+const isOfficialMultiTest=isOfficialFourTest||isOfficialEightTest||isOfficialEighteenTest;
 const isOfficialPairTest=isDesign01Review&&(qs.get('pair')==='1'||isOfficialMultiTest);
-const OFFICIAL_TEST_COUNT=isOfficialEightTest?8:isOfficialFourTest?4:2;
+const OFFICIAL_TEST_COUNT=isOfficialEighteenTest?18:isOfficialEightTest?8:isOfficialFourTest?4:2;
 const stageDock=document.querySelector('#stageDock');
 const stageStartBtn=document.querySelector('#stageStartBtn');
 const cameraAdjustToggle=document.querySelector('#cameraAdjustToggle');
 const cameraAdjustPanel=document.querySelector('#cameraAdjustPanel');
 const renderQuality=document.querySelector('#renderQuality');
-if(isOfficialPairTest){stageDock.hidden=false;renderQuality.value=isOfficialEightTest?'standard':isOfficialFourTest?'sharp':'standard'}
+if(isOfficialPairTest){stageDock.hidden=false;renderQuality.value=isOfficialEighteenTest?'light':isOfficialEightTest?'standard':isOfficialFourTest?'sharp':'standard'}
 if(isDesign01Review){
  fieldMode.value=isOfficialPairTest?'race18':'single';
  fieldMode.disabled=isOfficialPairTest;
@@ -493,7 +494,7 @@ const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x9ec8dd);
 scene.fog=new THREE.FogExp2(0x9ec8dd,isOfficialMultiTest?.000055:.00011); // 4頭では遠景をより鮮明に
 const camera=new THREE.PerspectiveCamera(43,1,.15,6000);
-const renderer=new THREE.WebGLRenderer({antialias:!isOfficialEightTest,powerPreference:'high-performance'});
+const renderer=new THREE.WebGLRenderer({antialias:!(isOfficialEightTest||isOfficialEighteenTest),powerPreference:'high-performance'});
 // The approved Meshy horse's meshes and textures are untouched. On iPhone,
 // reduce the pair-test fill rate only; original 1/18-horse modes are unchanged.
 // Higher internal raster resolution cures 4-horse background blur without
@@ -1178,6 +1179,13 @@ function eightStartLane(width,index){
   Math.max(2.75,(width-FOUR_RAIL_CENTER_CLEARANCE-1.65)/7));
  return fourHorseInnerLane(width)-index*spacing;
 }
+// 18のゲートを走路幅に収める。等距離の横並びは発走直後だけで、
+// 加速差と前馬の空き状況によって自然な前後の馬群を形成する。
+function eighteenStartLane(width,index){
+ const spacing=Math.min(1.92,Math.max(1.12,
+  (width-FOUR_RAIL_CENTER_CLEARANCE-1.65)/17));
+ return fourHorseInnerLane(width)-index*spacing;
+}
 // 4頭だけ外寄りから内ラチへ一度だけ寄る。既に確認済みの2頭は変更しない。
 // 外からの進入は従来どおり。4頭だけ内ラチ余裕の目標を2.8mにする。
 const FOUR_START_OUTSIDE_OFFSET=8.0,FOUR_INWARD_SETTLE_DISTANCE=160;
@@ -1198,7 +1206,8 @@ function fourHorseInwardSlope(distance){
 }
 console.assert([24,28,31,36,41].every(w=>
  Array.from({length:OFFICIAL_TEST_COUNT},(_,i)=>i).every(i=>{
-  const at=isOfficialEightTest?eightStartLane(w,i):
+  const at=isOfficialEighteenTest?eighteenStartLane(w,i):
+   isOfficialEightTest?eightStartLane(w,i):
    isOfficialFourTest?fourHorseInnerLane(w)-i*PAIR_LANE_SPACING:pairRailLane(w,i);
   return w/2-at>=(isOfficialMultiTest?FOUR_RAIL_CENTER_CLEARANCE:PAIR_RAIL_CENTER_CLEARANCE)-.001 &&
    at>=-w/2+1.5;
@@ -1223,10 +1232,12 @@ function initRaceHorses(){
   // 4頭はまず外寄りから並び、発走後に内側へ入る。2頭は従来位置。
   for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
    const h=raceHorses[i];
-   const lane=isOfficialEightTest?eightStartLane(width,i):officialReviewLane(width,i,0);
+   const lane=isOfficialEighteenTest?eighteenStartLane(width,i):
+    isOfficialEightTest?eightStartLane(width,i):officialReviewLane(width,i,0);
    h.startLane=lane;h.lane=lane;h.prevLane=lane;h.targetLane=lane;h.sideSpeed=0;
    h.slot=i;h.nextLaneReviewTime=0;
-   h.role=isOfficialEightTest?EIGHT_PACE_PROFILES[i].role:['逃げ','先行','差し','追込'][i];
+   h.role=isOfficialEighteenTest?EIGHTEEN_PACE_PROFILES[i].role:
+    isOfficialEightTest?EIGHT_PACE_PROFILES[i].role:['逃げ','先行','差し','追込'][i];
    h.prevDistance=h.distance;h.prevPostDistance=h.postDistance;
   }
  }
@@ -1548,6 +1559,54 @@ function eightHorseSafeStep(h,snapshot,dt,targetSpeed){
  lane=THREE.MathUtils.clamp(Math.max(h.lane,lane),-width/2+1.5,rail-.05);
  return {distance,lane,speed};
 }
+
+const EIGHTEEN_PACE_PROFILES=Array.from({length:18},(_,idx)=>{
+ const type=['先行','差し','中団','逃げ','先行','中団','差し','追込','先行',
+  '中団','差し','先行','追込','中団','差し','先行','中団','追込'][idx];
+ return {role:type,
+  accel:3.12+(idx*7%9)*.037,
+  early:15.78+(idx*11%15)*.037,
+  kickStart:type==='追込'?.37:type==='差し'?.29:.72,
+  kick:type==='追込'?.76:type==='差し'?.52:type==='中団'?.31:.18};
+});
+// 18頭専用の2D位置試験モデル。3Dモデルのシルエットを変えない。
+// スタート時は幅に合わせ18頭を並べ、前に空きができた馬から
+// 斜め内へ寄る。速度の急停止は許さず接近時は先を読んで調整。
+const EIGHTEEN_MERGE_LONGITUDINAL_BUFFER=4.3;
+function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
+ const width=fieldCenterAt(activePlan,h.distance).width;
+ const inner=fourHorseInnerLane(width);
+ const lateralRate=FOUR_INWARD_RATE*(.68+.32*THREE.MathUtils.clamp(h.distance/15,0,1));
+ let desiredSpeed=targetSpeed;
+ // In a larger pack, anticipate both the front horse AND the target
+ // inner lane. Pace harmonization keeps following horses rolling.
+ for(const other of snapshot){
+  if(other.idx===h.idx||other.finished)continue;
+  const ahead=other.distance-h.distance;
+  if(ahead>0&&ahead<18&&Math.abs(other.lane-h.lane)<2.50){
+   desiredSpeed=Math.min(desiredSpeed,other.speed+Math.max(-1.25,(ahead-4.6)*.72));
+  }
+ }
+ const acceleration=EIGHTEEN_PACE_PROFILES[h.idx].accel;
+ let speed=h.speed+THREE.MathUtils.clamp(desiredSpeed-h.speed,
+  -(desiredSpeed<h.speed?4.4:acceleration)*dt,acceleration*dt);
+ speed=Math.max(Math.min(10.4,Math.max(0,h.speed)),speed);
+ const distance=Math.min(activePlan.distance,h.distance+speed*dt);
+ const inwardBudget=Math.max(0,distance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD;
+ let lane=Math.min(inner-.05,h.lane+Math.min(
+  lateralRate*dt,inwardBudget,Math.max(0,inner-.05-h.lane)));
+ // The 18 stalls are closely spaced (about 1.1–1.9m), so the opponent
+ // exclusion must be conditional on near-alignment and their relative
+ // longitudinal motion, not on mere presence anywhere in the field.
+ for(const other of snapshot){
+  if(other.idx===h.idx||other.finished)continue;
+  const along=other.distance+other.speed*dt-distance;
+  if(Math.abs(along)<EIGHTEEN_MERGE_LONGITUDINAL_BUFFER&&other.lane>h.lane)
+   lane=Math.min(lane,other.lane-2.35);
+ }
+ lane=THREE.MathUtils.clamp(Math.max(h.lane,lane),-width/2+1.48,inner-.05);
+ return {distance,lane,speed};
+}
 function stepOfficialPair(tick){
  if(!activePlan||raceFinished.length>=OFFICIAL_TEST_COUNT)return;
  const previous=raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>({
@@ -1581,15 +1640,17 @@ function stepOfficialPair(tick){
    h.sideSpeed=(lane-h.lane)/tick;
    h.lane=lane;h.targetLane=lane;
   }else{
-   const profile=isOfficialEightTest?EIGHT_PACE_PROFILES[i]:FOUR_PACE_PROFILES[i];
+   const profile=isOfficialEighteenTest?EIGHTEEN_PACE_PROFILES[i]:
+    isOfficialEightTest?EIGHT_PACE_PROFILES[i]:FOUR_PACE_PROFILES[i];
    const progress=h.distance/Math.max(1,activePlan.distance);
    const launch=THREE.MathUtils.clamp((h.distance-180)/540,0,1);
    const late=THREE.MathUtils.clamp((progress-profile.kickStart)/.24,0,1);
    const targetSpeed=profile.early+profile.kick*launch+
     ((i===3||i===7)?late*.22:0);
    // 4頭は承認済みの挙動を維持。8頭はより大きな馬群用の独立AI。
-   const result=isOfficialEightTest?
-    eightHorseSafeStep(h,previous,tick,targetSpeed):
+   const result=isOfficialEighteenTest?
+    eighteenHorseSafeStep(h,previous,tick,targetSpeed):
+    isOfficialEightTest?eightHorseSafeStep(h,previous,tick,targetSpeed):
     fourHorseSafeStep(h,previous,tick,targetSpeed);
    h.distance=result.distance;h.speed=result.speed;
    h.sideSpeed=(result.lane-h.lane)/tick;
@@ -2273,13 +2334,14 @@ function officialPairCameraShot(which='field'){
  const focus=a.p.clone().addScaledVector(side,lane);
  const aspect=Math.max(.5,stage.clientWidth/Math.max(1,stage.clientHeight));
  const narrow=Math.max(0,1/aspect-1);
- const extra=isOfficialEightTest?(1-blend)*24:
-  isOfficialFourTest?(1-blend)*11:0;
+ const extra=isOfficialEighteenTest?(1-blend)*47:
+  isOfficialEightTest?(1-blend)*24:isOfficialFourTest?(1-blend)*11:0;
  const lateral=which==='chase'?-12-extra*.6:which==='front3q'?-26-extra*.6:
   -THREE.MathUtils.lerp(35,27,blend)-narrow*7-extra;
  const along=which==='chase'?-25:which==='front3q'?14:7;
  const height=(which==='chase'?11:which==='front3q'?9.5:9)+narrow*2+
-  (isOfficialEightTest?(1-blend)*8:isOfficialFourTest?(1-blend)*4:0);
+  (isOfficialEighteenTest?(1-blend)*13:
+   isOfficialEightTest?(1-blend)*8:isOfficialFourTest?(1-blend)*4:0);
  const eye=focus.clone().addScaledVector(side,lateral).addScaledVector(a.t,along)
   .add(new THREE.Vector3(0,height,0));
  const target=focus.clone().addScaledVector(a.t,1.4).add(new THREE.Vector3(0,2,0));
