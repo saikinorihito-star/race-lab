@@ -2959,17 +2959,18 @@ function officialBroadcastCameraShot(context){
  if(focusType==='gate'){
   outside=65;height=15;ahead=18;fov=44;
  }else if(focusType==='wide'){
-  outside=THREE.MathUtils.clamp(67+gap*.25,67,100);
-  height=THREE.MathUtils.clamp(20+gap*.075,20,32);
-  ahead=10;fov=THREE.MathUtils.clamp(44+Math.max(0,gap-45)*.028,44,47);
+  outside=THREE.MathUtils.clamp(58+gap*.24,58,88);
+  height=THREE.MathUtils.clamp(15+gap*.065,15,28);
+  ahead=18;fov=THREE.MathUtils.clamp(43+Math.max(0,gap-45)*.025,43,47);
  }else if(focusType==='lead'){
+  // Low three-quarter-front tracking view like the user-supplied footage.
   const separation=distanceOf(leader)-distanceOf(third);
-  outside=THREE.MathUtils.clamp(33+separation*.23,33,47);
-  height=10;ahead=16;fov=THREE.MathUtils.clamp(39+separation*.11,39,44);
+  outside=THREE.MathUtils.clamp(25+separation*.20,25,39);
+  height=6.3;ahead=28;fov=THREE.MathUtils.clamp(38+separation*.11,38,44);
  }else{
   const separation=distanceOf(third)-distanceOf(fifth);
-  outside=THREE.MathUtils.clamp(30+separation*.24,30,45);
-  height=9;ahead=12;fov=THREE.MathUtils.clamp(40+separation*.10,40,45);
+  outside=THREE.MathUtils.clamp(27+separation*.22,27,41);
+  height=6.9;ahead=24;fov=THREE.MathUtils.clamp(39+separation*.10,39,45);
  }
  const eye=at.p.clone().addScaledVector(inward,-outside)
   .addScaledVector(along,ahead).add(new THREE.Vector3(0,height,0));
@@ -2980,6 +2981,68 @@ function officialBroadcastCameraShot(context){
  return {eye,target,gap,focusedOnLead:focusType==='lead',
   fov,broadcastShotId:stageShot.id+'-'+focusType,
   broadcastLabel:caption+'｜'+rankCaption};
+}
+let broadcastLabelCutAt=0,lastRunnerLabelPaint=-1;
+function rankedOfficialRunners(){
+ return officialPair.map((entry,index)=>{
+  const position=officialPairVisualState(index),record=raceHorses[index];
+  if(!entry||!position||!record)return null;
+  return {index,number:index+1,name:officialRunnerNames[index]||'試験馬'+(index+1),
+   progress:position.distance+position.postDistance,
+   finished:!!record.finished,finishTime:record.finishTime??Infinity};
+ }).filter(Boolean).sort((a,b)=>{
+  if(a.finished&&b.finished)return a.finishTime-b.finishTime;
+  if(a.finished)return -1;
+  if(b.finished)return 1;
+  return b.progress-a.progress||a.number-b.number;
+ });
+}
+function clearRunnerNameLabels(){
+ for(const label of runnerNameLabels)label.hidden=true;
+}
+function updateRunnerNameLabels(time){
+ if(!isOfficialEighteenTest||!installedDesign01||view!=='broadcast'||
+    !activePlan||officialPair.length!==18){
+  clearRunnerNameLabels();return;
+ }
+ // Run DOM label updates at about 25fps, independently of the GLB animation.
+ if(time-lastRunnerLabelPaint<40)return;
+ lastRunnerLabelPaint=time;
+ const shot=lastBroadcastShotId||'';
+ const wide=shot.endsWith('-wide')||shot.endsWith('-gate');
+ const limit=wide?2:3;
+ const seconds=Math.max(0,(time-broadcastLabelCutAt)/1000)%8.5;
+ // Show leader first, then second and third, and fade out before repeating.
+ const revealed=seconds>=.45&&seconds<6.8?
+  Math.min(limit,1+Math.floor((seconds-.45)/.62)):0;
+ if(!revealed){clearRunnerNameLabels();return}
+ const ranked=rankedOfficialRunners();
+ const width=stage.clientWidth,height=stage.clientHeight;
+ const occupied=[];
+ camera.updateMatrixWorld();
+ for(let rank=0;rank<runnerNameLabels.length;rank++){
+  const el=runnerNameLabels[rank],item=ranked[rank];
+  el.hidden=true;
+  if(rank>=revealed||!item)continue;
+  const runner=officialPair[item.index];
+  if(!runner?.group?.visible)continue;
+  // Local +Z is forward; anchor a little above the approved horse's head.
+  runner.group.updateWorldMatrix(true,false);
+  const head=runner.group.localToWorld(new THREE.Vector3(0,3.05,.72));
+  const projected=head.project(camera);
+  if(!Number.isFinite(projected.x+projected.y+projected.z)||
+     projected.z<=-1||projected.z>=1)continue;
+  const x=(projected.x*.5+.5)*width;
+  const y=(.5-projected.y*.5)*height;
+  const nameWidth=Math.min(154,Math.max(54,[...item.name].length*13+22));
+  const rect={l:x-nameWidth/2,r:x+nameWidth/2,t:y-30,b:y+8};
+  if(rect.l<5||rect.r>width-5||rect.t<38||rect.b>height-119)continue;
+  if(occupied.some(prev=>rect.l<prev.r+8&&rect.r>prev.l-8&&
+     rect.t<prev.b+8&&rect.b>prev.t-8))continue;
+  el.textContent=item.name;
+  el.style.left=x+'px';el.style.top=y+'px';el.hidden=false;
+  occupied.push(rect);
+ }
 }
 function officialEighteenCameraShot(which,context){
  if(which==='broadcast')return officialBroadcastCameraShot(context);
@@ -3365,6 +3428,7 @@ function animate(time){
     broadcastCameraLabel.textContent='📺 中継：'+shot.broadcastLabel;
     if(cut){
      lastBroadcastShotId=shot.broadcastShotId;
+     broadcastLabelCutAt=time;
      camera.fov=shot.fov;
      camera.updateProjectionMatrix();
     }
@@ -3390,6 +3454,7 @@ function animate(time){
  }
  // 追尾中の自動カメラの姿勢をOrbitControlsで上書きしない。
  if(!pairTracking)controls.update();
+ updateRunnerNameLabels(time);
  // ピンチ操作で屋根や床の内部に入ったときは、障害物の模型だけ一時的に隠す。
  for(const item of stadiumGroups){
   const insideX=Math.abs(camera.position.x-item.x)<item.len/2+16;
