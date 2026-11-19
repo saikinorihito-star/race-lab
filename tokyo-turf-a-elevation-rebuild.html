@@ -1495,7 +1495,16 @@ function stepOfficialPair(tick){
   h.prevPostDistance=h.postDistance||0;
   h.prevLane=h.lane;
   if(h.finished){
-   h.postDistance=Math.min(24,h.postDistance+12*tick);
+   if(isOfficialFourTest){
+    // 先にゴールした馬を24mで停止させない。残りの馬がゴールする間も
+    // 緩やかに減速しながら走り抜ける（コース描画はG後90mまで継続）。
+    // 2頭確認モードの従来のゴール処理は変更しない。
+    h.postSpeed=Math.max(10.5,(h.postSpeed??h.speed)-.85*tick);
+    h.postDistance+=h.postSpeed*tick;
+    h.speed=h.postSpeed;
+   }else{
+    h.postDistance=Math.min(24,h.postDistance+12*tick);
+   }
    continue;
   }
   if(!isOfficialFourTest){
