@@ -12,13 +12,16 @@ function extract(name){
  assert.ok(end>=0,'Missing closing brace: '+name);
  return html.slice(from,from+end+2);
 }
-const SAFE=3.7,SEP=3.35;
+const SAFE=3.7,FOUR_SAFE=2.8,SEP=3.35;
 const lane=runInNewContext('('+extract('pairRailLane')+')',{
  PAIR_RAIL_CENTER_CLEARANCE:SAFE,PAIR_LANE_SPACING:SEP
 });
+const fourInnerLane=runInNewContext('('+extract('fourHorseInnerLane')+')',{
+ FOUR_RAIL_CENTER_CLEARANCE:FOUR_SAFE
+});
 function makeReviewLane(four){
  return runInNewContext('('+extract('officialReviewLane')+')',{
-  pairRailLane:lane,isOfficialFourTest:four,
+  pairRailLane:lane,fourHorseInnerLane:fourInnerLane,isOfficialFourTest:four,
   FOUR_START_OUTSIDE_OFFSET:8.0,FOUR_INWARD_SETTLE_DISTANCE:160,
   THREE:{MathUtils:{clamp:(x,min,max)=>Math.max(min,Math.min(max,x))}}
  });
@@ -129,7 +132,7 @@ test('4-horse review approaches rail from 8m farther out and never turns away af
  const four=makeReviewLane(true),two=makeReviewLane(false);
  for(const width of [31,36,41]){
   for(let horse=0;horse<4;horse++){
-   const target=lane(width,horse);
+   const target=fourInnerLane(width)-horse*SEP;
    assert.ok(Math.abs(four(width,horse,0)-(target-8))<1e-9);
    assert.ok(Math.abs(four(width,horse,160)-target)<1e-9);
    assert.ok(Math.abs(four(width,horse,500)-target)<1e-9);
@@ -137,11 +140,11 @@ test('4-horse review approaches rail from 8m farther out and never turns away af
    for(let d=0;d<=220;d+=2){
     const pos=four(width,horse,d);
     assert.ok(pos>=previous-1e-8,'Inward lane must not reverse');
-    assert.ok(width/2-pos>=SAFE-1e-8,'Rail clearance always >=3.7m');
+    assert.ok(width/2-pos>=FOUR_SAFE-1e-8,'4-horse clearance >=2.8m');
     assert.ok(width/2+pos>1.5,'Outer rail remains clear');
     previous=pos;
    }
-   assert.ok(Math.abs(two(width,horse,0)-target)<1e-9,'Approved 2-horse lanes unchanged');
+   assert.ok(Math.abs(two(width,horse,0)-lane(width,horse))<1e-9,'Approved 2-horse lanes unchanged');
   }
  }
 });
@@ -243,11 +246,12 @@ test('4-horse inward heading follows the actual lateral speed without allowing e
 function runActualFourHorseSimulation(distance,widthMode='standard'){
  const profiles=html.match(/const FOUR_PACE_PROFILES=\[[\s\S]*?\];/)?.[0];
  assert.ok(profiles,'Four-horse profiles missing');
- const code=['pairRailLane','officialReviewLane','fourHorseDesiredSlot',
+ const code=['pairRailLane','fourHorseInnerLane','officialReviewLane','fourHorseDesiredSlot',
   'fourHorseSafeStep','stepOfficialPair'].map(extract).join('\n');
  const source=`(()=>{
  const THREE={MathUtils:{clamp:(v,lo,hi)=>Math.max(lo,Math.min(hi,v))}};
  const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35,
+  FOUR_RAIL_CENTER_CLEARANCE=2.8,
  FOUR_START_OUTSIDE_OFFSET=8,FOUR_INWARD_SETTLE_DISTANCE=160,
  FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=3.05,
  FOUR_INWARD_RATE=4.4,FOUR_MAX_LATERAL_PER_FORWARD=.30,
@@ -331,7 +335,7 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
  for(const distance of [1400,1600,1800,2000,2300,2400,2500,2600,3400]){
   const r=runActualFourHorseSimulation(distance);
   assert.equal(r.finished,4,'All four must reach the finish at '+distance+'m');
-  assert.ok(r.minRailClearance>=3.7-1e-8,'No horse meets the inside rail');
+  assert.ok(r.minRailClearance>=FOUR_SAFE-1e-8,'Four-horse clearance');
   assert.ok(r.minActiveCenterDistance>=3.0,'No active horse overlap');
   assert.ok(r.maxLateralSpeed<=4.401,'Sideways speed capped at 4.4m/s');
   assert.ok(r.maxInwardToForwardRatio<=.300001,'Diagonal path cannot exceed a 0.30 inward/forward slope');
@@ -359,7 +363,7 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
    'Stalker should reach the inner lane behind the leader by 200m');
   const outsideAt200=r.snapshots[200][3];
   const localWidthAt200=36+5*Math.sin(outsideAt200.d/2083.1*Math.PI*2+.5);
-  const remainingToInner=lane(localWidthAt200,0)-outsideAt200.lane;
+  const remainingToInner=fourInnerLane(localWidthAt200)-outsideAt200.lane;
   assert.ok(remainingToInner<7.5,
    'The outside horse moves across several lanes promptly, but does not cut through traffic');
  }
@@ -381,7 +385,7 @@ test('unobstructed outermost horse reaches real innermost lane promptly',()=>{
   FOUR_MAX_LATERAL_PER_FORWARD:.30,
   PAIR_RAIL_CENTER_CLEARANCE:3.7,PAIR_LANE_SPACING:3.35,
   FOUR_PACE_PROFILES:[{accel:3.42},{accel:3.15},{accel:3.32},{accel:3.1}],
-  fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane};
+  fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane,fourHorseInnerLane:fourInnerLane};
  ctx.fourHorseDesiredSlot=runInNewContext('('+extract('fourHorseDesiredSlot')+')',ctx);
  const advance=runInNewContext('('+extract('fourHorseSafeStep')+')',ctx);
  const start=makeReviewLane(true)(width,3,0);
@@ -390,7 +394,7 @@ test('unobstructed outermost horse reaches real innermost lane promptly',()=>{
   const next=advance(h,[],1/60,15.95);
   Object.assign(h,next);
  }
- const target=lane(width,0);
+ const target=fourInnerLane(width);
  assert.ok(h.distance>=95,'The unblocked outermost horse should make forward progress');
  assert.ok(Math.abs(h.lane-target)<.11,'In an empty corridor the outside horse must reach the innermost safety lane by 95m');
  assert.ok(h.lane-start>17.8,'Inward rush covers the full original outside-to-inside range');
@@ -402,7 +406,7 @@ test('horse alongside must not cut across a nearby occupied lane',()=>{
   FOUR_INWARD_RATE:4.4,FOUR_MIN_LONGITUDINAL:4.8,FOUR_LATERAL_SHARED:3.05,
   FOUR_MAX_LATERAL_PER_FORWARD:.30,
   FOUR_PACE_PROFILES:[{accel:3.42},{accel:3.15},{accel:3.32},{accel:3.1}],
-  fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane};
+  fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane,fourHorseInnerLane:fourInnerLane};
  ctx.fourHorseDesiredSlot=runInNewContext('('+extract('fourHorseDesiredSlot')+')',ctx);
  const step=runInNewContext('('+extract('fourHorseSafeStep')+')',ctx);
  const horse={idx:3,distance:45,speed:12,lane:.28};
@@ -428,7 +432,7 @@ test('traffic stop also stops lateral movement on the same tick',()=>{
   FOUR_INWARD_RATE:4.4,FOUR_MAX_LATERAL_PER_FORWARD:.30,
   FOUR_MIN_LONGITUDINAL:4.8,FOUR_LATERAL_SHARED:3.05,
   FOUR_PACE_PROFILES:[{accel:3.42},{accel:3.15},{accel:3.32},{accel:3.1}],
-  fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane};
+  fieldCenterAt:(_p,d)=>({width}),pairRailLane:lane,fourHorseInnerLane:fourInnerLane};
  ctx.fourHorseDesiredSlot=runInNewContext('('+extract('fourHorseDesiredSlot')+')',ctx);
  const step=runInNewContext('('+extract('fourHorseSafeStep')+')',ctx);
  const h={idx:3,distance:45,lane:.28,speed:11};
@@ -449,7 +453,7 @@ test('four-horse finish runout stays smooth on narrow pocket courses as well as 
    assert.ok(r.minimumInRaceSpeed>10,'Minimum in-race speed above 10m/s, '+widthMode);
    assert.ok(r.longestPostFinishDistance>24,'No legacy 24m stop, '+widthMode);
    assert.ok(r.longestPostFinishDistance<85,'Do not exceed drawn 90m finish runout, '+widthMode);
-   assert.ok(r.minRailClearance>=3.7-1e-8,'Keep the inner rail clearance, '+widthMode);
+   assert.ok(r.minRailClearance>=FOUR_SAFE-1e-8,'Four-horse clearance, '+widthMode);
    assert.ok(r.minActiveCenterDistance>=3.0,'Horses must not overlap, '+widthMode);
   }
  }
@@ -468,13 +472,13 @@ function runActualTokyoWidthFourHorseSimulation(distance){
  // widthAt is a one-line declaration; extract() targets multi-line functions.
  const widthSource=html.match(/function widthAt\(s\)\{[^\n]*\}/)?.[0];
  assert.ok(widthSource,'Actual racecourse widthAt function missing');
- const code=[widthSource,...['pairRailLane','officialReviewLane','fourHorseDesiredSlot',
+ const code=[widthSource,...['pairRailLane','fourHorseInnerLane','officialReviewLane','fourHorseDesiredSlot',
   'fourHorseSafeStep','stepOfficialPair'].map(extract)].join('\n');
  assert.ok(profiles,'Tactical pace profiles must exist');
  const source=`(()=>{
  const THREE={MathUtils:{clamp:(v,lo,hi)=>Math.max(lo,Math.min(hi,v))}};
  const LAP=2083.1,FINISH_DISTANCE=525.9,PAIR_RAIL_CENTER_CLEARANCE=3.7,
- PAIR_LANE_SPACING=3.35,FOUR_START_OUTSIDE_OFFSET=8,
+ PAIR_LANE_SPACING=3.35,FOUR_RAIL_CENTER_CLEARANCE=2.8,FOUR_START_OUTSIDE_OFFSET=8,
  FOUR_INWARD_SETTLE_DISTANCE=160,FOUR_MIN_LONGITUDINAL=4.8,
  FOUR_LATERAL_SHARED=3.05,FOUR_INWARD_RATE=4.4,
  FOUR_MAX_LATERAL_PER_FORWARD=.30,isOfficialFourTest=true,OFFICIAL_TEST_COUNT=4;
@@ -556,7 +560,7 @@ test('real Tokyo turf width and race start stations prevent all four pre-finish 
    'Each horse maintains galloping forward speed after 30m: '+distance);
   assert.ok(r.minCenterDistance>=3.05,
    'Horses remain separated on the actual changing width: '+distance);
-  assert.ok(r.minRail>=3.7,
+  assert.ok(r.minRail>=FOUR_SAFE-1e-8,
    'No horse enters the inner rail on the actual changing width: '+distance);
   assert.equal(r.sidewaysWithoutForward,0,'Never travel sideways without forward progression');
   assert.ok(r.maximumForwardYawRatio<=.300001,'Natural diagonal merge angle cap');
@@ -572,4 +576,18 @@ test('Tokyo 1400m regression explicitly covers the previous 45m stoppage',()=>{
  assert.ok(r.snapshots[60].every(h=>h.speed>9),
   'The same horses keep running beyond 60m');
  assert.equal(r.frozenFrames.reduce((x,y)=>x+y,0),0);
+});
+
+test('only four-horse mode uses 2.8m rail clearance; two-horse remains 3.7m',()=>{
+ assert.match(html,/const FOUR_RAIL_CENTER_CLEARANCE=2\.8/);
+ const two=makeReviewLane(false),four=makeReviewLane(true);
+ for(const width of [24,28,31,36,41]){
+  assert.ok(Math.abs(width/2-lane(width,0)-3.7)<1e-8,'Two-horse safety unchanged');
+  assert.ok(Math.abs(width/2-fourInnerLane(width)-2.8)<1e-8,'Four-horse center clearance 2.8m');
+  for(let i=0;i<4;i++){
+   assert.ok(Math.abs(four(width,i,160)-two(width,i,160)-.9)<1e-7,
+    'The four-horse target is exactly 0.9m closer to the rail');
+  }
+ }
+ assert.match(extract('fourHorseSafeStep'),/const inner=fourHorseInnerLane\(width\)/);
 });
