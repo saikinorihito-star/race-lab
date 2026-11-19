@@ -286,7 +286,7 @@ if(isOfficialEighteenTest){
 if(isOfficialPairTest){
  stageDock.hidden=false;
  if(isOfficialEighteenTest){
-  renderQuality.add(new Option('自動（18頭推奨）','auto'),0);
+  renderQuality.add(new Option('安定画質（18頭・ちらつき対策）','auto'),0);
   renderQuality.value='auto';
  }else renderQuality.value=isOfficialEightTest?'standard':isOfficialFourTest?'sharp':'standard';
 }
@@ -368,6 +368,12 @@ function elevation(raw){
 }
 
 function widthAt(s){return 36+5*Math.sin((s/LAP)*Math.PI*2+.5)}
+// Design01 official 18 mode: widen only the VISIBLE turf beyond the outer
+// rail. Racing lane width and all approved 2/4/8 physics remain unchanged.
+const EIGHTEEN_OUTER_TURF_EXTRA=9.0;
+function renderedTurfWidthAt(s){
+ return widthAt(s)+(isOfficialEighteenTest?EIGHTEEN_OUTER_TURF_EXTRA:0);
+}
 // 公表断面図と同じ「左2083.1m→右ゴール0m」の向きで描画。
 const profileCanvas=document.querySelector('#elevationChart');
 const profileReadout=document.querySelector('#profileReadout');
@@ -549,7 +555,8 @@ const renderer=new THREE.WebGLRenderer({antialias:!(isOfficialEightTest||isOffic
 // modifying the approved 3D horse or textures. A visible quality switch lets
 // iPhone users choose a faster render if the frame interval grows.
 const renderDprLevels={sharp:1.35,standard:1.05,light:.90};
-const initialDpr=isOfficialPairTest?(renderDprLevels[renderQuality.value]||1.05):1.4;
+const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?.82:
+ renderDprLevels[renderQuality.value]||1.05):1.4;
 renderer.setPixelRatio(Math.min(initialDpr,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
 renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -568,23 +575,17 @@ function applyRenderQuality(){
   renderDprLevels[renderQuality.value]||1.05,window.devicePixelRatio||1));
  renderer.setSize(stage.clientWidth,stage.clientHeight,false);
 }
-let auto18Dpr=1.05,auto18SlowWindows=0,auto18FastWindows=0;
+let auto18Dpr=.82,auto18ObservedFps=0;
 renderQuality.addEventListener('change',()=>{
- auto18Dpr=1.05;auto18SlowWindows=0;auto18FastWindows=0;
+ auto18Dpr=.82;
  applyRenderQuality();
 });
 function autoTune18HorseResolution(fps){
- if(!isOfficialEighteenTest||renderQuality.value!=='auto'||!playing||!installedDesign01)return;
- auto18SlowWindows=fps<32?auto18SlowWindows+1:0;
- auto18FastWindows=fps>49?auto18FastWindows+1:0;
- let next=auto18Dpr;
- if(auto18SlowWindows>=2){next=Math.max(.78,auto18Dpr-.07);auto18SlowWindows=0}
- if(auto18FastWindows>=3){next=Math.min(1.05,auto18Dpr+.05);auto18FastWindows=0}
- if(Math.abs(next-auto18Dpr)>.005){
-  auto18Dpr=next;
-  renderer.setPixelRatio(Math.min(auto18Dpr,window.devicePixelRatio||1));
-  renderer.setSize(stage.clientWidth,stage.clientHeight,false);
- }
+ // Safari can flash when setPixelRatio()/setSize() reallocates the WebGL
+ // drawing buffer in the middle of a race. Keep 18-horse auto resolution
+ // fixed at .82; only explicit user quality changes may resize it.
+ if(isOfficialEighteenTest&&renderQuality.value==='auto')
+  auto18ObservedFps=fps;
 }
 scene.add(new THREE.HemisphereLight(0xeaf7ff,0x4e6450,1.42));
 const sun=new THREE.DirectionalLight(0xfff4e6,1.95);
@@ -662,7 +663,7 @@ function ringGeom(innerFn,outerFn){
 }
 const ring=new THREE.Mesh(ringGeom(
  s=>offsetAt(s,MEASURE_OFFSET,.065),
- s=>offsetAt(s,MEASURE_OFFSET-widthAt(s),.065)
+ s=>offsetAt(s,MEASURE_OFFSET-renderedTurfWidthAt(s),.065)
 ),matTurf);scene.add(ring);
 // Turf boundaries: narrow walkways and inner dirt silhouette for visual orientation only.
 function borderBand(distanceA,distanceB,color){
@@ -671,7 +672,8 @@ function borderBand(distanceA,distanceB,color){
  const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color,side:THREE.DoubleSide,roughness:.94}));
  scene.add(mesh);return mesh;
 }
-borderBand(s=>MEASURE_OFFSET-widthAt(s)-3,s=>MEASURE_OFFSET-widthAt(s),0x95a58e);
+borderBand(s=>MEASURE_OFFSET-renderedTurfWidthAt(s)-3,
+ s=>MEASURE_OFFSET-renderedTurfWidthAt(s),0x95a58e);
 borderBand(s=>MEASURE_OFFSET,s=>MEASURE_OFFSET+2,0x65a35b);
 // 芝とダートの緩衝帯。双方の標高に追従する。
 const separator=new THREE.Mesh(ringGeom(
@@ -684,8 +686,8 @@ function slopedGround(from,to,color){
  scene.add(new THREE.Mesh(ringGeom(from,to),
   new THREE.MeshStandardMaterial({color,side:THREE.DoubleSide,roughness:1})));
 }
-slopedGround(s=>offsetAt(s,MEASURE_OFFSET-widthAt(s)-3,.015),s=>{
- const p=offsetAt(s,MEASURE_OFFSET-widthAt(s)-29);p.y=.12;return p;
+slopedGround(s=>offsetAt(s,MEASURE_OFFSET-renderedTurfWidthAt(s)-3,.015),s=>{
+ const p=offsetAt(s,MEASURE_OFFSET-renderedTurfWidthAt(s)-29);p.y=.12;return p;
 },0x4a8750);
 slopedGround(s=>dirtPoint(s,DIRT_INNER_OFFSET,.01),s=>{
  const p=offsetAt(s,DIRT_INNER_OFFSET+31);p.y=.12;return p;
@@ -763,7 +765,7 @@ for(const lane of [6.2,11.7,17.1,21.9]){
 
 // 芝A内ラチ・外ラチ。上下二段横材と支柱を配置。寸法は視認性優先の近似。
 function createRail(inner){
- const count=330,offset=s=>inner?MEASURE_OFFSET:MEASURE_OFFSET-widthAt(s);
+ const count=330,offset=s=>inner?MEASURE_OFFSET:MEASURE_OFFSET-renderedTurfWidthAt(s);
  const beamMat=new THREE.MeshStandardMaterial({color:0xf4f9fa,roughness:.38,metalness:.04});
  const postMat=new THREE.MeshStandardMaterial({color:0xdfe9e8,roughness:.63});
  function beam(height,radius){
@@ -1147,7 +1149,7 @@ function highlightRace(plan){
  clearRoute();
  // 走路を邪魔する黄色い走行ラインは表示しない。
  const first=racePointAt(plan,0);
- const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.9,plan.pocket?26:widthAt(plan.startStation)),
+ const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.9,plan.pocket?26:renderedTurfWidthAt(plan.startStation)),
   new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}));
  stripe.rotation.x=-Math.PI/2;stripe.rotation.z=-Math.atan2(first.t.z,first.t.x);
  stripe.position.copy(first.p).add(new THREE.Vector3(0,.19,0));routeVisual.add(stripe);
@@ -2006,9 +2008,19 @@ function drawFieldGate(plan){
   }
  });
  gateRoot.clear();gateDoors=[];gateOpening=0;
- const a=fieldCenterAt(plan,0),w=FIELD_STALL_WIDTH,total=FIELD_COUNT*w;
+ const a=fieldCenterAt(plan,0);
+ // The full-detail Design01 official 18 start gate uses the EXACT same
+ // per-stall spacing/center as the corresponding 18 horse models.
+ // The older low-poly demonstration retains its legacy stall width.
+ const w=isOfficialEighteenTest?
+  eighteenStartLane(a.width,0)-eighteenStartLane(a.width,1):
+  FIELD_STALL_WIDTH;
+ const total=FIELD_COUNT*w;
+ const gateCenter=isOfficialEighteenTest?
+  (eighteenStartLane(a.width,0)+eighteenStartLane(a.width,FIELD_COUNT-1))/2:
+  fieldGateCenterShift(a.width);
  const gateSide=new THREE.Vector3(a.t.z,0,-a.t.x);
- gateRoot.position.copy(a.p).addScaledVector(gateSide,fieldGateCenterShift(a.width));
+ gateRoot.position.copy(a.p).addScaledVector(gateSide,gateCenter);
  gateRoot.rotation.y=Math.atan2(a.t.x,a.t.z);
  const frame=new THREE.MeshStandardMaterial({color:0x2c704a,metalness:.55,roughness:.46});
  const roof=new THREE.MeshStandardMaterial({color:0x235439,metalness:.34,roughness:.53});
@@ -2711,7 +2723,8 @@ function selectRace(){
  fieldMode.value==='race18'?raceOrderText():'固定レーン18頭／1頭デモの走行テスト';
  highlightRace(activePlan);drawFieldGate(activePlan);
  fieldRoot.visible=fieldMode.value!=='single'&&!isOfficialPairTest;
- gateRoot.visible=fieldMode.value!=='single'&&!isOfficialPairTest;
+ gateRoot.visible=fieldMode.value!=='single'&&
+  (!isOfficialPairTest||isOfficialEighteenTest);
  runner.visible=fieldMode.value==='single'&&(!isDesign01Review||installedDesign01);
  positionRunner();positionFieldHorses();updateGateDoors();
  const test=fieldLayoutCheck(activePlan);
@@ -2826,6 +2839,9 @@ function animate(time){
  let pairTracking=false;
  if(fieldMode.value!=='single'){
   gateOpening=travel>0?Math.min(1,gateOpening+dt*4):0;updateGateDoors();
+  // After the launch the starting machine is behind the horses and is
+  // hidden to save hundreds of draw calls; reappears on race reset.
+  if(isOfficialEighteenTest)gateRoot.visible=travel<105;
   if(isOfficialPairTest&&installedDesign01&&activePlan&&pairTrackingView(view)){
    const shot=officialPairCameraShot(view);
    // FPS変動に依存しない追尾。すべての2頭用ビューで毎フレーム更新する。
