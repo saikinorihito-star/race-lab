@@ -1418,7 +1418,7 @@ function stepRace(tick){
 // The four-horse mode adds distinct running styles and safe lane convergence.
 const FOUR_PACE_PROFILES=[
  {role:'逃げ',accel:3.42,early:16.25,kickStart:1.00,kick:0},
- {role:'先行',accel:3.25,early:16.13,kickStart:.75,kick:.12},
+ {role:'先行',accel:3.15,early:15.80,kickStart:.75,kick:.12},
  {role:'差し',accel:3.32,early:16.10,kickStart:.25,kick:.52},
  {role:'追込',accel:3.10,early:15.95,kickStart:.36,kick:.82}
 ];
@@ -1430,14 +1430,17 @@ function fourHorseDesiredSlot(h,snapshot){
  function slotOpen(slot){
   const proposed=officialReviewLane(width,slot,h.distance);
   for(const x of others){
-   if(Math.abs(x.distance-h.distance)<FOUR_MIN_LONGITUDINAL+1.2 &&
+   if(Math.abs(x.distance-h.distance)<FOUR_MIN_LONGITUDINAL+.5 &&
     Math.abs(x.lane-proposed)<FOUR_LATERAL_SHARED+.25)return false;
   }
   return true;
  }
  // A late closer uses the outside path until the pack is established.
  const minSlot=h.idx===3&&h.distance<300?2:0;
- for(let slot=minSlot;slot<=3;slot++)if(slotOpen(slot))return slot;
+ // Hold the original outside lane until a genuine inward slot opens.
+ // Once merged, do not zigzag back outside just because another horse
+ // comes near; braking / waiting safely is preferable to abrupt weaving.
+ for(let slot=minSlot;slot<current;slot++)if(slotOpen(slot))return slot;
  return current;
 }
 function fourHorseSafeStep(h,snapshot,dt,targetSpeed){
