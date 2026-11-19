@@ -1680,6 +1680,7 @@ async function loadApprovedHorse(buffer){
  const action=runnerMixer.clipAction(gltf.animations[0]);
  action.setLoop(THREE.LoopRepeat,Infinity);action.play();
  installedDesign01=true;usedStoredGLB=true;
+ runner.visible=fieldMode.value==='single';
  if(fieldMode.value==='single'&&isDesign01Review)demoBtn.disabled=false;
  setDesign01Status('Design 01・ギャロップV2 読込完了。コース上で1頭を確認できます。');
  if(fieldMode.value==='single')setView('chase');
@@ -1849,7 +1850,7 @@ function selectRace(){
  highlightRace(activePlan);drawFieldGate(activePlan);
  fieldRoot.visible=fieldMode.value!=='single';
  gateRoot.visible=fieldMode.value!=='single';
- runner.visible=fieldMode.value==='single';
+ runner.visible=fieldMode.value==='single'&&(!isDesign01Review||installedDesign01);
  positionRunner();positionFieldHorses();updateGateDoors();
  const test=fieldLayoutCheck(activePlan);
  gridStatus.textContent='芝'+activeDistance+'m｜18枠 '+(test.ok?'配置OK':'要調整')+
