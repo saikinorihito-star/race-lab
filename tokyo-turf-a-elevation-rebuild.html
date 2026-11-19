@@ -40,6 +40,10 @@ a{color:#95e8df}
 .profileCaption{font-size:12px;line-height:1.65;color:#c6d9dc;margin-top:7px}
 #raceOrder{margin:0 12px 9px;padding:9px 11px;border-radius:9px;background:#1d3540;border:1px solid #35555e;color:#dcefe9;font-size:12px;line-height:1.6}
 #raceOrder strong{color:#f2e8b0}
+#design01Loader{padding-top:5px;padding-bottom:5px}
+#design01Loader[hidden]{display:none}
+#design01Loader input[type=file]{font-size:12px;max-width:min(100%,320px)}
+#design01Status{font-size:12px;line-height:1.55;color:#d7ebf0}
 #profileReadout{font-size:12px;color:#ffdf9a;font-weight:650}
 .gradeChip{display:inline-block;padding:3px 7px;border-radius:8px;background:#29434e;margin:3px 4px 1px 0;font-size:11px}
 @media(min-width:800px){h1{font-size:23px}.tools{gap:10px}#stage{min-height:590px}}
@@ -114,9 +118,13 @@ a{color:#95e8df}
 <label><input type="checkbox" id="showStands" checked/>スタンド建物を表示</label>
  <label>坂の立体強調 <select id="reliefMode"><option value="1">実寸（1倍）</option><option value="2">2倍表示</option><option value="3" selected>3倍表示（見やすさ優先）</option></select></label>
 </div>
+<div class="tools" id="design01Loader" hidden>
+ <label><strong>Design 01・承認済みギャロップV2</strong> <input id="design01File" type="file" accept=".glb,model/gltf-binary" aria-label="Design 01 ギャロップV2のGLBを選択"/></label>
+ <span id="design01Status">承認済みGLBを読み込んでいません。最初の1回だけファイルを選択してください。次回から同じ端末で自動読み込みします。</span>
+</div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
 <div id="raceOrder" aria-live="polite">18頭の順位とレース展開を準備しています。</div>
-<div id="message">18頭の走行アニメーションを改良。4拍子の脚運びと空中期、膝・飛節の関節、馬体・首の上下動、騎手の揺れを抑える動きを追加しました。デモ速度0.5倍で脚の動きを確認できます。コース・カメラ・発馬機・進路判断は変更していません。</div>
+<div id="message">以前承認済みのDesign 01・ギャロップV2（実際に採用する馬）の1頭走行確認に対応しました。専用リンクから開き、最初の1回だけGLBファイルを選んでください。18頭の仮モデルとコース・発馬機・カメラ・進路判断は変更していません。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">18頭：毛色・勝負服を個別表示</span></div>
 <section class="elevationPanel">
  <h2>芝Aコース｜高低断面図に基づく3D標高</h2>
@@ -160,6 +168,10 @@ const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate
 const courseSigns=document.querySelector('#courseSigns');
 const showStands=document.querySelector('#showStands');
 const fieldMode=document.querySelector('#fieldMode'),gridStatus=document.querySelector('#gridStatus');
+const isDesign01Review=new URLSearchParams(window.location.search).get('model')==='design01';
+if(isDesign01Review)fieldMode.value='single';
+const design01Loader=document.querySelector('#design01Loader'),design01File=document.querySelector('#design01File');
+const design01Status=document.querySelector('#design01Status');
 const LAP=2083.1,STRAIGHT=560,BACK_STRAIGHT=542,RIGHT_TURN_LEN=449,MEASURE_OFFSET=1;
 const LEFT_TURN_LEN=LAP-STRAIGHT-BACK_STRAIGHT-RIGHT_TURN_LEN;
 const TURN_RADIUS=RIGHT_TURN_LEN/Math.PI,CURVE_LEN=RIGHT_TURN_LEN,FINISH_DISTANCE=525.9;
@@ -1623,37 +1635,102 @@ console.assert(layoutTests.every(t=>t.ok),'18頭の発馬枠幅検証',layoutTes
 // ===== 18頭テストここまで =====
 
 runner=new THREE.Group();const fallback=fallbackHorse();runner.add(fallback);scene.add(runner);
-async function maybeLoadStoredHorse(){
- try{
-  const db=await new Promise((ok,fail)=>{
-   const req=indexedDB.open('race-lab-3d-model-local-cache',1);
-   req.onsuccess=()=>ok(req.result);req.onerror=()=>fail(req.error);
-   req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('glb'))req.result.createObjectStore('glb')};
-  });
-  const saved=await new Promise((ok,fail)=>{
-   const tx=db.transaction('glb','readonly'),q=tx.objectStore('glb').get('design01-uvfixed-v1');
-   q.onsuccess=()=>ok(q.result);q.onerror=()=>fail(q.error);
-  });db.close();
-  if(!saved?.blob)return;
-  const buffer=await saved.blob.arrayBuffer();
-  const loader=new GLTFLoader();
-  const gltf=await new Promise((ok,fail)=>loader.parse(buffer,'',ok,fail));
-  const bounds=new THREE.Box3().setFromObject(gltf.scene);
-  const size=new THREE.Vector3();bounds.getSize(size);
-  const scale=Math.min(1.35,2.0/Math.max(1,size.y));
-  gltf.scene.scale.setScalar(scale);
-  gltf.scene.position.set(-(bounds.min.x+bounds.max.x)*scale/2,-bounds.min.y*scale,-(bounds.min.z+bounds.max.z)*scale/2);
-  runner.remove(fallback);runner.add(gltf.scene);
-  runnerMixer=gltf.animations.length?new THREE.AnimationMixer(gltf.scene):null;
-  if(runnerMixer){const action=runnerMixer.clipAction(gltf.animations[0]);action.play()}
-  usedStoredGLB=true;
-  if(fieldMode.value==='single')msg.textContent='端末保存の3D馬モデルを使った1頭走行です。';
- }catch(err){console.warn('端末のGLB確認（代替モデルを使用）',err)}
+// 既に承認済みの実モデル Design01 ギャロップV2（36ボーン）の1頭走行確認用。
+// サンプル馬とは分離し、ユーザーの端末上にGLBを一度保存する。勝手に18頭へは複製しない。
+const DESIGN01_CACHE_KEY='design01-gallop-v2-approved';
+let installedDesign01=false,installedScene=null,horseLoaderGeneration=0;
+function setDesign01Status(message){design01Status.textContent=message}
+function updateDesign01Panel(){
+ design01Loader.hidden=fieldMode.value!=='single';
+ if(fieldMode.value==='single'){
+  if(installedDesign01)setDesign01Status('承認済みDesign 01・ギャロップV2を読み込み済み。1頭走行を確認できます。');
+  else setDesign01Status('Design 01・ギャロップV2未読込。下のGLBを選ぶと、この端末に保存します。');
+ }
 }
+function openHorseCache(){
+ return new Promise((resolve,reject)=>{
+  const req=indexedDB.open('race-lab-3d-model-local-cache',1);
+  req.onsuccess=()=>resolve(req.result);
+  req.onerror=()=>reject(req.error);
+  req.onupgradeneeded=()=>{
+   if(!req.result.objectStoreNames.contains('glb'))req.result.createObjectStore('glb');
+  };
+ });
+}
+async function loadApprovedHorse(buffer){
+ if(!buffer||buffer.byteLength<200||new DataView(buffer).getUint32(0,true)!==0x46546c67)
+  throw Error('有効なGLBファイルではありません');
+ const gltf=await new Promise((resolve,reject)=>new GLTFLoader().parse(buffer,'',resolve,reject));
+ if(!gltf.scene||!gltf.animations?.length)throw Error('アニメーション付きのGLBではありません');
+ const horse=gltf.scene;
+ const bounds=new THREE.Box3().setFromObject(horse),size=new THREE.Vector3();
+ bounds.getSize(size);
+ if(size.y<.2||size.y>10)throw Error('馬体の縮尺を確認できません');
+ // 高さ2.45mを目安にし、脚の接地面（モデル最下点）が芝に接するよう配置。
+ const scale=2.45/size.y;
+ horse.scale.setScalar(scale);
+ horse.position.set(-(bounds.min.x+bounds.max.x)*scale/2,-bounds.min.y*scale,
+  -(bounds.min.z+bounds.max.z)*scale/2);
+ if(installedScene){runner.remove(installedScene)}
+ runner.remove(fallback);runner.add(horse);installedScene=horse;
+ runnerMixer=new THREE.AnimationMixer(horse);
+ const action=runnerMixer.clipAction(gltf.animations[0]);
+ action.setLoop(THREE.LoopRepeat,Infinity);action.play();
+ installedDesign01=true;usedStoredGLB=true;
+ setDesign01Status('Design 01・ギャロップV2 読込完了。コース上で1頭を確認できます。');
+ if(fieldMode.value==='single')setView('chase');
+}
+async function maybeLoadStoredHorse(){
+ const generation=++horseLoaderGeneration;
+ try{
+  const db=await openHorseCache();
+  const saved=await new Promise((resolve,reject)=>{
+   const q=db.transaction('glb','readonly').objectStore('glb').get(DESIGN01_CACHE_KEY);
+   q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);
+  });
+  db.close();
+  if(!saved?.blob){
+   updateDesign01Panel();return;
+  }
+  const buf=await saved.blob.arrayBuffer();
+  if(generation!==horseLoaderGeneration)return;
+  await loadApprovedHorse(buf);
+ }catch(err){
+  console.warn('Design 01のキャッシュ読込に失敗',err);
+  if(fieldMode.value==='single')setDesign01Status('保存モデルを読めませんでした。GLBをもう一度選択してください。');
+ }
+}
+design01File.addEventListener('change',async()=>{
+ const file=design01File.files?.[0];if(!file)return;
+ const generation=++horseLoaderGeneration;
+ setDesign01Status('GLBを読み込み中…');
+ try{
+  const buf=await file.arrayBuffer();
+  if(generation!==horseLoaderGeneration)return;
+  await loadApprovedHorse(buf);
+  try{
+   const db=await openHorseCache();
+   await new Promise((resolve,reject)=>{
+    const tx=db.transaction('glb','readwrite');
+    tx.objectStore('glb').put({blob:new Blob([buf],{type:'model/gltf-binary'})},DESIGN01_CACHE_KEY);
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+   });db.close();
+   setDesign01Status('Design 01・ギャロップV2を端末に保存しました。次回から自動読み込みします。');
+  }catch(cacheError){
+   console.warn('Design01 cache unavailable',cacheError);
+   setDesign01Status('走行モデルは読み込み済みです。ただし端末への保存はできませんでした。');
+  }
+ }catch(err){
+  console.error('GLB読込失敗',err);
+  setDesign01Status('読み込みに失敗しました: '+String(err?.message||err));
+ }
+});
 maybeLoadStoredHorse();
 function positionRunner(){
  if(!activePlan)return;
- const a=racePointAt(activePlan,travel),pos=a.p;
+ const a=fieldMode.value==='single'&&isDesign01Review?
+ fieldCenterAt(activePlan,travel):racePointAt(activePlan,travel);
+ const pos=a.p;
  runner.position.copy(pos);
  runner.rotation.y=Math.atan2(a.t.x,a.t.z);
  if(view==='chase'&&fieldMode.value==='single'){
@@ -1780,7 +1857,7 @@ function selectRace(){
  if(view==='chase'||view==='start'||view==='field')setView(fieldMode.value!=='single'?'start':'all');
 }
 raceSelector.addEventListener('change',selectRace);
-fieldMode.addEventListener('change',()=>{selectRace();if(fieldMode.value!=='single')setView('start')});
+fieldMode.addEventListener('change',()=>{selectRace();updateDesign01Panel();if(fieldMode.value!=='single')setView('start')});
 document.querySelector('#startView').addEventListener('click',()=>setView('start'));
 function resetDemo(){
  travel=0;playing=false;gateOpening=0;initRaceHorses();updateGateDoors();
@@ -1831,7 +1908,7 @@ function resize(){
  drawElevationProfile();
 }
 window.addEventListener('resize',resize);
-resize();setView('all');selectRace();setView('start');
+resize();setView('all');selectRace();updateDesign01Panel();setView(isDesign01Review?'chase':'start');
 function animate(time){
  requestAnimationFrame(animate);
  const dt=Math.min(clock.getDelta(),.05);
