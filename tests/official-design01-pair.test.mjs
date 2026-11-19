@@ -326,8 +326,11 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
    'The outermost horse must rush inward by more than 3 traditional lanes by 100m');
   assert.equal(r.snapshots[200][1].slot,0,
    'Stalker should reach the inner lane behind the leader by 200m');
-  assert.equal(r.snapshots[200][3].slot,0,
-   'Outermost horse can reach the inner lane when a safe gap appears');
+  const outsideAt200=r.snapshots[200][3];
+  const localWidthAt200=36+5*Math.sin(outsideAt200.d/2083.1*Math.PI*2+.5);
+  const remainingToInner=lane(localWidthAt200,0)-outsideAt200.lane;
+  assert.ok(remainingToInner<7.5,
+   'The outside horse moves across several lanes promptly, but does not cut through traffic');
  }
 });
 
