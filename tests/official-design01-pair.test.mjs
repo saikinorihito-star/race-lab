@@ -16,6 +16,13 @@ const SAFE=3.7,SEP=3.35;
 const lane=runInNewContext('('+extract('pairRailLane')+')',{
  PAIR_RAIL_CENTER_CLEARANCE:SAFE,PAIR_LANE_SPACING:SEP
 });
+function makeReviewLane(four){
+ return runInNewContext('('+extract('officialReviewLane')+')',{
+  pairRailLane:lane,isOfficialFourTest:four,
+  FOUR_START_OUTSIDE_OFFSET:8.0,FOUR_INWARD_SETTLE_DISTANCE:160,
+  THREE:{MathUtils:{clamp:(x,min,max)=>Math.max(min,Math.min(max,x))}}
+ });
+}
 
 test('2 and 4 official horses stay clear of the inner and outer turf rails',()=>{
  for(const width of [24,28,31,33,36,39,41]){
@@ -38,7 +45,8 @@ test('both 2 and 4 horse reviews use stable lanes without 18-horse AI',()=>{
   }));
   const ctx={activePlan:{distance},raceFinished:[],raceElapsed:0,raceHorses,
    OFFICIAL_TEST_COUNT:count,
-   fieldCenterAt:(_plan,d)=>({width:widthAt(d)}),pairRailLane:lane};
+   fieldCenterAt:(_plan,d)=>({width:widthAt(d)}),
+   pairRailLane:lane,officialReviewLane:makeReviewLane(count===4)};
   const step=runInNewContext('('+extract('stepOfficialPair')+')',ctx);
   let minCloseSpacing=Infinity;
   for(let tick=0;tick<24000&&ctx.raceFinished.length<count;tick++){
@@ -82,7 +90,7 @@ test('2 and 4 horse tracking angles frame whole pack if close, leader if far',()
       distance:200-(gap*i/(count-1)),postDistance:0,lane:12.3-i*3.35
      })),
      raceAccumulator:0,RACE_TICK:1/60,playing:false,
-     pairRailLane:lane,fieldCenterAt:(_p,d)=>({p:new Vec3(d,0,0),t:new Vec3(1,0,0),width:36}),
+     pairRailLane:lane,officialReviewLane:makeReviewLane(count===4),fieldCenterAt:(_p,d)=>({p:new Vec3(d,0,0),t:new Vec3(1,0,0),width:36}),
      fieldCameraShot:()=>{throw Error('Unexpected fallback camera')}};
     ctx.officialPairVisualState=runInNewContext('('+extract('officialPairVisualState')+')',ctx);
     const camera=runInNewContext('('+extract('officialPairCameraShot')+')',ctx);
@@ -104,7 +112,8 @@ test('official 2-horse visual position interpolates smoothly between 60Hz race t
  for(const alpha of [0,.125,.25,.375,.50,.625,.75,.875,1]){
   const ctx={THREE:fakeThree,raceHorses:[h],activePlan:{distance:1400},
    playing:true,raceAccumulator:alpha*step,RACE_TICK:step,
-   fieldCenterAt:(_p,d)=>({width:36}),pairRailLane:lane};
+   fieldCenterAt:(_p,d)=>({width:36}),pairRailLane:lane,
+   officialReviewLane:makeReviewLane(false)};
   const state=runInNewContext('('+extract('officialPairVisualState')+')',ctx)(0);
   readings.push(state.distance);
   assert.ok(Math.abs(state.distance-(50+alpha*.27))<1e-7);
@@ -113,6 +122,42 @@ test('official 2-horse visual position interpolates smoothly between 60Hz race t
  for(let i=1;i<readings.length;i++){
   assert.ok(readings[i]>readings[i-1],'No duplicate frozen draw poses inside a tick');
   assert.ok(readings[i]-readings[i-1]<.04,'No abrupt large step inside a tick');
+ }
+});
+
+test('4-horse review approaches rail from 8m farther out and never turns away after settling',()=>{
+ const four=makeReviewLane(true),two=makeReviewLane(false);
+ for(const width of [31,36,41]){
+  for(let horse=0;horse<4;horse++){
+   const target=lane(width,horse);
+   assert.ok(Math.abs(four(width,horse,0)-(target-8))<1e-9);
+   assert.ok(Math.abs(four(width,horse,160)-target)<1e-9);
+   assert.ok(Math.abs(four(width,horse,500)-target)<1e-9);
+   let previous=-Infinity;
+   for(let d=0;d<=220;d+=2){
+    const pos=four(width,horse,d);
+    assert.ok(pos>=previous-1e-8,'Inward lane must not reverse');
+    assert.ok(width/2-pos>=SAFE-1e-8,'Rail clearance always >=3.7m');
+    assert.ok(width/2+pos>1.5,'Outer rail remains clear');
+    previous=pos;
+   }
+   assert.ok(Math.abs(two(width,horse,0)-target)<1e-9,'Approved 2-horse lanes unchanged');
+  }
+ }
+});
+
+test('render-time 4-horse inward movement is smoothly interpolated',()=>{
+ const reviewLane=makeReviewLane(true);
+ const h={distance:50.27,prevDistance:50,postDistance:0,prevPostDistance:0,speed:16};
+ let previous=-Infinity;
+ for(const alpha of [0,.125,.25,.375,.5,.625,.75,.875,1]){
+  const ctx={THREE:fakeThree,raceHorses:[h],activePlan:{distance:1400},
+   playing:true,raceAccumulator:alpha/60,RACE_TICK:1/60,
+   fieldCenterAt:(_p,d)=>({width:36}),officialReviewLane:reviewLane};
+  const state=runInNewContext('('+extract('officialPairVisualState')+')',ctx)(0);
+  assert.ok(Math.abs(state.lane-reviewLane(36,0,state.distance))<1e-9);
+  assert.ok(state.lane>previous,'Inward lateral motion is continuous between simulation ticks');
+  previous=state.lane;
  }
 });
 
@@ -138,6 +183,7 @@ test('manual camera direction and zoom change the tracking eye but preserve its 
   raceHorses:Array.from({length:4},(_,i)=>({distance:200-i*2,postDistance:0,lane:12.3-i*3.35})),
   raceAccumulator:0,RACE_TICK:1/60,playing:false,activePlan:{distance:1400},
   groupCameraOffset:{yaw:0,pitch:0,zoom:1},pairRailLane:lane,
+  officialReviewLane:makeReviewLane(true),
   fieldCenterAt:(_p,d)=>({p:new Vec3(d,0,0),t:new Vec3(1,0,0),width:36}),
   fieldCameraShot:()=>{throw Error('Unexpected fallback')}};
  ctx.officialPairVisualState=runInNewContext('('+extract('officialPairVisualState')+')',ctx);
