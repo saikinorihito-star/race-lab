@@ -58,8 +58,8 @@ test('real starting gate is shown in 18 mode, doors open and the far-away gate i
 
 test('18-mode stabilized rendering cannot reallocate canvas after fluctuating FPS',()=>{
  assert.match(html,/高精細・固定（18頭推奨）/);
- assert.match(html,/let auto18Dpr=1\.35,auto18ObservedFps=0/);
- assert.match(html,/renderQuality\.value==='auto'\?1\.35/);
+ assert.match(html,/let auto18Dpr=1\.65,auto18ObservedFps=0/);
+ assert.match(html,/renderQuality\.value==='auto'\?1\.65/);
  const monitor=block('autoTune18HorseResolution');
  assert.match(monitor,/auto18ObservedFps=fps/);
  assert.doesNotMatch(monitor,/renderer\.setPixelRatio\s*\(/);
