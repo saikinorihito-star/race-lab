@@ -2348,7 +2348,50 @@ function inspectMarker(){
 markerFocus.addEventListener('change',inspectMarker);
 // 追尾中のカメラでも、利用者が指定した微調整を上書きしない。
 const groupCameraOffset={yaw:0,pitch:0,zoom:1};
+const camera18={yaw:0,pitch:0,zoom:1,pan:0,lift:0};
+const camera18Follow=document.querySelector('#cam18Follow');
+const camera18Inputs={
+ yaw:document.querySelector('#cam18Yaw'),
+ pitch:document.querySelector('#cam18Pitch'),
+ zoom:document.querySelector('#cam18Zoom'),
+ pan:document.querySelector('#cam18Pan'),
+ lift:document.querySelector('#cam18Lift')
+};
+function wrapCameraAngle(angle){
+ return ((angle+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
+}
+function syncCamera18Controls(){
+ if(!isOfficialEighteenTest)return;
+ camera18Inputs.yaw.value=String(Math.round(camera18.yaw*180/Math.PI));
+ camera18Inputs.pitch.value=String(Math.round(camera18.pitch*180/Math.PI));
+ camera18Inputs.zoom.value=String(Math.round(camera18.zoom*20)/20);
+ camera18Inputs.pan.value=String(Math.round(camera18.pan));
+ camera18Inputs.lift.value=String(Math.round(camera18.lift*2)/2);
+ document.querySelector('#cam18YawValue').textContent=Math.round(camera18.yaw*180/Math.PI)+'°';
+ document.querySelector('#cam18PitchValue').textContent=Math.round(camera18.pitch*180/Math.PI)+'°';
+ document.querySelector('#cam18ZoomValue').textContent=camera18.zoom.toFixed(2)+'×';
+ document.querySelector('#cam18PanValue').textContent=Math.round(camera18.pan)+'m';
+ document.querySelector('#cam18LiftValue').textContent=camera18.lift.toFixed(1)+'m';
+ document.querySelectorAll('[data-cam18-view]').forEach(btn=>
+  btn.classList.toggle('selected',btn.dataset.cam18View===view));
+}
+function resetCamera18(){
+ camera18.yaw=0;camera18.pitch=0;camera18.zoom=1;
+ camera18.pan=0;camera18.lift=0;
+ syncCamera18Controls();
+}
 function adjustGroupCamera(kind){
+ if(isOfficialEighteenTest){
+  if(kind==='left')camera18.yaw=wrapCameraAngle(camera18.yaw-.21);
+  if(kind==='right')camera18.yaw=wrapCameraAngle(camera18.yaw+.21);
+  if(kind==='up')camera18.pitch=THREE.MathUtils.clamp(camera18.pitch+.10,-.35,1.31);
+  if(kind==='down')camera18.pitch=THREE.MathUtils.clamp(camera18.pitch-.10,-.35,1.31);
+  if(kind==='near')camera18.zoom=Math.max(.30,camera18.zoom*.80);
+  if(kind==='far')camera18.zoom=Math.min(4,camera18.zoom*1.25);
+  if(kind==='reset')resetCamera18();
+  syncCamera18Controls();
+  return;
+ }
  if(kind==='left')groupCameraOffset.yaw-=.14;
  if(kind==='right')groupCameraOffset.yaw+=.14;
  if(kind==='up')groupCameraOffset.pitch=Math.min(.48,groupCameraOffset.pitch+.085);
@@ -2358,6 +2401,25 @@ function adjustGroupCamera(kind){
  if(kind==='reset'){groupCameraOffset.yaw=0;groupCameraOffset.pitch=0;groupCameraOffset.zoom=1}
 }
 if(isOfficialPairTest){
+ if(isOfficialEighteenTest){
+  document.querySelector('#cameraAdjustHint').textContent=
+   '1本指：360°回転と上下角度｜2本指：つまんで拡大縮小、動かして注視点移動';
+  for(const [name,control] of Object.entries(camera18Inputs)){
+   control.addEventListener('input',()=>{
+    const value=Number(control.value);
+    camera18[name]=(name==='yaw'||name==='pitch')?value*Math.PI/180:value;
+    syncCamera18Controls();
+   });
+  }
+  camera18Follow.addEventListener('change',syncCamera18Controls);
+  document.querySelector('#cam18Reset').addEventListener('click',resetCamera18);
+  for(const btn of document.querySelectorAll('[data-cam18-view]')){
+   btn.addEventListener('click',()=>{
+    resetCamera18();
+    setView(btn.dataset.cam18View);
+   });
+  }
+ }
  cameraAdjustToggle.addEventListener('click',()=>{
   const opening=cameraAdjustPanel.hidden;
   cameraAdjustPanel.hidden=!opening;
