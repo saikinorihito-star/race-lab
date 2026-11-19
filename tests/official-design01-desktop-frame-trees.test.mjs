@@ -24,7 +24,7 @@ test('original detailed GLB skeleton and gait remain untouched, cloth numbers ad
  const loader=extract('initializeOfficialPair');
  const cloth=extract('addOfficialFrameCloth');
  assert.match(loader,/const model=cloneSkeleton\(source\)/);
- assert.match(loader,/if\(isOfficialEighteenTest\)addOfficialFrameCloth\(group,i\+1,originalFrameBounds\)/);
+ assert.match(loader,/if\(isOfficialEighteenTest\)\{\s*tintOriginalHelmetAndCloth\(model,i\+1\);\s*addOfficialFrameCloth\(group,i\+1,originalFrameBounds\);\s*\}/);
  assert.match(loader,/const originalFrameBounds=isOfficialEighteenTest\?/);
  assert.match(loader,/new THREE\.Box3\(\)\.setFromObject\(source\)/);
  assert.match(cloth,/group\.add\(outsidePanels\)/);
@@ -105,7 +105,7 @@ test('race desktop toolbar and speed controls preserve the construction UI and p
  assert.match(html,/@media\(min-width:820px\)/);
  assert.match(html,/if\(isOfficialEighteenTest\)\{\s*raceSpeedButtons\.hidden=false/);
  assert.match(html,/document\.querySelector\('#legacyRateLabel'\)\.hidden=true/);
- assert.match(html,/const racingCameraViews=new Set\(\['side','front3q','chase','field'\]\)/);
+ assert.match(html,/const racingCameraViews=new Set\(\['broadcast','side','front3q','chase','field'\]\)/);
  assert.match(html,/id="cam18Extras"/);
  assert.match(html,/id="stageStartBtn"/);
 });
