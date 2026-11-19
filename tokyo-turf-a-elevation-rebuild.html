@@ -47,6 +47,18 @@ a{color:#95e8df}
 #stageDock{position:absolute;z-index:5;left:9px;right:9px;bottom:42px;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;pointer-events:none}
 #stageDock[hidden],#cameraAdjustPanel[hidden]{display:none}
 #stageDock button,#stageDock select{pointer-events:auto;touch-action:manipulation}
+#raceSpeedButtons[hidden],#legacyRateLabel[hidden]{display:none!important}
+#raceSpeedButtons{display:flex;gap:6px;align-items:center;pointer-events:auto;position:absolute;right:0;bottom:69px}
+#raceSpeedButtons button{background:#1b3d4bde;min-width:67px;border:1px solid #87b4bf;border-radius:11px;font-weight:750;font-size:13px;min-height:44px}
+#raceSpeedButtons button.selected{background:#218a71;color:white;border-color:#acf9d0}
+@media(min-width:820px){
+ #stageDock{align-items:flex-end;gap:22px}
+ #raceSpeedButtons{position:static;margin-left:auto}
+ #raceSpeedButtons button{min-width:82px;font-size:14px}
+ #cameraAdjustPanel{width:min(395px,calc(100vw - 20px));max-height:min(68svh,620px)}
+ #stage{height:min(79svh,820px);min-height:530px}
+ #stageStartBtn{min-width:152px}
+}
 #stageStartBtn{min-width:132px;min-height:53px;background:#b5ef54;border:2px solid #e3ff98;color:#183015;border-radius:13px;font-size:16px;font-weight:800;box-shadow:0 4px 16px #06181ab0;white-space:nowrap}
 #stageStartBtn[disabled]{opacity:.7}
 #cameraAdjustToggle{min-height:44px;background:#132f40ed;border-color:#83cfc3;font-weight:750}
@@ -138,6 +150,10 @@ a{color:#95e8df}
     </select></label>
    </div>
   </div>
+  <div id="raceSpeedButtons" hidden role="group" aria-label="レース倍速">
+   <button type="button" data-race-speed="2" aria-pressed="false">▶▶ 2倍</button>
+   <button type="button" data-race-speed="4" aria-pressed="false">▶▶ 4倍</button>
+  </div>
   <button id="stageStartBtn" type="button" aria-label="レースをスタート">▶ スタート</button>
  </div>
  <div id="design01Overlay" hidden>
@@ -202,7 +218,7 @@ a{color:#95e8df}
 <label>走行テスト <select id="fieldMode"><option value="race18" selected>18頭レース展開（能力差あり）</option><option value="field18">18頭同時走行（固定レーン）</option><option value="single">従来の1頭走行</option></select></label>
 <button id="demo">18頭のレースを開始</button>
 <button id="reset">発馬機へ戻す</button>
-<label>デモ速度 <select id="rate"><option value="0.5">0.5倍（脚の動き確認）</option><option value="1" selected>1倍（発走確認）</option><option value="4">4倍</option><option value="8">8倍（確認向け）</option></select></label>
+<label id="legacyRateLabel">デモ速度 <select id="rate"><option value="1" selected>通常速度</option><option value="2">2倍</option><option value="4">4倍</option></select></label>
 <label><input type="checkbox" id="labels" checked/>施設・距離の表示</label>
 <label><input type="checkbox" id="courseSigns"/>大きな案内看板（全景用）</label>
 <label><input type="checkbox" id="showStands" checked/>スタンド建物を表示</label>
@@ -262,6 +278,7 @@ import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
 const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate'),checkLabels=document.querySelector('#labels');
+const raceSpeedButtons=document.querySelector('#raceSpeedButtons');
 const courseSigns=document.querySelector('#courseSigns');
 const showStands=document.querySelector('#showStands');
 const fieldMode=document.querySelector('#fieldMode'),gridStatus=document.querySelector('#gridStatus');
@@ -294,6 +311,8 @@ if(isOfficialPairTest){
 // Course construction and inspection keep their own camera controls.
 // When watching the official 18-runner race, offer only actual race cameras.
 if(isOfficialEighteenTest){
+ raceSpeedButtons.hidden=false;
+ document.querySelector('#legacyRateLabel').hidden=true;
  const racingCameraViews=new Set(['side','front3q','chase','field']);
  const raceViewButtons=[...document.querySelectorAll('#views button')];
  for(const button of raceViewButtons)
@@ -2381,6 +2400,25 @@ const camera18Inputs={
  pan:document.querySelector('#cam18Pan'),
  lift:document.querySelector('#cam18Lift')
 };
+function setRacePlaybackSpeed(speed){
+ const next=Number(speed);
+ if(![1,2,4].includes(next))return;
+ // 1x is the normal default; clicking the selected multiplier restores 1x.
+ rate.value=String(next);
+ for(const button of raceSpeedButtons.querySelectorAll('[data-race-speed]')){
+  const active=Number(button.dataset.raceSpeed)===next;
+  button.classList.toggle('selected',active);
+  button.setAttribute('aria-pressed',String(active));
+ }
+}
+if(isOfficialEighteenTest){
+ for(const button of raceSpeedButtons.querySelectorAll('[data-race-speed]'))
+  button.addEventListener('click',()=>{
+   const requested=Number(button.dataset.raceSpeed);
+   setRacePlaybackSpeed(Number(rate.value)===requested?1:requested);
+  });
+ rate.addEventListener('change',()=>setRacePlaybackSpeed(rate.value));
+}
 function wrapCameraAngle(angle){
  return ((angle+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
 }
