@@ -116,7 +116,12 @@ test('18-runners camera and automatic resolution retain the source model',()=>{
  assert.match(fn('officialPairCameraShot'),/isOfficialEighteenTest\?\(1-blend\)\*47/);
  assert.match(html,/renderQuality\.value='auto'/);
  assert.match(html,/autoTune18HorseResolution\(fps\)/);
- assert.match(html,/auto18SlowWindows>=2/);
+ assert.match(html,/const initialDpr=isOfficialPairTest\?\(renderQuality\.value==='auto'\?\.82/);
+ assert.match(html,/let auto18Dpr=\.82,auto18ObservedFps=0/);
+ const tuner=fn('autoTune18HorseResolution');
+ assert.ok(!tuner.includes('renderer.setPixelRatio('),'No framebuffer reallocation while FPS changes');
+ assert.ok(!tuner.includes('renderer.setSize('),'No canvas resize triggered by FPS changes');
+ assert.match(fn('resize'),/w===lastStageWidth&&h===lastStageHeight/);
  assert.match(html,/const EIGHTEEN_MERGE_LONGITUDINAL_BUFFER=6\.0/);
  assert.match(html,/const EIGHTEEN_SPACING_FROM=300/);
 });
