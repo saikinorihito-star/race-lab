@@ -44,7 +44,7 @@ test('approved 2-horse review still follows its original stable lanes',()=>{
    speed:0,finished:false,finishTime:null
   }));
   const ctx={activePlan:{distance},raceFinished:[],raceElapsed:0,raceHorses,
-   OFFICIAL_TEST_COUNT:count,
+   OFFICIAL_TEST_COUNT:count,isOfficialFourTest:false,
    fieldCenterAt:(_plan,d)=>({width:widthAt(d)}),
    pairRailLane:lane,officialReviewLane:makeReviewLane(count===4)};
   const step=runInNewContext('('+extract('stepOfficialPair')+')',ctx);
@@ -111,7 +111,7 @@ test('official 2-horse visual position interpolates smoothly between 60Hz race t
  const readings=[];
  for(const alpha of [0,.125,.25,.375,.50,.625,.75,.875,1]){
   const ctx={THREE:fakeThree,raceHorses:[h],activePlan:{distance:1400},
-   playing:true,raceAccumulator:alpha*step,RACE_TICK:step,
+   playing:true,isOfficialFourTest:false,raceAccumulator:alpha*step,RACE_TICK:step,
    fieldCenterAt:(_p,d)=>({width:36}),pairRailLane:lane,
    officialReviewLane:makeReviewLane(false)};
   const state=runInNewContext('('+extract('officialPairVisualState')+')',ctx)(0);
@@ -246,7 +246,7 @@ function runActualFourHorseSimulation(distance){
  const THREE={MathUtils:{clamp:(v,lo,hi)=>Math.max(lo,Math.min(hi,v))}};
  const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35,
  FOUR_START_OUTSIDE_OFFSET=8,FOUR_INWARD_SETTLE_DISTANCE=160,
- FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=2.65,
+ FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=2.9,
  isOfficialFourTest=true,OFFICIAL_TEST_COUNT=4;
  ${profiles}
  ${code}
@@ -279,7 +279,7 @@ function runActualFourHorseSimulation(distance){
    const a=active[i],b=active[j],long=Math.abs(a.distance-b.distance);
    const lateral=Math.abs(a.lane-b.lane);
    minActiveCenterDistance=Math.min(minActiveCenterDistance,Math.hypot(long,lateral));
-   if(lateral<2.65&&long>=4.8&&long<20)stackedFrames++;
+   if(lateral<2.9&&long>=4.8&&long<20)stackedFrames++;
   }
  }
  return {finished:raceFinished.length,minActiveCenterDistance,
@@ -294,7 +294,7 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
   const r=runActualFourHorseSimulation(distance);
   assert.equal(r.finished,4,'All four must reach the finish at '+distance+'m');
   assert.ok(r.minRailClearance>=3.7-1e-8,'No horse meets the inside rail');
-  assert.ok(r.minActiveCenterDistance>=2.6,'No active horse overlap');
+  assert.ok(r.minActiveCenterDistance>=2.75,'No active horse overlap');
   assert.ok(r.maxLateralSpeed<=1.201,'Sideways speed capped at 1.2m/s');
   assert.equal(r.outwardSlotChanges,0,'No rapid outward-inward lane oscillation');
   assert.ok(r.stackedFrames>100,'Must visibly queue nose-to-tail at some stage');
