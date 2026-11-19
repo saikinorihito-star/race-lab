@@ -52,6 +52,8 @@ test('real starting gate is shown in 18 mode, doors open and the far-away gate i
  assert.match(html,/drawFieldGate\(activePlan\)/);
  assert.match(html,/gateOpening=travel>0\?Math\.min\(1,gateOpening\+dt\*4\):0/);
  assert.match(block('updateGateDoors'),/door\.rotation\.y=side\*gateOpening\*1\.17/);
+ assert.match(block('resetDemo'),/if\(isOfficialEighteenTest\)gateRoot\.visible=true/);
+ assert.match(html,/travel=0;gateOpening=0;initRaceHorses\(\);updateGateDoors\(\);positionFieldHorses\(\);\s*if\(isOfficialEighteenTest\)gateRoot\.visible=true/);
 });
 
 test('18-mode stabilized rendering cannot reallocate canvas after fluctuating FPS',()=>{
