@@ -108,6 +108,7 @@ a{color:#95e8df}
      </div>
      <label class="camFollowLabel">追う対象<select id="cam18Follow" aria-label="追う馬や馬群を選択">
       <option value="auto">自動（馬群→先頭）</option>
+      <option value="fixed">現在位置に固定（馬が通過）</option>
       <option value="pack">馬群の中央</option>
       <option value="leader">先頭</option>
       <option value="tail">最後尾</option>
@@ -118,7 +119,7 @@ a{color:#95e8df}
      <label>左右移動<input id="cam18Pan" type="range" min="-100" max="100" step="1" value="0" aria-label="視点の注視位置を左右に移動"/><output id="cam18PanValue">0m</output></label>
      <label>上下移動<input id="cam18Lift" type="range" min="-24" max="24" step="0.5" value="0" aria-label="視点の注視位置を上下に移動"/><output id="cam18LiftValue">0m</output></label>
      <button type="button" class="camReset" id="cam18Reset">↺ 視点調整を初期化</button>
-     <div class="camNote">1本指で360°回転・上下角度変更。2本指でつまむとズーム、2本指で同方向へ動かすと注視位置を移動します。追尾は続きます。</div>
+     <div class="camNote">1本指で360°回転・上下角度変更。2本指でつまむとズーム、2本指を一緒に動かすと注視位置が移動します。「現在位置に固定」以外は追尾を続けます。</div>
     </div>
     <div class="camGrid">
      <button type="button" data-cam-adjust="left" aria-label="左へ回転">↶ 左</button>
@@ -2350,6 +2351,7 @@ markerFocus.addEventListener('change',inspectMarker);
 const groupCameraOffset={yaw:0,pitch:0,zoom:1};
 const camera18={yaw:0,pitch:0,zoom:1,pan:0,lift:0};
 const camera18Follow=document.querySelector('#cam18Follow');
+let camera18LatestAnchor=null,camera18FixedAnchor=null;
 const camera18Inputs={
  yaw:document.querySelector('#cam18Yaw'),
  pitch:document.querySelector('#cam18Pitch'),
@@ -2411,7 +2413,11 @@ if(isOfficialPairTest){
     syncCamera18Controls();
    });
   }
-  camera18Follow.addEventListener('change',syncCamera18Controls);
+  camera18Follow.addEventListener('change',()=>{
+   camera18FixedAnchor=camera18Follow.value==='fixed'&&camera18LatestAnchor?
+    {...camera18LatestAnchor}:null;
+   syncCamera18Controls();
+  });
   document.querySelector('#cam18Reset').addEventListener('click',resetCamera18);
   for(const btn of document.querySelectorAll('[data-cam18-view]')){
    btn.addEventListener('click',()=>{
@@ -2509,7 +2515,12 @@ function officialEighteenCameraShot(which,context){
  }else if(/^\d+$/.test(choice)){
   const horse=horses[Number(choice)-1];
   if(horse){distance=horse.distance+(horse.postDistance||0);lane=horse.lane}
+ }else if(choice==='fixed'){
+  if(!camera18FixedAnchor)camera18FixedAnchor={distance,lane};
+  distance=camera18FixedAnchor.distance;
+  lane=camera18FixedAnchor.lane;
  }
+ camera18LatestAnchor={distance,lane};
  const a=fieldCenterAt(activePlan,Math.max(0,distance));
  const side=new THREE.Vector3(a.t.z,0,-a.t.x).normalize();
  const focus=a.p.clone().addScaledVector(side,lane);
@@ -2691,6 +2702,9 @@ function selectRace(){
  activeDistance=Number(raceSelector.value);
  activePlan=racePlan(activeDistance);
  playing=false;travel=0;gateOpening=0;initRaceHorses();
+ if(isOfficialEighteenTest){
+  camera18LatestAnchor=null;camera18FixedAnchor=null;camera18Follow.value='auto';
+ }
  demoBtn.textContent=initialDemoText();
  document.querySelector('#raceOrder').textContent=isOfficialPairTest?
  '正式モデル'+OFFICIAL_TEST_COUNT+'頭：逃げ・先行・差し・追込の隊列、内側への進路選択と接触回避を確認。':
