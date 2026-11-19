@@ -15,6 +15,7 @@ h1{font-size:20px;line-height:1.35;margin:0 0 5px;font-weight:750}
 main{max-width:1320px;margin:0 auto}
 .pillrow{padding:9px 12px;display:flex;gap:7px;flex-wrap:wrap}
 .pill{font-size:11px;color:#b7e5d4;background:#234b44;border:1px solid #37796d;border-radius:16px;padding:5px 9px}
+#views button[hidden],#distanceViews[hidden]{display:none!important}
 #stage{height:min(69svh,720px);min-height:370px;position:relative;background:linear-gradient(#a2d1da,#cce5da);overflow:hidden;touch-action:none}
 #stage canvas{display:block}
 #telemetry{position:absolute;left:10px;top:10px;z-index:3;padding:8px 10px;border-radius:9px;background:#112736e8;color:#ecfff9;font-size:12px;line-height:1.55;border:1px solid #456b79;pointer-events:none}
@@ -286,9 +287,18 @@ if(isOfficialEighteenTest){
 if(isOfficialPairTest){
  stageDock.hidden=false;
  if(isOfficialEighteenTest){
-  renderQuality.add(new Option('安定画質（18頭・ちらつき対策）','auto'),0);
+  renderQuality.add(new Option('高精細・固定（18頭推奨）','auto'),0);
   renderQuality.value='auto';
  }else renderQuality.value=isOfficialEightTest?'standard':isOfficialFourTest?'sharp':'standard';
+}
+// Course construction and inspection keep their own camera controls.
+// When watching the official 18-runner race, offer only actual race cameras.
+if(isOfficialEighteenTest){
+ const racingCameraViews=new Set(['side','front3q','chase','field']);
+ const raceViewButtons=[...document.querySelectorAll('#views button')];
+ for(const button of raceViewButtons)
+  button.hidden=!racingCameraViews.has(button.dataset.view);
+ document.querySelector('#distanceViews').hidden=true;
 }
 if(isDesign01Review){
  fieldMode.value=isOfficialPairTest?'race18':'single';
@@ -555,7 +565,7 @@ const renderer=new THREE.WebGLRenderer({antialias:!(isOfficialEightTest||isOffic
 // modifying the approved 3D horse or textures. A visible quality switch lets
 // iPhone users choose a faster render if the frame interval grows.
 const renderDprLevels={sharp:1.35,standard:1.05,light:.90};
-const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?.82:
+const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?1.35:
  renderDprLevels[renderQuality.value]||1.05):1.4;
 renderer.setPixelRatio(Math.min(initialDpr,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
@@ -575,15 +585,15 @@ function applyRenderQuality(){
   renderDprLevels[renderQuality.value]||1.05,window.devicePixelRatio||1));
  renderer.setSize(stage.clientWidth,stage.clientHeight,false);
 }
-let auto18Dpr=.82,auto18ObservedFps=0;
+let auto18Dpr=1.35,auto18ObservedFps=0;
 renderQuality.addEventListener('change',()=>{
- auto18Dpr=.82;
+ auto18Dpr=1.35;
  applyRenderQuality();
 });
 function autoTune18HorseResolution(fps){
  // Safari can flash when setPixelRatio()/setSize() reallocates the WebGL
- // drawing buffer in the middle of a race. Keep 18-horse auto resolution
- // fixed at .82; only explicit user quality changes may resize it.
+ // drawing buffer in the middle of a race. Keep 18-horse default
+ // high-detail resolution fixed at 1.35; only a user quality change may resize.
  if(isOfficialEighteenTest&&renderQuality.value==='auto')
   auto18ObservedFps=fps;
 }
