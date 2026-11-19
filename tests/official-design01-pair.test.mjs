@@ -47,7 +47,7 @@ test('approved 2-horse review still follows its original stable lanes',()=>{
    speed:0,finished:false,finishTime:null
   }));
   const ctx={activePlan:{distance},raceFinished:[],raceElapsed:0,raceHorses,
-   OFFICIAL_TEST_COUNT:count,isOfficialFourTest:false,
+   OFFICIAL_TEST_COUNT:count,isOfficialFourTest:false,isOfficialMultiTest:false,isOfficialEightTest:false,
    fieldCenterAt:(_plan,d)=>({width:widthAt(d)}),
    pairRailLane:lane,officialReviewLane:makeReviewLane(count===4)};
   const step=runInNewContext('('+extract('stepOfficialPair')+')',ctx);
@@ -87,7 +87,7 @@ test('2 and 4 horse tracking angles frame whole pack if close, leader if far',()
    for(const gap of [0,8,14,20,27,50,95]){
     const ctx={THREE:fakeThree,stage:{clientWidth:800*aspect,clientHeight:800},
      activePlan:{distance:1400},
-     OFFICIAL_TEST_COUNT:count,isOfficialFourTest:count===4,isOfficialPairTest:true,
+     OFFICIAL_TEST_COUNT:count,isOfficialFourTest:count===4,isOfficialMultiTest:count===4,isOfficialEightTest:false,isOfficialPairTest:true,
      groupCameraOffset:{yaw:0,pitch:0,zoom:1},
      raceHorses:Array.from({length:count},(_,i)=>({
       distance:200-(gap*i/(count-1)),postDistance:0,lane:12.3-i*3.35
@@ -114,7 +114,7 @@ test('official 2-horse visual position interpolates smoothly between 60Hz race t
  const readings=[];
  for(const alpha of [0,.125,.25,.375,.50,.625,.75,.875,1]){
   const ctx={THREE:fakeThree,raceHorses:[h],activePlan:{distance:1400},
-   playing:true,isOfficialFourTest:false,raceAccumulator:alpha*step,RACE_TICK:step,
+   playing:true,isOfficialFourTest:false,isOfficialMultiTest:false,raceAccumulator:alpha*step,RACE_TICK:step,
    fieldCenterAt:(_p,d)=>({width:36}),pairRailLane:lane,
    officialReviewLane:makeReviewLane(false)};
   const state=runInNewContext('('+extract('officialPairVisualState')+')',ctx)(0);
@@ -156,7 +156,7 @@ test('render-time 4-horse inward movement is smoothly interpolated',()=>{
  let previous=-Infinity;
  for(const alpha of [0,.125,.25,.375,.5,.625,.75,.875,1]){
   const ctx={THREE:fakeThree,raceHorses:[h],activePlan:{distance:1400},
-   isOfficialFourTest:true,playing:true,raceAccumulator:alpha/60,RACE_TICK:1/60,
+   isOfficialFourTest:true,isOfficialMultiTest:true,playing:true,raceAccumulator:alpha/60,RACE_TICK:1/60,
    fieldCenterAt:(_p,d)=>({width:36}),officialReviewLane:reviewLane};
   const state=runInNewContext('('+extract('officialPairVisualState')+')',ctx)(0);
   assert.ok(Math.abs(state.lane-(h.prevLane+(h.lane-h.prevLane)*alpha))<1e-9);
@@ -166,25 +166,25 @@ test('render-time 4-horse inward movement is smoothly interpolated',()=>{
 });
 
 test('4-horse render defaults to sharp antialiasing with adjustable fallback',()=>{
- assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:true,/);
+ assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:!isOfficialEightTest,/);
  assert.match(html,/const renderDprLevels=\{sharp:1\.35,standard:1\.05,light:\.90\}/);
  assert.match(html,/renderQuality\.addEventListener\('change',applyRenderQuality\)/);
  assert.match(html,/cloneSkeleton\(source\)/);
  assert.match(html,/h\.mixer\.setTime\(gaitTime\)/);
- assert.match(html,/const gaitTime=isOfficialFourTest\?/);
+ assert.match(html,/const gaitTime=isOfficialMultiTest\?/);
 });
 
 test('4-horse clone count and safe independent animation loop use test count',()=>{
  assert.match(extract('initializeOfficialPair'),/for\(let i=0;i<OFFICIAL_TEST_COUNT;i\+\+\)/);
  assert.match(extract('updateOfficialPair'),/for\(let i=0;i<OFFICIAL_TEST_COUNT;i\+\+\)/);
  assert.match(extract('stepOfficialPair'),/raceFinished\.length>=OFFICIAL_TEST_COUNT/);
- assert.match(html,/const OFFICIAL_TEST_COUNT=isOfficialFourTest\?4:2;/);
+ assert.match(html,/const OFFICIAL_TEST_COUNT=isOfficialEightTest\?8:isOfficialFourTest\?4:2;/);
  assert.match(html,/official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119/);
 });
 
 test('manual camera direction and zoom change the tracking eye but preserve its target',()=>{
  const ctx={THREE:fakeThree,stage:{clientWidth:430,clientHeight:800},
-  OFFICIAL_TEST_COUNT:4,isOfficialFourTest:true,isOfficialPairTest:true,
+  OFFICIAL_TEST_COUNT:4,isOfficialFourTest:true,isOfficialMultiTest:true,isOfficialPairTest:true,
   raceHorses:Array.from({length:4},(_,i)=>({distance:200-i*2,postDistance:0,lane:12.3-i*3.35})),
   raceAccumulator:0,RACE_TICK:1/60,playing:false,activePlan:{distance:1400},
   groupCameraOffset:{yaw:0,pitch:0,zoom:1},pairRailLane:lane,
@@ -240,7 +240,7 @@ test('4-horse inward heading follows the actual lateral speed without allowing e
  }
  assert.match(extract('updateOfficialPair'),/state\.sideSpeed\/Math\.max\(\.5,state\.speed\)/);
  assert.match(extract('updateOfficialPair'),/,-\.30,\.30/);
- assert.match(extract('updateOfficialPair'),/isOfficialFourTest\?/);
+ assert.match(extract('updateOfficialPair'),/isOfficialMultiTest\?/);
 });
 
 function runActualFourHorseSimulation(distance,widthMode='standard'){
@@ -255,7 +255,7 @@ function runActualFourHorseSimulation(distance,widthMode='standard'){
  FOUR_START_OUTSIDE_OFFSET=8,FOUR_INWARD_SETTLE_DISTANCE=160,
  FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=3.05,
  FOUR_INWARD_RATE=4.4,FOUR_MAX_LATERAL_PER_FORWARD=.30,
- isOfficialFourTest=true,OFFICIAL_TEST_COUNT=4;
+ isOfficialFourTest=true,isOfficialMultiTest=true,isOfficialEightTest=false,OFFICIAL_TEST_COUNT=4;
  ${profiles}
  ${code}
  const activePlan={distance:trackDistance};
@@ -372,7 +372,7 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
 test('four-horse role order displays independently of the approved source saddlecloth',()=>{
  assert.match(html,/現在の隊列：/);
  assert.match(html,/ゼッケン4は正式デザインのままです。/);
- assert.match(html,/h\.role=\['逃げ','先行','差し','追込'\]\[i\]/);
+ assert.match(html,/h\.role=isOfficialEightTest\?EIGHT_PACE_PROFILES\[i\]\.role:\['逃げ','先行','差し','追込'\]\[i\]/);
  assert.match(html,/const FOUR_PACE_PROFILES=\[/);
  assert.match(html,/FOUR_MIN_LONGITUDINAL=4\.8,FOUR_LATERAL_SHARED=3\.05/);
  assert.match(html,/const FOUR_INWARD_RATE=4\.4/);
@@ -420,7 +420,7 @@ test('horse alongside must not cut across a nearby occupied lane',()=>{
 
 test('four-horse gait phase advances with actual forward metres, not elapsed stationary time',()=>{
  const update=extract('updateOfficialPair');
- assert.match(update,/const gaitTime=isOfficialFourTest\?/);
+ assert.match(update,/const gaitTime=isOfficialMultiTest\?/);
  assert.match(update,/\(state\.distance\+\(state\.postDistance\|\|0\)\)\/16\.0\+i\*\.07/);
  assert.match(update,/h\.mixer\.setTime\(gaitTime\)/);
  assert.match(update,/shownTime\*Math\.min\(2,Number\(rate\.value\)\)\+i\*\.07/);
@@ -461,7 +461,7 @@ test('four-horse finish runout stays smooth on narrow pocket courses as well as 
 
 test('approved 2-horse mode still uses its original independent finish-out behavior',()=>{
  const step=extract('stepOfficialPair');
- assert.match(step,/if\(isOfficialFourTest\)\{/);
+ assert.match(step,/if\(isOfficialMultiTest\)\{/);
  assert.match(step,/h\.postDistance\+=h\.postSpeed\*tick/);
  assert.match(step,/h\.postDistance=Math\.min\(24,h\.postDistance\+12\*tick\)/);
  assert.match(step,/h\.postSpeed=Math\.max\(10\.5,/);
@@ -481,7 +481,7 @@ function runActualTokyoWidthFourHorseSimulation(distance){
  PAIR_LANE_SPACING=3.35,FOUR_RAIL_CENTER_CLEARANCE=2.8,FOUR_START_OUTSIDE_OFFSET=8,
  FOUR_INWARD_SETTLE_DISTANCE=160,FOUR_MIN_LONGITUDINAL=4.8,
  FOUR_LATERAL_SHARED=3.05,FOUR_INWARD_RATE=4.4,
- FOUR_MAX_LATERAL_PER_FORWARD=.30,isOfficialFourTest=true,OFFICIAL_TEST_COUNT=4;
+ FOUR_MAX_LATERAL_PER_FORWARD=.30,isOfficialFourTest=true,isOfficialMultiTest=true,isOfficialEightTest=false,OFFICIAL_TEST_COUNT=4;
  ${profiles}
  ${code}
  const startStation=((FINISH_DISTANCE-trackDistance)%LAP+LAP)%LAP;
