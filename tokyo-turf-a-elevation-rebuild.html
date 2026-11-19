@@ -148,6 +148,7 @@ a{color:#95e8df}
       <button type="button" data-cam18-view="front3q">斜め前</button>
       <button type="button" data-cam18-view="chase">真後ろ</button>
       <button type="button" data-cam18-view="field">自動追尾</button>
+       <button type="button" id="cam18LowView">🐎 馬の目線</button>
      </div>
      <label class="camFollowLabel">追う対象<select id="cam18Follow" aria-label="追う馬や馬群を選択">
       <option value="auto">自動（馬群→先頭）</option>
@@ -157,7 +158,7 @@ a{color:#95e8df}
       <option value="tail">最後尾</option>
      </select></label>
      <label>左右回転<input id="cam18Yaw" type="range" min="-180" max="180" step="1" value="0" aria-label="左右360度回転"/><output id="cam18YawValue">0°</output></label>
-     <label>上下角度<input id="cam18Pitch" type="range" min="-20" max="75" step="1" value="0" aria-label="カメラの仰角"/><output id="cam18PitchValue">0°</output></label>
+     <label>上下角度<input id="cam18Pitch" type="range" min="-65" max="75" step="1" value="0" aria-label="カメラの仰角"/><output id="cam18PitchValue">0°</output></label>
      <label>拡大縮小<input id="cam18Zoom" type="range" min="0.30" max="4" step="0.05" value="1" aria-label="カメラのズーム倍率"/><output id="cam18ZoomValue">1.0×</output></label>
      <label>左右移動<input id="cam18Pan" type="range" min="-100" max="100" step="1" value="0" aria-label="視点の注視位置を左右に移動"/><output id="cam18PanValue">0m</output></label>
      <label>上下移動<input id="cam18Lift" type="range" min="-24" max="24" step="0.5" value="0" aria-label="視点の注視位置を上下に移動"/><output id="cam18LiftValue">0m</output></label>
@@ -926,6 +927,7 @@ function createRail(inner){
 }
 createRail(true);createRail(false);
 // ダートにも二段式の内ラチと外ラチ。支柱はInstancedMeshで軽量化。
+const dirtRailGroup=new THREE.Group();scene.add(dirtRailGroup);
 function createDirtRail(offset){
  const n=280,beams=[[],[]];
  for(let i=0;i<n;i++){
@@ -936,7 +938,7 @@ function createDirtRail(offset){
  const railMat=new THREE.MeshStandardMaterial({color:0xf4f5ef,roughness:.5});
  for(let j=0;j<2;j++){
   const curve=new THREE.CatmullRomCurve3(beams[j],true,'centripetal');
-  scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,1000,j===0?.15:.09,5,true),railMat));
+  dirtRailGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve,1000,j===0?.15:.09,5,true),railMat));
  }
  const posts=new THREE.InstancedMesh(
   new THREE.CylinderGeometry(.105,.13,1.36,6),
@@ -946,7 +948,7 @@ function createDirtRail(offset){
   const s=LAP*i/n,p=dirtPoint(s,offset,.68);
   dummy.position.copy(p);dummy.updateMatrix();posts.setMatrixAt(i,dummy.matrix);
  }
- posts.instanceMatrix.needsUpdate=true;scene.add(posts);
+ posts.instanceMatrix.needsUpdate=true;dirtRailGroup.add(posts);
 }
 createDirtRail(DIRT_OUTER_OFFSET);createDirtRail(DIRT_INNER_OFFSET);
 // 両コースのゴール位置を示す砂上の白いライン。ダートの詳細な計測位置は近似。
@@ -1248,7 +1250,7 @@ if(isOfficialEighteenTest){
    const indexWithin=Math.floor(i/RACE_TREE_SITES.length);
    const fraction=(indexWithin+.30+((i*7+type*3)%5)*.09)/12;
    const station=start+(end-start)*Math.min(.98,fraction);
-   const outside=34+((i+type*3)%5)*6;
+   const outside=90+((i+type*3)%5)*8; // Background trees only, no foreground occlusion
    const p=offsetAt(station,MEASURE_OFFSET-renderedTurfWidthAt(station)-outside);
    const scale=.82+((i*11+type*7)%9)*.055;
    forestDummy.rotation.set(0,(i*2.2+type*.9)%6.28,0);
@@ -1899,7 +1901,10 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
    desiredSpeed=Math.min(desiredSpeed,other.speed+Math.max(-1.25,(ahead-4.6)*.72));
   }
  }
- const acceleration=EIGHTEEN_PACE_PROFILES[h.idx].accel;
+ // One simultaneous gate release: individual speeds diverge after 12m.
+ const commonLaunch=h.distance<12;
+ if(commonLaunch)desiredSpeed=15.8;
+ const acceleration=commonLaunch?3.32:EIGHTEEN_PACE_PROFILES[h.idx].accel;
  let speed=h.speed+THREE.MathUtils.clamp(desiredSpeed-h.speed,
   -(desiredSpeed<h.speed?4.4:acceleration)*dt,acceleration*dt);
  speed=Math.max(Math.min(EIGHTEEN_MIN_ROLL_BASE+
@@ -2560,7 +2565,8 @@ function updateOfficialPair(dt){
   // stationary/accelerating horses must not gallop at full speed in place.
   // The approved 2-horse animation timeline stays unchanged.
   const gaitTime=isOfficialMultiTest?
-   (state.distance+(state.postDistance||0))/16.0+i*.07:
+   (state.distance+(state.postDistance||0))/16.0+
+    (isOfficialEighteenTest?Math.min(1,Math.max(0,(state.distance-12)/24)):1)*i*.07:
    shownTime*Math.min(2,Number(rate.value))+i*.07;
   h.mixer.setTime(gaitTime);
  }
@@ -2796,8 +2802,8 @@ function adjustGroupCamera(kind){
   leaveBroadcastForManualCamera();
   if(kind==='left')camera18.yaw=wrapCameraAngle(camera18.yaw-.21);
   if(kind==='right')camera18.yaw=wrapCameraAngle(camera18.yaw+.21);
-  if(kind==='up')camera18.pitch=THREE.MathUtils.clamp(camera18.pitch+.10,-.35,1.31);
-  if(kind==='down')camera18.pitch=THREE.MathUtils.clamp(camera18.pitch-.10,-.35,1.31);
+  if(kind==='up')camera18.pitch=THREE.MathUtils.clamp(camera18.pitch+.10,-1.12,1.31);
+  if(kind==='down')camera18.pitch=THREE.MathUtils.clamp(camera18.pitch-.10,-1.12,1.31);
   if(kind==='near')camera18.zoom=Math.max(.30,camera18.zoom*.80);
   if(kind==='far')camera18.zoom=Math.min(4,camera18.zoom*1.25);
   if(kind==='reset')resetCamera18();
@@ -2831,6 +2837,11 @@ if(isOfficialPairTest){
    syncCamera18Controls();
   });
   document.querySelector('#cam18Reset').addEventListener('click',resetCamera18);
+  document.querySelector('#cam18LowView').addEventListener('click',()=>{
+   resetCamera18();setView('front3q');
+   camera18.pitch=-.48;camera18.zoom=.68;
+   syncCamera18Controls();
+  });
   for(const btn of document.querySelectorAll('[data-cam18-view]')){
    btn.addEventListener('click',()=>{
     resetCamera18();
@@ -2879,7 +2890,7 @@ if(isOfficialPairTest){
       (current.x-previous.x)/Math.max(240,stage.clientWidth)*Math.PI*1.9);
      camera18.pitch=THREE.MathUtils.clamp(camera18.pitch-
       (current.y-previous.y)/Math.max(240,stage.clientHeight)*1.6,
-      -.35,1.31);
+      -1.12,1.31);
     }
    }else if(pointers.size===2){
     const other=[...pointers.entries()].find(([id])=>id!==event.pointerId)?.[1];
@@ -2998,10 +3009,11 @@ function officialBroadcastCameraShot(context){
  const cycle=Math.floor(Math.max(0,leadDistance-36)/190)%4;
  const focusType=stageShot.id==='gate'?'gate':
   remaining<=55?'lead':['lead','third','side','wide'][cycle];
- const selected=focusType==='lead'?ranked.slice(0,Math.min(4,ranked.length)):
-  focusType==='third'?ranked.slice(Math.min(1,ranked.length-1),Math.min(7,ranked.length)):
-  focusType==='side'?ranked.slice(0,Math.min(6,ranked.length)):
-  focusType==='gate'?ranked.slice(0,Math.min(8,ranked.length)):ranked;
+ const selected=focusType==='lead'?ranked.slice(0,Math.min(3,ranked.length)):
+  focusType==='third'?ranked.slice(Math.min(1,ranked.length-1),Math.min(5,ranked.length)):
+  focusType==='side'?ranked.slice(0,Math.min(4,ranked.length)):
+  focusType==='gate'?ranked.slice(0,Math.min(8,ranked.length)):
+  gap<45?ranked:ranked.slice(0,Math.min(9,ranked.length));
  const dist=h=>h.distance+(h.postDistance||0);
  const first=selected[0]||leader,last=selected[selected.length-1]||first;
  const focusDistance=(dist(first)+dist(last))*.5;
@@ -3020,6 +3032,12 @@ function officialBroadcastCameraShot(context){
  const eye=at.p.clone().addScaledVector(side,-outside)
   .addScaledVector(along,ahead).add(new THREE.Vector3(0,height,0));
  fitBroadcastToRunners(eye,target,selected,fov);
+ // Cap TV crane distance: horses, not scenery, remain the subject.
+ const maxDistance=focusType==='wide'?103:focusType==='gate'?81:
+  focusType==='side'?67:70;
+ const vector=eye.clone().sub(target),radius=vector.length();
+ if(radius>maxDistance)eye.copy(target).addScaledVector(vector,maxDistance/radius);
+ eye.y=Math.max(at.p.y+3.1,Math.min(eye.y,at.p.y+(focusType==='wide'?13:7.5)));
  const caption=focusType==='gate'?'ゲート・発走':
   focusType==='lead'?'先頭集団・低い斜め前':
   focusType==='third'?'3番手付近・斜め前':
@@ -3123,7 +3141,7 @@ function officialEighteenCameraShot(which,context){
  const baseElevation=which==='field'?.34:which==='chase'?.16:
   which==='front3q'?.09:0;
  const yaw=baseYaw+camera18.yaw;
- const elevation=THREE.MathUtils.clamp(baseElevation+camera18.pitch,-.34,1.38);
+ const elevation=THREE.MathUtils.clamp(baseElevation+camera18.pitch,-1.12,1.38);
  const baseRadius=which==='field'?Math.min(145,57+gap*.85):
   choice==='pack'?Math.max(34,Math.min(135,gap*1.60)):
   which==='chase'?32:which==='front3q'?34:29;
@@ -3136,6 +3154,8 @@ function officialEighteenCameraShot(which,context){
   .add(new THREE.Vector3(0,2+camera18.lift,0));
  const eye=target.clone().addScaledVector(outward,radius*Math.cos(elevation))
   .add(new THREE.Vector3(0,radius*Math.sin(elevation),0));
+ // Never send negative-pitch camera below the turf.
+ eye.y=Math.max(a.p.y+1.45,eye.y);
  return {eye,target,gap,focusedOnLead:blend>=.8};
 }
 function officialPairCameraShot(which='field'){
@@ -3400,6 +3420,7 @@ function updateSceneLabelVisibility(){
      :isWide;
   sprite.visible=checkLabels.checked&&inThisView;
  }
+ dirtRailGroup.visible=!(isOfficialEighteenTest&&pairTrackingView(view));
  const closeViews=new Set(['goal','goalboard','hill','dirt','chase','field','start','marker']);
  turfVisionGroups.forEach(group=>{group.visible=!closeViews.has(view)});
 }
@@ -3463,7 +3484,7 @@ function animate(time){
  syncStageStartButton();
  let pairTracking=false;
  if(fieldMode.value!=='single'){
-  gateOpening=travel>0?Math.min(1,gateOpening+dt*4):0;updateGateDoors();
+  gateOpening=travel>0?Math.min(1,gateOpening+dt*(isOfficialEighteenTest?15:4)):0;updateGateDoors();
   // After the launch the starting machine is behind the horses and is
   // hidden to save hundreds of draw calls; reappears on race reset.
   if(isOfficialEighteenTest)gateRoot.visible=travel<105;
