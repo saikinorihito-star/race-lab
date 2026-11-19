@@ -1197,9 +1197,12 @@ function fourHorseInwardSlope(distance){
  return FOUR_START_OUTSIDE_OFFSET*6*t*(1-t)/FOUR_INWARD_SETTLE_DISTANCE;
 }
 console.assert([24,28,31,36,41].every(w=>
- Array.from({length:OFFICIAL_TEST_COUNT},(_,i)=>i).every(i=>
- w/2-pairRailLane(w,i)>=PAIR_RAIL_CENTER_CLEARANCE-.001 &&
- pairRailLane(w,i)>-w/2+1.5)),'正式2頭の内外ラチ余裕');
+ Array.from({length:OFFICIAL_TEST_COUNT},(_,i)=>i).every(i=>{
+  const at=isOfficialEightTest?eightStartLane(w,i):
+   isOfficialFourTest?fourHorseInnerLane(w)-i*PAIR_LANE_SPACING:pairRailLane(w,i);
+  return w/2-at>=(isOfficialMultiTest?FOUR_RAIL_CENTER_CLEARANCE:PAIR_RAIL_CENTER_CLEARANCE)-.001 &&
+   at>=-w/2+1.5;
+ })),'正式Design 01の2/4/8頭の安全な発走レーン');
 function initRaceHorses(){
  raceElapsed=0;raceFinished=[];raceAccumulator=0;raceContactWarnings=0;
  const width=activePlan?fieldCenterAt(activePlan,0).width:31;
