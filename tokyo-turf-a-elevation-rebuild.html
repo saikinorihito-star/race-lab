@@ -1306,8 +1306,9 @@ function horsePart(name,geometry,role,xyz,scale,rotation=[0,0,0],anim=null){
  }
  if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
  fieldRoot.add(mesh);
- horsePartDefs.push({name,mesh,xyz,scale,rotation,anim});
- return mesh;
+ const definition={name,mesh,xyz,scale,rotation,anim};
+ horsePartDefs.push(definition);
+ return definition;
 }
 // 体型: 丸一個の胴体から、肩・胸・臀部・首・頭部へ分けてシルエットを立体化。
 horsePart('barrel',hSphere,'coat',[0,1.43,-.10],[.40,.38,.70]);
@@ -1357,9 +1358,7 @@ const horseRootPose=new THREE.Object3D();
 const horseLocalPose=new THREE.Object3D();
 const horseResultMatrix=new THREE.Matrix4();
 const horseUpAxis=new THREE.Vector3(0,1,0);
-const horseXAxis=new THREE.Vector3(1,0,0);
 const segmentFrom=new THREE.Vector3(),segmentTo=new THREE.Vector3(),segmentVector=new THREE.Vector3();
-const limbEnd=new THREE.Vector3();
 function writeHorsePart(part,index,rootMatrix,xyz,scale,rotation){
  horseLocalPose.position.set(xyz[0],xyz[1],xyz[2]);
  horseLocalPose.rotation.set(rotation[0],rotation[1],rotation[2]);
@@ -1380,12 +1379,13 @@ function writeHorseSegment(part,index,rootMatrix,a,b){
  part.mesh.setMatrixAt(index,horseResultMatrix);
 }
 function positionFieldHorses(){
- if(!activePlan)return;
+ if(!activePlan||fieldMode.value==='single')return;
  for(let i=0;i<FIELD_COUNT;i++){
   const state=fieldMode.value==='race18'?raceHorses[i]:null;
   const at=state?raceHorsePosition(state):fieldHorseAt(activePlan,travel,i);
-  const distance=state?state.distance:travel;
-  const velocity=state?state.speed:(playing?16.7*Number(rate.value):0);
+  const distance=state?state.distance+(state.postDistance||0):travel;
+  const velocity=state?(state.finished&&state.postDistance<87?12:state.speed):
+   (playing?16.7*Number(rate.value):0);
   // 踏み出しから巡航まで滑らかにつなぎ、止まっているときは4本脚を接地。
   const gallop=Math.min(1,Math.max(0,distance/7))*
    Math.min(1,Math.max(0,velocity/10));
@@ -1399,15 +1399,15 @@ function positionFieldHorses(){
   const root=horseRootPose.matrix;
   for(const part of horsePartDefs){
    if(part.anim && part.anim.kind!=='tail')continue;
-   const pos=part.xyz.slice(),rot=(part.rotation||[0,0,0]).slice();
+   let pos=part.xyz,rot=part.rotation||[0,0,0];
    if(part.name==='rider-body'||part.name==='rider-head'||part.name==='helmet'||part.name==='helmet-peak'){
-    pos[1]+=gallop*.043*Math.sin(cycle*2.0+.5);
+    pos=[pos[0],pos[1]+gallop*.043*Math.sin(cycle*2.0+.5),pos[2]];
    }
    if(part.name==='neck'||part.name==='cheek'||part.name==='nose'){
-    pos[1]+=gallop*.025*Math.sin(cycle+.75);
+    pos=[pos[0],pos[1]+gallop*.025*Math.sin(cycle+.75),pos[2]];
    }
    if(part.anim && part.anim.kind==='tail'){
-    rot[2]+=gallop*.13*Math.sin(cycle+.8);
+    rot=[rot[0],rot[1],rot[2]+gallop*.13*Math.sin(cycle+.8)];
    }
    writeHorsePart(part,i,root,pos,part.scale,rot);
   }
@@ -1415,14 +1415,12 @@ function positionFieldHorses(){
    const phase=cycle+leg.phaseOffset;
    const swing=gallop*(leg.front?.56:.66)*Math.sin(phase);
    const flex=gallop*(leg.front?.37:.46)*Math.max(0,Math.cos(phase));
-   const upperVector=new THREE.Vector3(0,-.54,0).applyAxisAngle(horseXAxis,swing);
-   const knee=[leg.hip[0],leg.hip[1]+upperVector.y,leg.hip[2]+upperVector.z];
-   const shinVector=new THREE.Vector3(0,-.54,0).applyAxisAngle(horseXAxis,
-    swing*.40+(leg.front?1:-1)*flex);
-   const ankle=[knee[0],knee[1]+shinVector.y,knee[2]+shinVector.z];
-   writeHorseSegment(horsePartDefs.find(p=>p.mesh===leg.upper),i,root,leg.hip,knee);
-   writeHorseSegment(horsePartDefs.find(p=>p.mesh===leg.lower),i,root,knee,ankle);
-   writeHorsePart(horsePartDefs.find(p=>p.mesh===leg.hoof),i,root,
+   const knee=[leg.hip[0],leg.hip[1]-.54*Math.cos(swing),leg.hip[2]-.54*Math.sin(swing)];
+   const shinAngle=swing*.40+(leg.front?1:-1)*flex;
+   const ankle=[knee[0],knee[1]-.54*Math.cos(shinAngle),knee[2]-.54*Math.sin(shinAngle)];
+   writeHorseSegment(leg.upper,i,root,leg.hip,knee);
+   writeHorseSegment(leg.lower,i,root,knee,ankle);
+   writeHorsePart(leg.hoof,i,root,
     [ankle[0],ankle[1]-.07,ankle[2]+.08],[.16,.14,.24],[.15*swing,0,0]);
   }
  }
