@@ -2208,9 +2208,11 @@ const horseAbilities=isOfficialEighteenTest?loadHorseAbilities():[];
 function effectiveEighteenProfile(index){
  const b=EIGHTEEN_PACE_PROFILES[index],v=horseAbilities[index]||defaultHorseAbility(index);
  const role=v.role,modified=role!==b.role;
+ const customized=modified||['speed','stamina','acceleration','finish']
+  .some(key=>v[key]!==50);
  const kickByRole={逃げ:.18,先行:.18,中団:.31,差し:.52,追込:.76};
  const timingByRole={逃げ:.72,先行:.72,中団:.72,差し:.29,追込:.37};
- return {...b,role,
+ return {...b,role,customized,baseEarly:b.early,
   early:b.early+(v.speed-50)*.017,
   accel:b.accel*(1+(v.acceleration-50)*.010),
   endurance:THREE.MathUtils.clamp(b.endurance*(1+(v.stamina-50)*.006),.65,1.30),
@@ -2425,6 +2427,19 @@ function stepOfficialPair(tick){
      profile.kick*profile.finishStrength*closing*(.38+.62*energy)-
      (1-energy)*(1.30-profile.endurance)*.82+
      (fit-.5)*.70;
+    // A fast horse explicitly assigned a closing role must not simply run
+    // wire-to-wire. Bank energy in the first half, then release the pace cap
+    // smoothly so the last 600m can produce a visible, actual position gain.
+    // All default 50-point profiles remain unchanged.
+    if(profile.customized&&['追込','差し','中団'].includes(profile.role)){
+     const chase=profile.role==='追込';
+     const cap=profile.baseEarly+(chase?-.13:profile.role==='差し'?.05:.15);
+     const startRelease=chase?Math.max(650,activePlan.distance*.31):
+      profile.role==='差し'?Math.max(540,activePlan.distance*.26):
+      Math.max(480,activePlan.distance*.23);
+     const release=THREE.MathUtils.smoothstep(startRelease-remaining,0,330);
+     targetSpeed=THREE.MathUtils.lerp(Math.min(targetSpeed,cap),targetSpeed,release);
+    }
     const blocked=previous.some(o=>o.idx!==h.idx&&!o.finished&&
      o.distance>h.distance&&o.distance-h.distance<13&&
      Math.abs(o.lane-h.lane)<2.5&&o.speed+.25<targetSpeed);
