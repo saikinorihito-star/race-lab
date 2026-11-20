@@ -1762,14 +1762,21 @@ function makePocket(spec){
  const curve=curveFor((lo+hi)/2),length=curve.getLength();
  const vertices=[],colors=[],uv=[],indices=[];
  const w=spec.distance===1800?24:28;
+ // Align both texture UV phase and striped grass colours at the join
+ // with the ring mesh. Repeated colour bands should not jump abruptly.
+ const mainBand=Math.floor(spec.join/LAP*N/8)%2;
+ const pocketEndBand=Math.floor(100/8)%2;
  for(let i=0;i<=100;i++){
   const u=i/100,p=curve.getPointAt(u),t=curve.getTangentAt(u).normalize();
   const side=new THREE.Vector3(t.z,0,-t.x).normalize();
   for(const dir of [-1,1]){
    const point=p.clone().addScaledVector(side,dir*w/2);point.y+=.003;
    vertices.push(point.x,point.y,point.z);
-   uv.push(u*length/12,dir===-1?0:3.2);
-   const c=new THREE.Color(Math.floor(i/8)%2===0?0x409b4b:0x3a9147);
+   uv.push((spec.join+(u-1)*length)/12,dir===1?0:3.2);
+   const localBand=Math.floor(i/8)%2;
+   const alignedBand=localBand===pocketEndBand?mainBand:1-mainBand;
+   const c=new THREE.Color(alignedBand===0?0x409b4b:0x3a9147);
+   if(dir===-1)c.multiplyScalar(.95); // same subdued outer turf edge
    colors.push(c.r,c.g,c.b);
   }
   if(i<100){const k=i*2;indices.push(k,k+1,k+2,k+1,k+3,k+2)}
