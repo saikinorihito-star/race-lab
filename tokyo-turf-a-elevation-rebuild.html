@@ -2171,6 +2171,7 @@ function initRaceHorses(){
  clearRaceResults();
  if(isOfficialEighteenTest){
   clearRaceAnalysis();
+  buildEighteenCornerProfile();
   raceGoingAtStart=Object.hasOwn(GOING_SEVERITY,raceGoingSelect.value)?
    raceGoingSelect.value:'good';
   const mode=raceFlowModeInput.value==='varied'?'varied':'standard',
@@ -2212,6 +2213,7 @@ function initRaceHorses(){
    if(isOfficialEighteenTest){
     h.energy=1;h.blockedFor=0;h.trafficSeconds=0;
     h.passGoal=null;h.passUntil=0;h.passCooldown=0;h.passAttempts=0;
+    h.pathDistance=0;h.pathExtraMeters=0;h.curveTravel=0;
    }
   }
  }
@@ -2909,6 +2911,57 @@ initHorseAbilityEditor();
 initRunnerGateSwap();
 initHorseLibraryEditor();
 
+// Turn physics are derived from existing 3D course centreline. The
+// measured path-loss numbers are estimates, not surveyed track distances.
+const EIGHTEEN_CORNER_STEP=5;
+let eighteenCornerProfile=[];
+function buildEighteenCornerProfile(){
+ eighteenCornerProfile=[];
+ if(!isOfficialEighteenTest||!activePlan)return;
+ const plan=activePlan;
+ for(let d=0;d<=plan.distance+EIGHTEEN_CORNER_STEP;d+=EIGHTEEN_CORNER_STEP){
+  const here=THREE.MathUtils.clamp(d,0,plan.distance);
+  const lo=Math.max(0,here-5),hi=Math.min(plan.distance,here+5);
+  const ta=fieldCenterAt(plan,lo).t,tb=fieldCenterAt(plan,hi).t,
+   tm=fieldCenterAt(plan,here).t;
+  const la=Math.hypot(ta.x,ta.z)||1,lb=Math.hypot(tb.x,tb.z)||1,
+   lm=Math.hypot(tm.x,tm.z)||1;
+  const inwardX=tm.z/lm,inwardZ=-tm.x/lm;
+  const signed=((tb.x/lb-ta.x/la)*inwardX+
+    (tb.z/lb-ta.z/la)*inwardZ)/Math.max(1,hi-lo);
+  let referenceLane=0;
+  if(!plan.pocket||here>=plan.pocket.length){
+   const station=plan.startStation+here-(plan.pocket?plan.pocket.length:0);
+   const gauge=widthAt(station)/2-MEASURE_OFFSET;
+   const merge=plan.pocket?
+    THREE.MathUtils.smoothstep(here-plan.pocket.length,0,60):1;
+   referenceLane=gauge*merge;
+  }
+  eighteenCornerProfile.push({kappa:THREE.MathUtils.clamp(signed,-.013,.013),
+   referenceLane});
+ }
+}
+function cornerDataAt(distance){
+ if(!eighteenCornerProfile.length)return {kappa:0,referenceLane:0};
+ const x=THREE.MathUtils.clamp(distance/EIGHTEEN_CORNER_STEP,0,
+  eighteenCornerProfile.length-1);
+ const i=Math.floor(x),j=Math.min(eighteenCornerProfile.length-1,i+1);
+ const blend=x-i,a=eighteenCornerProfile[i],b=eighteenCornerProfile[j];
+ return {kappa:THREE.MathUtils.lerp(a.kappa,b.kappa,blend),
+  referenceLane:THREE.MathUtils.lerp(a.referenceLane,b.referenceLane,blend)};
+}
+function cornerPathFactor(distance,lane){
+ const data=cornerDataAt(distance);
+ const afterGate=THREE.MathUtils.smoothstep(distance,12,75);
+ return THREE.MathUtils.clamp(
+  1+data.kappa*(data.referenceLane-lane)*afterGate,.80,1.30);
+}
+function cornerPacePenalty(distance,profile){
+ const data=cornerDataAt(distance);
+ const intensity=THREE.MathUtils.clamp(Math.abs(data.kappa)*145,0,1.50);
+ const aptitude=THREE.MathUtils.clamp(profile?.courseBonus??0,-.45,.45);
+ return intensity*(.25-.11*aptitude);
+}
 // 18頭専用の2D位置試験モデル。3Dモデルのシルエットを変えない。
 // スタート時は幅に合わせ18頭を並べ、前に空きができた馬から
 // 斜め内へ寄る。速度の急停止は許さず接近時は先を読んで調整。
@@ -2923,7 +2976,11 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  const width=fieldCenterAt(activePlan,h.distance).width;
  const inner=fourHorseInnerLane(width);
  const lateralRate=FOUR_INWARD_RATE*(.68+.32*THREE.MathUtils.clamp(h.distance/15,0,1));
- let desiredSpeed=targetSpeed;
+ // Physical pace is converted into reference-distance progress. Wide
+ // routes cover more ground; the outer runners need more effort to keep up.
+ let desiredSpeed=Math.max(9.5,targetSpeed-cornerPacePenalty(
+  h.distance,h.raceProfile||EIGHTEEN_PACE_PROFILES[h.idx]))/
+  cornerPathFactor(h.distance,h.lane);
  // When the course narrows again later in a long-distance race,
  // gently stagger close runners instead of forcing two horses sideways
  // into the same coordinates. Delay until 300m so the opening pack stays compact.
@@ -3119,11 +3176,19 @@ function stepOfficialPair(tick){
     fourHorseSafeStep(h,previous,tick,targetSpeed);
    if(isOfficialEighteenTest){
     const travelled=Math.max(0,result.distance-h.distance);
+    const midDistance=(h.distance+result.distance)/2,
+     midLane=(h.lane+result.lane)/2;
+    const forward=travelled*cornerPathFactor(midDistance,midLane);
+    const physicalStep=Math.hypot(forward,result.lane-h.lane);
+    h.pathDistance=(h.pathDistance||0)+physicalStep;
+    h.pathExtraMeters=h.pathDistance-result.distance;
+    if(Math.abs(cornerDataAt(midDistance).kappa)>.0015)
+     h.curveTravel=(h.curveTravel||0)+physicalStep;
     const effort=THREE.MathUtils.clamp((result.speed-14.4)/2.6,0,1.6);
     const load=Math.sqrt(activePlan.distance/1800);
     const earlyShare=Math.max(0,1-(h.distance/activePlan.distance)/.70);
     const composure=1-((profile.composureAbility??5)-5)*.06*earlyShare;
-    const cost=travelled/Math.max(1,activePlan.distance)*
+    const cost=physicalStep/Math.max(1,activePlan.distance)*
      (.37+.29*effort)*load/Math.max(.72,profile.endurance)*composure;
     h.energy=THREE.MathUtils.clamp((h.energy??1)-cost,.07,1);
    }
