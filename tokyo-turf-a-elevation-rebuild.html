@@ -51,9 +51,9 @@ a{color:#95e8df}
 #raceResults[hidden]{display:none!important}
 #raceResults summary{cursor:pointer;font-weight:750;line-height:1.65;color:#f6e6b8}
 #raceResults .resultTableWrap{max-height:315px;overflow:auto;overscroll-behavior:contain}
-#raceResults table{width:100%;min-width:575px;font-variant-numeric:tabular-nums}
+#raceResults table{width:100%;min-width:680px;font-variant-numeric:tabular-nums}
 #raceResults td:nth-child(1){white-space:nowrap;width:43px}
-#raceResults td:nth-child(3),#raceResults td:nth-child(4),#raceResults td:nth-child(5){white-space:nowrap;text-align:right}
+#raceResults td:nth-child(3),#raceResults td:nth-child(4),#raceResults td:nth-child(5),#raceResults td:nth-child(6){white-space:nowrap;text-align:right}
 #raceResults td:nth-child(2){overflow-wrap:anywhere}
 #raceResults tr:first-child td{color:#ffe5a0;font-weight:750}
 #raceResults .resultNote{font-size:11px;line-height:1.5;color:#a9c3c4}
@@ -426,12 +426,12 @@ a{color:#95e8df}
  <summary id="raceResultSummary">レース結果</summary>
  <div class="resultTableWrap">
   <table aria-label="18頭レースの確定着順">
-   <thead><tr><th>着順</th><th>馬名</th><th>タイム</th><th>上がり600m</th><th>1着との差</th></tr></thead>
+   <thead><tr><th>着順</th><th>馬名</th><th>タイム</th><th>上がり600m</th><th>推定距離ロス</th><th>1着との差</th></tr></thead>
    <tbody id="raceResultRows"></tbody>
   </table>
  </div>
  <p id="raceTacticsSummary" class="resultNote"></p>
- <p class="resultNote">架空の走行モデルの結果です。ゴール時刻は60Hzの計算間隔内を補間した推定値で、実競馬の公式記録ではありません。</p>
+ <p class="resultNote">架空の走行モデルの結果です。ゴール時刻は60Hzの計算間隔内を補間した推定値です。「推定距離ロス」はコース模型の内ラチ付近を基準とした走行経路差（負値は0表示）で、実測値や公式記録ではありません。</p>
 </details>
 <div id="message">正式な馬はBabylonJSで承認されたMeshy版のデザインだけです。元の馬体とテクスチャを保持した専用GLBを読み込み、横・斜め前・後ろから1頭走行を検証します。仮の馬を代わりに表示しません。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">18頭：毛色・勝負服を個別表示</span></div>
@@ -2017,6 +2017,7 @@ function renderRaceAnalysis(time){
   '｜速度 '+horse.speed.toFixed(2)+'m/s'+
   '｜先頭との差 '+Math.max(0,leadDist-horse.distance).toFixed(1)+'m'+
   '｜余力 '+Math.round((horse.energy??1)*100)+'%'+
+  '｜推定距離ロス '+Math.max(0,horse.pathExtraMeters??0).toFixed(1)+'m'+
   '｜脚質 '+horse.role;
  const tbody=document.querySelector('#analysisRows');
  const fragment=document.createDocumentFragment();
@@ -2089,6 +2090,7 @@ function renderRaceResults(){
    horse.finishTime.toFixed(2)+'秒',
    Number.isFinite(horse.last600StartTime)?
     (horse.finishTime-horse.last600StartTime).toFixed(2)+'秒':'―',
+   Math.max(0,horse.pathExtraMeters??0).toFixed(1)+'m',
    index===0?'―':'+'+Math.max(0,delta).toFixed(2)+'秒'
   ]){
    const cell=document.createElement('td');
