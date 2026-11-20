@@ -431,7 +431,7 @@ a{color:#95e8df}
 </details>
 <details id="balanceAuditPanel" hidden>
  <summary>⚖️ 11能力の自動バランス検証・補正</summary>
- <p>選んだ出走馬の各能力を5と10に設定して、2つの展開番号で計44走の比較を行います。他の17頭の登録設定は変えません。結果は架空のAIモデルに対する感度検査です。</p>
+ <p>選んだ出走馬の各能力を5と10に設定して、2つの展開番号で計44走の比較を行います。対象馬のほかの能力は5に固定し、他の17頭の登録設定は変えません。結果は架空のAIモデルに対する感度検査です。</p>
  <div class="balanceActions">
   <label>検証する馬 <select id="balanceHorse"></select></label>
   <button type="button" id="balanceRun">11能力を自動検証</button>
@@ -3014,6 +3014,164 @@ function initHorseAbilityEditor(){
 initHorseAbilityEditor();
 initRunnerGateSwap();
 initHorseLibraryEditor();
+
+// Headless audit runs the SAME 60Hz engine as the live 18-horse race.
+// Each sample swaps only the state references and restores them in finally.
+let balanceAuditBusy=false,balanceDiagnosticsRunning=false;
+let recommendedBalanceWeights=null;
+function balanceTrial(slot,key,level,seed,starterSnapshot){
+ const old={horses:raceHorses,finished:raceFinished,elapsed:raceElapsed,
+  accumulator:raceAccumulator,contact:raceContactWarnings,flow:raceFlowAtStart};
+ balanceDiagnosticsRunning=true;
+ try{
+  const id=horseIdentityBySlot[slot],ability=defaultHorseAbility(id);
+  ability.role=(horseAbilities[id]||ability).role;
+  ability[key]=level;
+  raceHorses=starterSnapshot.map(h=>{
+   const profile=h.idx===slot?effectiveEighteenProfile(h.idx,ability):
+    effectiveEighteenProfile(h.idx);
+   const lane=h.startLane;
+   return {...h,lane,prevLane:lane,targetLane:lane,role:profile.role,
+    distance:0,prevDistance:0,postDistance:0,prevPostDistance:0,
+    speed:0,sideSpeed:0,postSpeed:null,finished:false,finishTime:null,
+    energy:1,blockedFor:0,trafficSeconds:0,passGoal:null,passUntil:0,
+    passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,
+    pathDistance:0,pathExtraMeters:0,curveTravel:0,last600StartTime:null,
+    raceProfile:profile,raceFlow:runnerFlow(seed,horseIdentityBySlot[h.idx])};
+  });
+  raceFinished=[];raceElapsed=0;raceAccumulator=0;raceContactWarnings=0;
+  raceFlowAtStart={mode:'varied',seed,tempo:(flowHash(seed,0,21)-.5)*.30};
+  const maxSteps=Math.min(36000,Math.ceil(activePlan.distance/8*60)+3600);
+  for(let t=0;t<maxSteps&&raceFinished.length<18;t++)stepOfficialPair(RACE_TICK);
+  if(raceFinished.length!==18)throw Error('完走しない馬がいます');
+  const chosen=raceHorses[slot];
+  if(!Number.isFinite(chosen.finishTime))throw Error('タイム計算に失敗');
+  const order=raceHorses.slice(0,18).sort((a,b)=>a.finishTime-b.finishTime);
+  return {time:chosen.finishTime,rank:order.findIndex(x=>x.idx===slot)+1};
+ }finally{
+  raceHorses=old.horses;raceFinished=old.finished;raceElapsed=old.elapsed;
+  raceAccumulator=old.accumulator;raceContactWarnings=old.contact;
+  raceFlowAtStart=old.flow;balanceDiagnosticsRunning=false;
+ }
+}
+function initBalanceAudit(){
+ if(!isOfficialEighteenTest)return;
+ const panel=document.querySelector('#balanceAuditPanel'),
+  select=document.querySelector('#balanceHorse'),
+  run=document.querySelector('#balanceRun'),
+  apply=document.querySelector('#balanceApply'),
+  reset=document.querySelector('#balanceReset'),
+  info=document.querySelector('#balanceStatus'),
+  tbody=document.querySelector('#balanceRows');
+ for(let i=0;i<18;i++)select.add(new Option(
+  (i+1)+'番 '+officialRunnerNames[i],String(i)));
+ const writeRows=rows=>{
+  const fragment=document.createDocumentFragment();
+  for(const item of rows){
+   const row=document.createElement('tr');
+   if(item.warning)row.className='balanceWarn';
+   for(const text of [BALANCE_ABILITY_LABELS[item.key],
+    item.delta.toFixed(2)+'秒',item.rankDelta.toFixed(1)+'位',
+    item.wins+'/2',item.warning?'偏り候補':'許容目安']){
+    const cell=document.createElement('td');cell.textContent=text;row.append(cell);
+   }
+   fragment.append(row);
+  }
+  tbody.replaceChildren(fragment);
+ };
+ run.addEventListener('click',()=>{
+  if(balanceAuditBusy)return;
+  if(playing||raceElapsed>0||!activePlan||raceHorses.length<18){
+   info.textContent='発馬機に戻してから検証してください。';return;
+  }
+  const slot=Number(select.value),seed=validFlowSeed(raceFlowSeedInput.value);
+  if(!Number.isInteger(slot)||slot<0||slot>=18)return;
+  const plan=activePlan,starters=raceHorses;
+  const seeds=[seed,seed%999999+1],jobs=[];
+  for(const key of HORSE_ABILITY_KEYS)for(const s of seeds)
+   for(const level of [5,10])jobs.push({key,seed:s,level});
+  const entries={},rows=[];
+  for(const key of HORSE_ABILITY_KEYS)entries[key]={low:[],high:[]};
+  recommendedBalanceWeights=null;balanceAuditBusy=true;
+  apply.disabled=true;run.disabled=true;tbody.replaceChildren();
+  let progress=0;
+  const finish=error=>{
+   balanceAuditBusy=false;run.disabled=false;
+   if(error){
+    recommendedBalanceWeights=null;apply.disabled=true;
+    info.textContent='検証中断：'+error;return;
+   }
+   const limit=Math.max(3,plan.distance*.0035);
+   const weights={...balanceWeights};
+   let proposals=0;
+   for(const row of rows)if(row.warning&&row.delta>limit){
+    const next=THREE.MathUtils.clamp(balanceWeights[row.key]*
+     THREE.MathUtils.clamp(limit/row.delta,.55,1),.55,1.15);
+    if(next<balanceWeights[row.key]-.005){
+     weights[row.key]=next;proposals++;
+    }
+   }
+   recommendedBalanceWeights=proposals?weights:null;
+   apply.disabled=!recommendedBalanceWeights;
+   info.textContent='44走の比較完了。偏り候補'+
+    rows.filter(r=>r.warning).length+'項目・補正候補'+proposals+
+    '項目。'+(proposals?'適用ボタンを押すまで変更しません。':
+     '補正の追加は不要と判定しました。');
+  };
+  const next=()=>{
+   if(activePlan!==plan||raceHorses!==starters||playing||raceElapsed>0){
+    finish('レース条件が変わりました。');return;
+   }
+   const job=jobs[progress];
+   try{
+    entries[job.key][job.level===5?'low':'high'].push(
+     balanceTrial(slot,job.key,job.level,job.seed,starters));
+   }catch(e){
+    console.warn('自動バランス検証に失敗',e);
+    finish(e?.message||'不明なエラー');return;
+   }
+   progress++;
+   if(progress%4===0){
+    const low=entries[job.key].low,high=entries[job.key].high;
+    const mean=(a,p)=>a.reduce((v,x)=>v+x[p],0)/a.length;
+    const delta=mean(low,'time')-mean(high,'time');
+    const wins=high.filter(x=>x.rank===1).length;
+    const warning=Math.abs(delta)>Math.max(3,plan.distance*.0035)||
+     (wins===2&&low.every(x=>x.rank!==1));
+    rows.push({key:job.key,delta,rankDelta:mean(low,'rank')-
+     mean(high,'rank'),wins,warning});
+    writeRows(rows);
+   }
+   info.textContent='実走AIを比較中：'+progress+'/44走';
+   if(progress===jobs.length)finish();
+   else requestAnimationFrame(next);
+  };
+  info.textContent='実走AIを比較中：0/44走';
+  requestAnimationFrame(next);
+ });
+ apply.addEventListener('click',()=>{
+  if(balanceAuditBusy||playing||raceElapsed>0||!recommendedBalanceWeights)return;
+  if(!storeBalanceWeights(recommendedBalanceWeights)){
+   info.textContent='補正を保存できませんでした。';return;
+  }
+  recommendedBalanceWeights=null;apply.disabled=true;
+  initRaceHorses();info.textContent=
+   '補正係数を保存しました。馬の能力値・馬名・枠順は変更していません。';
+ });
+ reset.addEventListener('click',()=>{
+  if(balanceAuditBusy||playing||raceElapsed>0){
+   info.textContent='発馬機に戻してから初期化してください。';return;
+  }
+  if(!storeBalanceWeights(defaultBalanceWeights())){
+   info.textContent='初期化を保存できませんでした。';return;
+  }
+  recommendedBalanceWeights=null;apply.disabled=true;tbody.replaceChildren();
+  if(activePlan)initRaceHorses();
+  info.textContent='11能力の補正係数を初期値に戻しました。';
+ });
+ panel.hidden=false;
+}
+initBalanceAudit();
 
 // Turn physics are derived from existing 3D course centreline. The
 // measured path-loss numbers are estimates, not surveyed track distances.
