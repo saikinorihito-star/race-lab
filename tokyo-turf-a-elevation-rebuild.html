@@ -45,6 +45,18 @@ a{color:#95e8df}
 .profileCaption{font-size:12px;line-height:1.65;color:#c6d9dc;margin-top:7px}
 #raceOrder{margin:0 12px 9px;padding:9px 11px;border-radius:9px;background:#1d3540;border:1px solid #35555e;color:#dcefe9;font-size:12px;line-height:1.6}
 #raceOrder strong{color:#f2e8b0}
+/* Results live beneath the race, never over the camera or approved horse. */
+#raceResults{margin:0 12px 10px;padding:9px 11px;border:1px solid #537976;
+ background:#17313b;border-radius:10px;font-size:12px;color:#e3f4ee}
+#raceResults[hidden]{display:none!important}
+#raceResults summary{cursor:pointer;font-weight:750;line-height:1.65;color:#f6e6b8}
+#raceResults .resultTableWrap{max-height:315px;overflow-y:auto;overscroll-behavior:contain}
+#raceResults table{width:100%;font-variant-numeric:tabular-nums}
+#raceResults td:nth-child(1){white-space:nowrap;width:43px}
+#raceResults td:nth-child(3),#raceResults td:nth-child(4){white-space:nowrap;text-align:right}
+#raceResults td:nth-child(2){overflow-wrap:anywhere}
+#raceResults tr:first-child td{color:#ffe5a0;font-weight:750}
+#raceResults .resultNote{font-size:11px;line-height:1.5;color:#a9c3c4}
 #design01Loader{padding-top:5px;padding-bottom:5px}
 #design01Overlay{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:18px;pointer-events:none}
 #design01Overlay[hidden]{display:none}
@@ -272,6 +284,16 @@ a{color:#95e8df}
 </div>
 <div class="tools"><span class="pill" id="gridStatus">18頭の発馬位置を検証中…</span></div>
 <div id="raceOrder" aria-live="polite">18頭の順位とレース展開を準備しています。</div>
+<details id="raceResults" hidden>
+ <summary id="raceResultSummary">レース結果</summary>
+ <div class="resultTableWrap">
+  <table aria-label="18頭レースの確定着順">
+   <thead><tr><th>着順</th><th>馬名</th><th>タイム</th><th>1着との差</th></tr></thead>
+   <tbody id="raceResultRows"></tbody>
+  </table>
+ </div>
+ <p class="resultNote">架空の走行モデルの結果です。ゴール時刻は60Hzの計算間隔内を補間した推定値で、実競馬の公式記録ではありません。</p>
+</details>
 <div id="message">正式な馬はBabylonJSで承認されたMeshy版のデザインだけです。元の馬体とテクスチャを保持した専用GLBを読み込み、横・斜め前・後ろから1頭走行を検証します。仮の馬を代わりに表示しません。</div>
 <div id="legend"><span class="legend">緑：芝Aコース</span><span class="legend">砂色：ダート</span><span class="legend">白：芝・ダートの二段ラチ</span><span class="legend">青：大型ターフビジョン</span><span class="legend">赤白：番号付きハロン棒</span><span class="legend">黄：ゴール</span><span class="legend">白：選択したS</span><span class="legend">18頭：毛色・勝負服を個別表示</span></div>
 <section class="elevationPanel">
@@ -1643,6 +1665,45 @@ const RACE_TICK=1/60;
 const RACE_CLEARANCE=.96;     // 近い位置にいる馬同士の横方向中心間隔の目標
 const RACE_FRONT_GAP=2.65;    // 同一進路で追突しないための前後中心間隔の目標
 let raceHorses=[],raceElapsed=0,raceFinished=[],raceAccumulator=0,raceContactWarnings=0;
+const raceResultPanel=document.querySelector('#raceResults');
+const raceResultSummary=document.querySelector('#raceResultSummary');
+const raceResultRows=document.querySelector('#raceResultRows');
+function clearRaceResults(){
+ raceResultPanel.open=false;
+ raceResultPanel.hidden=true;
+ raceResultRows.replaceChildren();
+}
+// The order and clock are derived from the simulated 60Hz physics step,
+// not from frame rendering, video FPS, or the array's input order.
+function renderRaceResults(){
+ if(!isOfficialEighteenTest||!activePlan||
+    raceFinished.length!==OFFICIAL_TEST_COUNT)return;
+ const finishers=raceHorses.slice(0,OFFICIAL_TEST_COUNT)
+  .sort((a,b)=>(a.finishTime??Infinity)-(b.finishTime??Infinity)||a.number-b.number);
+ if(finishers.some(h=>!Number.isFinite(h.finishTime)))return;
+ const winner=finishers[0],winTime=winner.finishTime;
+ const newRows=document.createDocumentFragment();
+ finishers.forEach((horse,index)=>{
+  const row=document.createElement('tr');
+  const name=officialRunnerNames[horse.idx]||'試験馬'+horse.number;
+  const delta=horse.finishTime-winTime;
+  for(const value of [
+   String(index+1)+'着',
+   horse.number+'番 '+name,
+   horse.finishTime.toFixed(2)+'秒',
+   index===0?'―':'+'+Math.max(0,delta).toFixed(2)+'秒'
+  ]){
+   const cell=document.createElement('td');
+   cell.textContent=value;row.append(cell);
+  }
+  newRows.append(row);
+ });
+ raceResultRows.replaceChildren(newRows);
+ raceResultSummary.textContent='🏆 '+activeDistance+'m 結果｜1着 '+winner.number+
+  '番 '+(officialRunnerNames[winner.idx]||'試験馬'+winner.number)+
+  '（'+winTime.toFixed(2)+'秒）｜18頭の着順を見る';
+ raceResultPanel.hidden=false;raceResultPanel.open=true;
+}
 function initialDemoText(){
  return isOfficialPairTest?'正式モデル'+OFFICIAL_TEST_COUNT+'頭を走らせる':
  fieldMode.value==='race18'?'18頭のレースを開始':
@@ -1700,6 +1761,7 @@ console.assert([24,28,31,36,41].every(w=>
  })),'正式Design 01の2/4/8頭の安全な発走レーン');
 function initRaceHorses(){
  raceElapsed=0;raceFinished=[];raceAccumulator=0;raceContactWarnings=0;
+ clearRaceResults();
  const width=activePlan?fieldCenterAt(activePlan,0).width:31;
  raceHorses=Array.from({length:FIELD_COUNT},(_,i)=>({
   number:i+1,idx:i,distance:0,postDistance:0,speed:0,finished:false,finishTime:null,
@@ -2171,7 +2233,19 @@ function stepOfficialPair(tick){
    h.slot=Math.min(h.slot,currentSlot);
   }
   if(h.distance>=activePlan.distance){
-   h.finished=true;h.finishTime=raceElapsed;h.postDistance=0;
+   h.finished=true;
+   // 18-horse mode: resolve crossing time INSIDE the current 1/60s tick.
+   // The movement/AI step already clamps distance to the goal; the
+   // unclamped crossing displacement is h.speed*tick.
+   if(isOfficialEighteenTest){
+    const remaining=Math.max(0,activePlan.distance-h.prevDistance);
+    const travelThisTick=Math.max(1e-9,h.speed*tick);
+    const fraction=THREE.MathUtils.clamp(remaining/travelThisTick,0,1);
+    h.finishTime=raceElapsed-tick+fraction*tick;
+   }else{
+    h.finishTime=raceElapsed;
+   }
+   h.postDistance=0;
    raceFinished.push(h.number);
   }
  }
@@ -3683,7 +3757,11 @@ function animate(time){
  const dt=Math.min(clock.getDelta(),.05);
  if(playing){
   if(fieldMode.value==='race18'){
-   if(updateRace(dt)){playing=false;demoBtn.textContent=isOfficialPairTest?OFFICIAL_TEST_COUNT+'頭テストをもう一度':'18頭ゴール・もう一度'}
+   if(updateRace(dt)){
+     playing=false;
+     demoBtn.textContent=isOfficialPairTest?OFFICIAL_TEST_COUNT+'頭テストをもう一度':'18頭ゴール・もう一度';
+     if(isOfficialEighteenTest)renderRaceResults();
+    }
   }else{
    const step=16.7*Number(rate.value)*dt;
    travel=Math.min(activePlan?.distance||LAP,travel+step);
