@@ -617,7 +617,7 @@ function initRunnerGateSwap(){
   const inputs=document.querySelectorAll('#raceNameInputs input');
   if(inputs[a])inputs[a].value=officialRunnerNames[a];
   if(inputs[b])inputs[b].value=officialRunnerNames[b];
-  refreshRunnerSelectors();
+  refreshRunnerSelectors();refreshReserveAbilityOptions();
   const ability=document.querySelector('#abilityHorseSelect');
   if(ability)ability.dispatchEvent(new Event('change'));
   if(activePlan)initRaceHorses();
@@ -2598,6 +2598,122 @@ function effectiveEighteenProfile(index){
   kick:modified?kickByRole[role]:b.kick,
   kickStart:modified?timingByRole[role]:b.kickStart};
 }
+
+function refreshReserveAbilityOptions(){
+ if(!isOfficialEighteenTest)return;
+ const node=document.querySelector('#abilityHorseSelect');
+ if(!node)return;
+ const saved=node.value;
+ for(let i=node.options.length-1;i>=0;i--)
+  if(node.options[i].value.startsWith('reserve:'))node.remove(i);
+ for(const horse of horseLibrary)
+  if(!horseIdentityBySlot.includes(horse.id))
+   node.add(new Option('控え：'+horse.name,'reserve:'+horse.id));
+ if([...node.options].some(o=>o.value===saved))node.value=saved;
+}
+function initHorseLibraryEditor(){
+ if(!isOfficialEighteenTest)return;
+ const panel=document.querySelector('#horseLibraryPanel'),
+  select=document.querySelector('#libraryHorse'),
+  nameInput=document.querySelector('#libraryName'),
+  slotInput=document.querySelector('#librarySlot'),
+  status=document.querySelector('#libraryStatus');
+ const ready=()=>!playing&&raceElapsed===0;
+ for(let i=0;i<18;i++)slotInput.add(new Option((i+1)+'番（'+
+  (officialFrameIndex(i+1)+1)+'枠）',String(i)));
+ const refresh=(preferred)=>{
+  const id=preferred??Number(select.value);
+  select.replaceChildren();
+  for(const h of horseLibrary){
+   const slot=horseIdentityBySlot.indexOf(h.id);
+   select.add(new Option((slot<0?'控え':'出走'+(slot+1)+'番')+
+    '：'+h.name,String(h.id)));
+  }
+  if(horseLibrary.some(h=>h.id===id))select.value=String(id);
+  document.querySelector('#libraryCount').textContent=
+   '登録馬 '+horseLibrary.length+'頭／最大'+RUNNER_LIBRARY_LIMIT+
+   '頭（出走18頭・控え'+(horseLibrary.length-18)+'頭）';
+  refreshRunnerSelectors();refreshReserveAbilityOptions();
+ };
+ const updateNameFields=()=>{
+  document.querySelectorAll('#raceNameInputs input').forEach((input,i)=>{
+   input.value=officialRunnerNames[i];
+  });
+  refreshRunnerSelectors();refreshReserveAbilityOptions();
+  const a=document.querySelector('#abilityHorseSelect');
+  if(a)a.dispatchEvent(new Event('change'));
+ };
+ document.querySelector('#libraryAdd').addEventListener('click',()=>{
+  if(!ready()){status.textContent='発馬機に戻してから登録してください。';return}
+  const name=nameInput.value.trim().slice(0,24);
+  if(!name){status.textContent='馬の名前を入力してください。';return}
+  if(horseLibrary.length>=RUNNER_LIBRARY_LIMIT){
+   status.textContent='登録できるのは100頭までです。';return;
+  }
+  const id=nextHorseLibraryId;
+  if(id>=10000){status.textContent='登録IDの上限です。';return}
+  nextHorseLibraryId++;
+  const horse={id,name,ability:defaultHorseAbility(id)};
+  horseLibrary.push(horse);
+  horseAbilities[id]=horse.ability;
+  if(!persistHorseLibrary()){
+   horseLibrary.pop();horseAbilities[id]=undefined;nextHorseLibraryId--;
+   status.textContent='保存に失敗したため登録しませんでした。';return;
+  }
+  nameInput.value='';refresh(id);
+  status.textContent='「'+name+'」を登録しました。出走枠を選んで入れ替えられます。';
+ });
+ document.querySelector('#libraryEnter').addEventListener('click',()=>{
+  if(!ready()){status.textContent='レース中・ゴール後は変更できません。発馬機へ戻してください。';return}
+  const id=Number(select.value),slot=Number(slotInput.value);
+  if(!libraryHorse(id)||!Number.isInteger(slot)||slot<0||slot>=18)return;
+  const previousId=horseIdentityBySlot[slot],
+   previousSlot=horseIdentityBySlot.indexOf(id);
+  if(previousId===id){status.textContent='すでにその枠に出走しています。';return}
+  if(previousSlot>=0)horseIdentityBySlot[previousSlot]=previousId;
+  horseIdentityBySlot[slot]=id;
+  const oldNames=officialRunnerNames.slice();
+  for(let i=0;i<18;i++){
+   officialRunnerNames[i]=libraryHorse(horseIdentityBySlot[i])?.name||'試験馬'+(i+1);
+  }
+  if(!persistRunnerLineup()){
+   if(previousSlot>=0)horseIdentityBySlot[previousSlot]=id;
+   horseIdentityBySlot[slot]=previousId;
+   officialRunnerNames.splice(0,18,...oldNames);
+   status.textContent='保存に失敗したため枠順は変更しませんでした。';return;
+  }
+  updateNameFields();refresh(id);initRaceHorses();
+  status.textContent='「'+libraryHorse(id).name+'」を'+(slot+1)+
+   '番へ登録しました。前の馬は'+(previousSlot<0?'控え':'別の枠')+'へ移動しました。';
+ });
+ document.querySelector('#libraryEdit').addEventListener('click',()=>{
+  const id=Number(select.value),slot=horseIdentityBySlot.indexOf(id);
+  const horse=libraryHorse(id);
+  if(!horse)return;
+  const editor=document.querySelector('#horseAbilityEditor'),
+   abilitySelect=document.querySelector('#abilityHorseSelect');
+  editor.open=true;
+  abilitySelect.value=slot>=0?String(slot):'reserve:'+id;
+  abilitySelect.dispatchEvent(new Event('change'));
+  status.textContent='「'+horse.name+'」を能力編集で選択しました。';
+ });
+ document.querySelector('#libraryDelete').addEventListener('click',()=>{
+  if(!ready()){status.textContent='発馬機に戻してから削除してください。';return}
+  const id=Number(select.value),slot=horseIdentityBySlot.indexOf(id);
+  if(slot>=0){status.textContent='出走中の馬は削除できません。控えに戻してください。';return}
+  if(id<18){status.textContent='既存の18頭は保護されています。';return}
+  const index=horseLibrary.findIndex(h=>h.id===id);
+  if(index<0)return;
+  const removed=horseLibrary.splice(index,1)[0];
+  if(!persistHorseLibrary()){
+   horseLibrary.splice(index,0,removed);
+   status.textContent='保存できず、削除を取り消しました。';return;
+  }
+  refresh();
+  status.textContent='「'+removed.name+'」を控えの登録から削除しました。';
+ });
+ panel.hidden=false;refresh(horseLibrary[0]?.id);
+}
 function initHorseAbilityEditor(){
  if(!isOfficialEighteenTest)return;
  const panel=document.querySelector('#horseAbilityEditor');
@@ -2618,6 +2734,7 @@ function initHorseAbilityEditor(){
   finish:document.querySelector('#abilityFinish')
  };
  for(let i=0;i<18;i++)selector.add(new Option((i+1)+'番 '+officialRunnerNames[i],String(i)));
+ refreshReserveAbilityOptions();
  const updateLabels=()=>{for(const range of Object.values(ranges))
   document.querySelector('#'+range.id+'Value').textContent=range.value;};
  const loadSelected=()=>{
@@ -2674,6 +2791,7 @@ function initHorseAbilityEditor(){
 }
 initHorseAbilityEditor();
 initRunnerGateSwap();
+initHorseLibraryEditor();
 
 // 18頭専用の2D位置試験モデル。3Dモデルのシルエットを変えない。
 // スタート時は幅に合わせ18頭を並べ、前に空きができた馬から
