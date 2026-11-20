@@ -131,6 +131,22 @@ a{color:#95e8df}
 #raceNameInputs label{display:flex;align-items:center;gap:8px}
 #raceNameInputs input{width:100%;min-width:0;min-height:35px;background:#10212b;
  border:1px solid #557781;border-radius:7px;color:#fff;font-size:13px;padding:6px}
+
+#horseAbilityEditor{margin:8px 12px;padding:11px;border:1px solid #527c79;
+ background:#152d36;border-radius:11px;font-size:13px}
+#horseAbilityEditor[hidden]{display:none!important}
+#horseAbilityEditor summary{cursor:pointer;font-weight:750;line-height:1.6}
+#horseAbilityEditor .abilityForm{display:grid;gap:10px;max-width:670px;margin-top:12px}
+#horseAbilityEditor .abilityRow{display:grid;grid-template-columns:91px minmax(0,1fr) 30px;gap:8px;align-items:center}
+#horseAbilityEditor .abilityRow label{font-size:13px;display:block}
+#horseAbilityEditor input[type="range"]{width:100%;min-width:0;min-height:35px;accent-color:#b6ef56}
+#horseAbilityEditor output{font-variant-numeric:tabular-nums;color:#c8f3ac;text-align:right}
+#horseAbilityEditor select{max-width:100%;min-height:44px}
+#horseAbilityEditor .abilityActions{display:flex;gap:8px;flex-wrap:wrap}
+#horseAbilityEditor .abilityActions button{min-height:44px}
+#abilitySave{background:#246e58;border-color:#81d4a9}
+#horseAbilityEditor .abilityHint{font-size:11px;line-height:1.65;color:#b6d1d4;margin:0}
+#abilityStatus{font-size:12px;color:#d8eebb;min-height:18px}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script>
 </head>
@@ -277,6 +293,27 @@ a{color:#95e8df}
  <summary>18頭の馬名を編集（端末に保存）</summary>
  <div id="raceNameInputs"></div>
 </details>
+<details id="horseAbilityEditor" hidden>
+ <summary>🐎 18頭の能力を設定（速度・スタミナ・加速力・末脚・脚質）</summary>
+ <div class="abilityForm">
+  <label>編集する馬 <select id="abilityHorseSelect" aria-label="能力を編集する馬"></select></label>
+  <p class="abilityHint">0〜100の範囲で50は元の能力です。保存した能力は次の発走から反映され、レース中には変更されません。</p>
+  <div class="abilityRow"><label for="abilitySpeed">速度</label><input id="abilitySpeed" type="range" min="0" max="100" value="50"/><output id="abilitySpeedValue" for="abilitySpeed">50</output></div>
+  <div class="abilityRow"><label for="abilityStamina">スタミナ</label><input id="abilityStamina" type="range" min="0" max="100" value="50"/><output id="abilityStaminaValue" for="abilityStamina">50</output></div>
+  <div class="abilityRow"><label for="abilityAcceleration">加速力</label><input id="abilityAcceleration" type="range" min="0" max="100" value="50"/><output id="abilityAccelerationValue" for="abilityAcceleration">50</output></div>
+  <div class="abilityRow"><label for="abilityFinish">末脚</label><input id="abilityFinish" type="range" min="0" max="100" value="50"/><output id="abilityFinishValue" for="abilityFinish">50</output></div>
+  <label>脚質 <select id="abilityRole">
+   <option value="逃げ">逃げ</option><option value="先行">先行</option>
+   <option value="中団">中団</option><option value="差し">差し</option>
+   <option value="追込">追込</option>
+  </select></label>
+  <div class="abilityActions">
+   <button id="abilitySave" type="button">この馬の能力を保存</button>
+   <button id="abilityReset" type="button">この馬を標準に戻す</button>
+  </div>
+  <p id="abilityStatus" role="status" aria-live="polite"></p>
+ </div>
+</details>
 <div class="tools" id="design01OriginalInfo" hidden><strong>正式モデル：BabylonJSで承認されたMeshy版 Design 01</strong> <span>元の馬体・顔・青白の勝負服・ゼッケン4をそのまま使用</span></div>
 <div class="tools" id="design01Loader" hidden>
  <strong>正式モデルのファイルは3D画面の中央から選択できます</strong>
@@ -387,6 +424,9 @@ if(isOfficialEighteenTest){
    input.value=officialRunnerNames[i];
    try{localStorage.setItem(RUNNER_NAMES_KEY,JSON.stringify(officialRunnerNames))}
    catch(error){console.warn('馬名の保存に失敗しました',error)}
+   const abilitySelect=document.querySelector('#abilityHorseSelect');
+   if(abilitySelect?.options[i])
+    abilitySelect.options[i].textContent=(i+1)+'番 '+officialRunnerNames[i];
   });
   label.append(title,input);fields.append(label);
  }
@@ -1794,7 +1834,8 @@ function initRaceHorses(){
     isOfficialEightTest?eightStartLane(width,i):officialReviewLane(width,i,0);
    h.startLane=lane;h.lane=lane;h.prevLane=lane;h.targetLane=lane;h.sideSpeed=0;
    h.slot=i;h.nextLaneReviewTime=0;
-   h.role=isOfficialEighteenTest?EIGHTEEN_PACE_PROFILES[i].role:
+   if(isOfficialEighteenTest)h.raceProfile=effectiveEighteenProfile(i);
+   h.role=isOfficialEighteenTest?h.raceProfile.role:
     isOfficialEightTest?EIGHT_PACE_PROFILES[i].role:['逃げ','先行','差し','追込'][i];
    h.prevDistance=h.distance;h.prevPostDistance=h.postDistance;
    if(isOfficialEighteenTest){
@@ -2134,6 +2175,106 @@ const EIGHTEEN_PACE_PROFILES=Array.from({length:18},(_,idx)=>{
   finishStrength:.72+(idx*5%11)*.045,
   preferredDistance:1400+(idx*5%9)*250};
 });
+// Per-horse ability editing applies to 18-horse AI only. The approved
+// GLB design and other runner counts retain their existing behavior.
+const HORSE_ABILITIES_KEY='race-lab-design01-18-abilities-v1';
+const HORSE_ROLE_OPTIONS=['逃げ','先行','中団','差し','追込'];
+const HORSE_ABILITY_KEYS=['speed','stamina','acceleration','finish'];
+function defaultHorseAbility(index){
+ return {speed:50,stamina:50,acceleration:50,finish:50,
+  role:EIGHTEEN_PACE_PROFILES[index].role};
+}
+function normalizeHorseAbility(raw,index){
+ const result=defaultHorseAbility(index);
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))return result;
+ for(const key of HORSE_ABILITY_KEYS){
+  const val=raw[key];
+  if(typeof val==='number'&&Number.isFinite(val))
+   result[key]=THREE.MathUtils.clamp(Math.round(val),0,100);
+ }
+ if(HORSE_ROLE_OPTIONS.includes(raw.role))result.role=raw.role;
+ return result;
+}
+function loadHorseAbilities(){
+ const defaults=Array.from({length:18},(_,i)=>defaultHorseAbility(i));
+ try{
+  const data=JSON.parse(localStorage.getItem(HORSE_ABILITIES_KEY)||'null');
+  if(data?.version===1&&Array.isArray(data.horses))
+   return defaults.map((_,i)=>normalizeHorseAbility(data.horses[i],i));
+ }catch(err){console.warn('能力設定の読込に失敗。標準値を使用',err)}
+ return defaults;
+}
+const horseAbilities=isOfficialEighteenTest?loadHorseAbilities():[];
+function effectiveEighteenProfile(index){
+ const b=EIGHTEEN_PACE_PROFILES[index],v=horseAbilities[index]||defaultHorseAbility(index);
+ const role=v.role,modified=role!==b.role;
+ const kickByRole={逃げ:.18,先行:.18,中団:.31,差し:.52,追込:.76};
+ const timingByRole={逃げ:.72,先行:.72,中団:.72,差し:.29,追込:.37};
+ return {...b,role,
+  early:b.early+(v.speed-50)*.017,
+  accel:b.accel*(1+(v.acceleration-50)*.010),
+  endurance:THREE.MathUtils.clamp(b.endurance*(1+(v.stamina-50)*.006),.65,1.30),
+  finishStrength:b.finishStrength*(1+(v.finish-50)*.014),
+  kick:modified?kickByRole[role]:b.kick,
+  kickStart:modified?timingByRole[role]:b.kickStart};
+}
+function initHorseAbilityEditor(){
+ if(!isOfficialEighteenTest)return;
+ const panel=document.querySelector('#horseAbilityEditor');
+ const selector=document.querySelector('#abilityHorseSelect');
+ const roleInput=document.querySelector('#abilityRole');
+ const status=document.querySelector('#abilityStatus');
+ const ranges={
+  speed:document.querySelector('#abilitySpeed'),
+  stamina:document.querySelector('#abilityStamina'),
+  acceleration:document.querySelector('#abilityAcceleration'),
+  finish:document.querySelector('#abilityFinish')
+ };
+ for(let i=0;i<18;i++)selector.add(new Option((i+1)+'番 '+officialRunnerNames[i],String(i)));
+ const updateLabels=()=>{for(const range of Object.values(ranges))
+  document.querySelector('#'+range.id+'Value').textContent=range.value;};
+ const loadSelected=()=>{
+  const v=horseAbilities[Number(selector.value)]||defaultHorseAbility(Number(selector.value));
+  for(const [key,range] of Object.entries(ranges))range.value=v[key];
+  roleInput.value=v.role;
+  updateLabels();
+  status.textContent='編集後は「この馬の能力を保存」を押してください。';
+ };
+ const dirty=()=>{
+  updateLabels();status.textContent='未保存です。保存後、次のレースから反映します。';
+ };
+ selector.addEventListener('change',loadSelected);
+ for(const range of Object.values(ranges))range.addEventListener('input',dirty);
+ roleInput.addEventListener('change',dirty);
+ const persist=()=>{
+  try{
+   localStorage.setItem(HORSE_ABILITIES_KEY,JSON.stringify({version:1,horses:horseAbilities}));
+   return true;
+  }catch(err){
+   console.warn('能力の保存に失敗',err);
+   status.textContent='保存に失敗しました。Safariのストレージをご確認ください。';
+   return false;
+  }
+ };
+ const saveChanges=(reset=false)=>{
+  const index=Number(selector.value),old=horseAbilities[index];
+  const changes=reset?defaultHorseAbility(index):
+   normalizeHorseAbility({role:roleInput.value,...Object.fromEntries(
+    Object.entries(ranges).map(([key,range])=>[key,Number(range.value)]))},index);
+  horseAbilities[index]=changes;
+  if(!persist()){horseAbilities[index]=old;return}
+  if(!playing&&raceElapsed===0&&activePlan)initRaceHorses();
+  loadSelected();
+  status.textContent=(index+1)+'番を'+(reset?'標準に戻しました。':'保存しました。')+
+   '次の発走から反映されます。';
+ };
+ document.querySelector('#abilitySave').addEventListener('click',()=>saveChanges());
+ document.querySelector('#abilityReset').addEventListener('click',()=>saveChanges(true));
+ panel.hidden=false;
+ loadSelected();
+}
+initHorseAbilityEditor();
+
 // 18頭専用の2D位置試験モデル。3Dモデルのシルエットを変えない。
 // スタート時は幅に合わせ18頭を並べ、前に空きができた馬から
 // 斜め内へ寄る。速度の急停止は許さず接近時は先を読んで調整。
@@ -2174,7 +2315,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // One simultaneous gate release: individual speeds diverge after 12m.
  const commonLaunch=h.distance<12;
  if(commonLaunch)desiredSpeed=15.8;
- const acceleration=commonLaunch?3.32:EIGHTEEN_PACE_PROFILES[h.idx].accel;
+ const acceleration=commonLaunch?3.32:
+  (h.raceProfile?.accel??EIGHTEEN_PACE_PROFILES[h.idx].accel);
  let speed=h.speed+THREE.MathUtils.clamp(desiredSpeed-h.speed,
   -(desiredSpeed<h.speed?4.4:acceleration)*dt,acceleration*dt);
  speed=Math.max(Math.min(EIGHTEEN_MIN_ROLL_BASE+
@@ -2263,7 +2405,8 @@ function stepOfficialPair(tick){
    h.sideSpeed=(lane-h.lane)/tick;
    h.lane=lane;h.targetLane=lane;
   }else{
-   const profile=isOfficialEighteenTest?EIGHTEEN_PACE_PROFILES[i]:
+   const profile=isOfficialEighteenTest?
+    (h.raceProfile||EIGHTEEN_PACE_PROFILES[i]):
     isOfficialEightTest?EIGHT_PACE_PROFILES[i]:FOUR_PACE_PROFILES[i];
    const progress=h.distance/Math.max(1,activePlan.distance);
    const launch=THREE.MathUtils.clamp((h.distance-180)/540,0,1);
