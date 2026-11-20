@@ -3284,7 +3284,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   -(desiredSpeed<h.speed?4.4:acceleration)*dt,acceleration*dt);
  speed=Math.max(Math.min(EIGHTEEN_MIN_ROLL_BASE+
   (17-h.idx)*EIGHTEEN_MIN_ROLL_STAGGER,Math.max(0,h.speed)),speed);
- const distance=Math.min(activePlan.distance,h.distance+speed*dt);
+ let distance=Math.min(activePlan.distance,h.distance+speed*dt);
  const inwardBudget=Math.max(0,distance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD;
  let lane=Math.min(inner-.05,h.lane+Math.min(
   lateralRate*dt,inwardBudget,Math.max(0,inner-.05-h.lane)));
@@ -3369,12 +3369,49 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   lane=Math.max(h.lane,lane);
  }
  lane=THREE.MathUtils.clamp(lane,-width/2+1.48,inner-.05);
+ // Recheck the final predicted two-dimensional spacing, including another
+ // horse's own intended sideways move. Never teleport sideways out of danger.
+ for(const other of snapshot){
+  if(other.idx===h.idx||other.finished)continue;
+  const predictedOtherDistance=other.distance+Math.max(0,other.speed)*dt;
+  if(Math.abs(distance-predictedOtherDistance)>3)continue;
+  let otherLane=other.lane;
+  if(other.passGoal!==null&&other.passGoal!==undefined&&
+    other.passUntil>other.distance){
+   const sign=Math.sign(other.passGoal-other.lane);
+   otherLane+=sign*Math.min(FOUR_INWARD_RATE*dt,
+    Math.abs(other.passGoal-other.lane));
+  }
+  let longitudinal=distance-predictedOtherDistance;
+  let side=lane-otherLane;
+  if(Math.hypot(longitudinal,side)>=1.16)continue;
+  const originalSide=h.lane-otherLane;
+  if(Math.abs(originalSide)>Math.abs(side)+.001){
+   lane=h.lane;
+   if(h.passGoal!==null)h.passGoal=null;
+   side=lane-otherLane;
+  }
+  // The runner behind yields. If a side route is already clear no braking
+  // is applied. A sub-centimetre tolerance avoids oscillatory deadlocks.
+  if(Math.hypot(longitudinal,side)<1.16&&
+    predictedOtherDistance>h.distance+1e-6&&
+    Math.abs(side)<1.16){
+   const required=Math.sqrt(Math.max(0,1.16*1.16-side*side));
+   const safe=predictedOtherDistance-required-.005;
+   if(safe<distance){
+    distance=Math.max(h.distance,safe);
+    speed=Math.max(0,(distance-h.distance)/dt);
+    longitudinal=distance-predictedOtherDistance;
+   }
+  }
+ }
  return {distance,lane,speed};
 }
 function stepOfficialPair(tick){
  if(!activePlan||raceFinished.length>=OFFICIAL_TEST_COUNT)return;
  const previous=raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>({
-  idx:h.idx,distance:h.distance,lane:h.lane,speed:h.speed,finished:h.finished
+  idx:h.idx,distance:h.distance,lane:h.lane,speed:h.speed,finished:h.finished,
+  passGoal:h.passGoal,passUntil:h.passUntil
  }));
  raceElapsed+=tick;
  for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
