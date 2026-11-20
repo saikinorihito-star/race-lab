@@ -2098,13 +2098,16 @@ function renderRaceResults(){
  });
  raceResultRows.replaceChildren(newRows);
  const passDecisions=finishers.reduce((v,h)=>v+(h.passAttempts||0),0);
+ const insideDecisions=finishers.reduce((v,h)=>v+(h.insidePassAttempts||0),0);
+ const outsideDecisions=finishers.reduce((v,h)=>v+(h.outsidePassAttempts||0),0);
  const trafficSeconds=finishers.reduce((v,h)=>v+(h.trafficSeconds||0),0);
  const averageEnergy=finishers.reduce((v,h)=>v+(h.energy??1),0)/finishers.length;
  raceTacticsSummary.textContent='展開：'+
   (raceFlowAtStart.mode==='varied'?'番号'+raceFlowAtStart.seed:'固定')+
   '｜芝馬場：'+({good:'良',slightlyHeavy:'稍重',heavy:'重',bad:'不良'}[raceGoingAtStart]||'良')+
-  '｜架空の展開モデル｜外に持ち出す判断 '+passDecisions+
-  '回｜進路が詰まった時間（延べ）'+trafficSeconds.toFixed(1)+
+  '｜架空の展開モデル｜進路変更判断 '+passDecisions+
+  '回（内 '+insideDecisions+'／外 '+outsideDecisions+'）'+
+  '｜進路が詰まった時間（延べ）'+trafficSeconds.toFixed(1)+
   '秒｜平均残存スタミナ '+Math.round(averageEnergy*100)+'%。';
  raceResultSummary.textContent='🏆 '+activeDistance+'m 結果｜1着 '+winner.number+
   '番 '+(officialRunnerNames[winner.idx]||'試験馬'+winner.number)+
@@ -2214,6 +2217,7 @@ function initRaceHorses(){
     h.energy=1;h.blockedFor=0;h.trafficSeconds=0;
     h.passGoal=null;h.passUntil=0;h.passCooldown=0;h.passAttempts=0;
     h.pathDistance=0;h.pathExtraMeters=0;h.curveTravel=0;
+    h.insidePassAttempts=0;h.outsidePassAttempts=0;
    }
   }
  }
@@ -3030,42 +3034,55 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   if(Math.abs(along)<EIGHTEEN_MERGE_LONGITUDINAL_BUFFER&&other.lane>h.lane)
    lane=Math.min(lane,other.lane-2.35);
  }
- // An outside pass begins only if the whole destination corridor is free.
- // Two attempts maximum per runner, 200m cooldown between attempts.
+ // On a bend, a trapped runner checks an inside gap first. If it is not
+ // open, it uses the existing outside passing option. A tight corridor is
+ // never crossed instantaneously, even when it is the shorter path.
  if(h.distance>105&&h.distance<activePlan.distance-90&&
     h.blockedFor>THREE.MathUtils.clamp(
      .9-((h.raceProfile?.trafficAbility??5)-5)*.085+
       (h.raceFlow?.trafficPatience??0),.50,1.45)&&
     h.passUntil<=h.distance&&h.passCooldown<=h.distance&&h.passAttempts<2){
-  const destination=h.lane-2.75;
-  const free=destination>-width/2+2&&snapshot.every(o=>{
-   if(o.idx===h.idx||o.finished)return true;
-   const longitudinal=o.distance+o.speed*dt-distance;
-   return Math.abs(longitudinal)>9||
-    Math.abs(o.lane-destination)>2.75;
-  });
-  if(free){
+  const bend=cornerDataAt(h.distance);
+  const innerOption=bend.kappa>.0015;
+  const desiredOptions=innerOption?
+   [h.lane+2.85,h.lane-2.75]:[h.lane-2.75];
+  for(const destination of desiredOptions){
+   if(destination>inner-.05||destination<-width/2+2)continue;
+   const free=snapshot.every(o=>{
+    if(o.idx===h.idx||o.finished)return true;
+    const longitudinal=o.distance+o.speed*dt-distance;
+    return Math.abs(longitudinal)>9||
+     Math.abs(o.lane-destination)>2.70;
+   });
+   if(!free)continue;
    h.passGoal=destination;h.passUntil=h.distance+42;
    h.passCooldown=h.distance+220;
    h.blockedFor=0;h.passAttempts++;
+   if(destination>h.lane)h.insidePassAttempts++;
+   else h.outsidePassAttempts++;
+   break;
   }
  }
  const passing=h.passGoal!==null&&h.passUntil>h.distance&&
-  h.passGoal<h.lane-.08;
+  Math.abs(h.passGoal-h.lane)>.08;
  if(passing){
+  const low=Math.min(h.lane,h.passGoal),
+   high=Math.max(h.lane,h.passGoal);
   const clear=snapshot.every(o=>{
    if(o.idx===h.idx||o.finished)return true;
    const longitudinal=o.distance+o.speed*dt-distance;
-   return Math.abs(longitudinal)>7.5||o.lane>h.lane+1.6||
-    o.lane<h.passGoal-2.7;
+   return Math.abs(longitudinal)>7.5||
+    o.lane<low-1.6||o.lane>high+1.6;
   });
   if(clear){
-   const step=Math.min(lateralRate*dt,inwardBudget,h.lane-h.passGoal);
-   lane=h.lane-step;
+   const sign=Math.sign(h.passGoal-h.lane);
+   const step=Math.min(lateralRate*dt,inwardBudget,
+    Math.abs(h.passGoal-h.lane));
+   lane=h.lane+sign*step;
   }else lane=h.lane;
  }else{
   h.passGoal=null;
-  // Keep the approved no-instant-jump constraint when NOT passing.
+  // Keep the approved continuous lateral movement in normal formation.
   lane=Math.max(h.lane,lane);
  }
  lane=THREE.MathUtils.clamp(lane,-width/2+1.48,inner-.05);
