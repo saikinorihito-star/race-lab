@@ -1733,7 +1733,7 @@ const POCKET_DATA=[
 function makePocket(spec){
  const remaining=modulo(FINISH_DISTANCE-spec.join,LAP);
  const targetLength=spec.distance-remaining;
- const end=offsetAt(spec.join,MEASURE_OFFSET-widthAt(spec.join)/2,.12),tangent=positionAt(spec.join).t; // 18頭用にポケット出口を本線中央へ接続
+ const end=offsetAt(spec.join,MEASURE_OFFSET-widthAt(spec.join)/2,.065),tangent=positionAt(spec.join).t; // 18頭用にポケット出口を本線中央へ接続
  const direction=new THREE.Vector3(spec.deltaX,0,spec.deltaZ).normalize();
  function curveFor(scale){
   const p0=end.clone().addScaledVector(direction,scale);
@@ -1750,15 +1750,16 @@ function makePocket(spec){
   if(curveFor(m).getLength()<targetLength)lo=m;else hi=m;
  }
  const curve=curveFor((lo+hi)/2),length=curve.getLength();
- const vertices=[],colors=[],indices=[];
+ const vertices=[],colors=[],uv=[],indices=[];
  const w=spec.distance===1800?24:28;
  for(let i=0;i<=100;i++){
   const u=i/100,p=curve.getPointAt(u),t=curve.getTangentAt(u).normalize();
   const side=new THREE.Vector3(t.z,0,-t.x).normalize();
   for(const dir of [-1,1]){
-   const point=p.clone().addScaledVector(side,dir*w/2);point.y+=.09;
+   const point=p.clone().addScaledVector(side,dir*w/2);point.y+=.003;
    vertices.push(point.x,point.y,point.z);
-   const c=new THREE.Color(Math.floor(i/8)%2===0?0x3c9949:0x388e45);
+   uv.push(u*length/12,dir===-1?0:3.2);
+   const c=new THREE.Color(Math.floor(i/8)%2===0?0x409b4b:0x3a9147);
    colors.push(c.r,c.g,c.b);
   }
   if(i<100){const k=i*2;indices.push(k,k+1,k+2,k+1,k+3,k+2)}
@@ -1766,11 +1767,17 @@ function makePocket(spec){
  const geom=new THREE.BufferGeometry();
  geom.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
  geom.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+ geom.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
  geom.setIndex(indices);geom.computeVertexNormals();
- const turf=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.95}));
+ const turf=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({
+  map:grassTexture,vertexColors:true,side:THREE.DoubleSide,roughness:.98,
+  polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1
+ }));
+ turf.name='TurfPocket_'+spec.distance;
+ turf.visible=false; // An inactive pocket must never appear in another race.
  scene.add(turf);pocketTurfMaterials.push(turf.material);
  // 走路の中央の黄色い補助線は撤去.
- return {...spec,curve,length,remaining,start:curve.getPointAt(0)};
+ return {...spec,curve,length,remaining,start:curve.getPointAt(0),turfMesh:turf};
 }
 const POCKETS=new Map(POCKET_DATA.map(x=>[x.distance,makePocket(x)]));
 // Turf palettes use the existing shaders and meshes, with no extra draw calls.
@@ -1900,6 +1907,10 @@ for(const pocket of POCKETS.values()){
 }
 function showPocketRailing(distance){
  fullOuterRail.visible=!pocketRailVariants.has(distance);
+ for(const [value,pocket] of POCKETS){
+  // Main-course tracks must not display the 1800m/2000m grass branch.
+  if(pocket.turfMesh)pocket.turfMesh.visible=Number(value)===Number(distance);
+ }
  for(const [value,item] of pocketRailVariants){
   const show=Number(value)===Number(distance);
   item.group.visible=show;item.mainOuter.visible=show;
@@ -1917,7 +1928,11 @@ function racePointAt(plan,distance){
  }
  const remainder=d-(plan.pocket?plan.pocket.length:0);
  const station=plan.startStation+Math.max(0,remainder);
- return {p:offsetAt(station,plan.pocket?MEASURE_OFFSET-widthAt(station)/2:-6,.12),t:positionAt(station).t};
+ // In Design01 18 mode, the S marker and start stripe must line up with the
+ // 18-horse gate centred at fieldCenterAt(), rather than the old -6m guide.
+ const centerShift=plan.pocket||isOfficialEighteenTest?
+  MEASURE_OFFSET-widthAt(station)/2:-6;
+ return {p:offsetAt(station,centerShift,.12),t:positionAt(station).t};
 }
 const routeVisual=new THREE.Group();scene.add(routeVisual);
 const startCanvas=makeCanvasTexture(['S'],'#122530','#ffffff',256,256);
@@ -1936,7 +1951,9 @@ function highlightRace(plan){
  clearRoute();
  // 走路を邪魔する黄色い走行ラインは表示しない。
  const first=racePointAt(plan,0);
- const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.9,plan.pocket?26:renderedTurfWidthAt(plan.startStation)),
+ const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.9,plan.pocket?
+  (plan.distance===1800?24:28):
+  (isOfficialEighteenTest?widthAt(plan.startStation):renderedTurfWidthAt(plan.startStation))),
   new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}));
  stripe.rotation.x=-Math.PI/2;stripe.rotation.z=-Math.atan2(first.t.z,first.t.x);
  stripe.position.copy(first.p).add(new THREE.Vector3(0,.19,0));routeVisual.add(stripe);
