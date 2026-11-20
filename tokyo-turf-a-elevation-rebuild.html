@@ -431,7 +431,7 @@ a{color:#95e8df}
 </details>
 <details id="balanceAuditPanel" hidden>
  <summary>⚖️ 11能力の自動バランス検証・補正</summary>
- <p>選んだ出走馬の各能力を5と10に設定して、2つの展開番号で計44走の比較を行います。対象馬のほかの能力は5に固定し、他の17頭の登録設定は変えません。結果は架空のAIモデルに対する感度検査です。</p>
+ <p>選んだ出走馬の各能力を5と10に設定して、2つの展開番号で計44走の比較を行います。対象馬のほかの能力は5に固定し、他の17頭の登録設定は変えません。現在の距離と馬場状態で検証します（良馬場では「馬場状態適性」の差は出ません）。結果は架空のAIモデルに対する感度検査です。</p>
  <div class="balanceActions">
   <label>検証する馬 <select id="balanceHorse"></select></label>
   <button type="button" id="balanceRun">11能力を自動検証</button>
@@ -3104,9 +3104,14 @@ function initBalanceAudit(){
    const limit=Math.max(3,plan.distance*.0035);
    const weights={...balanceWeights};
    let proposals=0;
-   for(const row of rows)if(row.warning&&row.delta>limit){
-    const next=THREE.MathUtils.clamp(balanceWeights[row.key]*
-     THREE.MathUtils.clamp(limit/row.delta,.55,1),.55,1.15);
+   for(const row of rows)if(row.warning&&row.delta>0){
+    // Time dominance gets a proportional reduction; a 2/2 win sweep
+    // without a large time margin gets a small, reversible 8% reduction.
+    const shrink=row.delta>limit?
+     THREE.MathUtils.clamp(limit/row.delta,.55,1):
+     (row.wins===2?.92:1);
+    const next=THREE.MathUtils.clamp(
+     balanceWeights[row.key]*shrink,.55,1.15);
     if(next<balanceWeights[row.key]-.005){
      weights[row.key]=next;proposals++;
     }
