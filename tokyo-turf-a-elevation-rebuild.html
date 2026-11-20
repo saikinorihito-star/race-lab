@@ -53,7 +53,7 @@ a{color:#95e8df}
 #raceResults .resultTableWrap{max-height:315px;overflow-y:auto;overscroll-behavior:contain}
 #raceResults table{width:100%;font-variant-numeric:tabular-nums}
 #raceResults td:nth-child(1){white-space:nowrap;width:43px}
-#raceResults td:nth-child(3),#raceResults td:nth-child(4){white-space:nowrap;text-align:right}
+#raceResults td:nth-child(3),#raceResults td:nth-child(4),#raceResults td:nth-child(5){white-space:nowrap;text-align:right}
 #raceResults td:nth-child(2){overflow-wrap:anywhere}
 #raceResults tr:first-child td{color:#ffe5a0;font-weight:750}
 #raceResults .resultNote{font-size:11px;line-height:1.5;color:#a9c3c4}
@@ -425,7 +425,7 @@ a{color:#95e8df}
  <summary id="raceResultSummary">レース結果</summary>
  <div class="resultTableWrap">
   <table aria-label="18頭レースの確定着順">
-   <thead><tr><th>着順</th><th>馬名</th><th>タイム</th><th>1着との差</th></tr></thead>
+   <thead><tr><th>着順</th><th>馬名</th><th>タイム</th><th>上がり600m</th><th>1着との差</th></tr></thead>
    <tbody id="raceResultRows"></tbody>
   </table>
  </div>
@@ -2077,6 +2077,8 @@ function renderRaceResults(){
    horse.number+'番 '+name+'（'+horse.role+'・余力'+Math.round(
     (horse.energy??1)*100)+'%）',
    horse.finishTime.toFixed(2)+'秒',
+   Number.isFinite(horse.last600StartTime)?
+    (horse.finishTime-horse.last600StartTime).toFixed(2)+'秒':'―',
    index===0?'―':'+'+Math.max(0,delta).toFixed(2)+'秒'
   ]){
    const cell=document.createElement('td');
