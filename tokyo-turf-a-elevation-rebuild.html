@@ -50,8 +50,8 @@ a{color:#95e8df}
  background:#17313b;border-radius:10px;font-size:12px;color:#e3f4ee}
 #raceResults[hidden]{display:none!important}
 #raceResults summary{cursor:pointer;font-weight:750;line-height:1.65;color:#f6e6b8}
-#raceResults .resultTableWrap{max-height:315px;overflow-y:auto;overscroll-behavior:contain}
-#raceResults table{width:100%;font-variant-numeric:tabular-nums}
+#raceResults .resultTableWrap{max-height:315px;overflow:auto;overscroll-behavior:contain}
+#raceResults table{width:100%;min-width:575px;font-variant-numeric:tabular-nums}
 #raceResults td:nth-child(1){white-space:nowrap;width:43px}
 #raceResults td:nth-child(3),#raceResults td:nth-child(4),#raceResults td:nth-child(5){white-space:nowrap;text-align:right}
 #raceResults td:nth-child(2){overflow-wrap:anywhere}
@@ -349,6 +349,7 @@ a{color:#95e8df}
   <div class="libraryButtons">
    <button id="libraryEnter" type="button">選んだ馬を出走枠に入れる</button>
    <button id="libraryEdit" type="button">能力を編集する</button>
+   <button id="libraryRename" type="button">入力した名前に変更</button>
    <button id="libraryDelete" type="button">控え馬を削除する</button>
   </div>
   <p>18頭の枠は固定です。出走枠の馬と交代しても登録馬の名前・11能力・脚質を維持します。レース中は出走馬を変更できません。</p>
@@ -577,17 +578,17 @@ function persistHorseLibrary(){
  }
 }
 function persistRunnerLineup(){
+ // Registry is canonical; older 18-slot stores are optional backups.
  if(!isOfficialEighteenTest||!persistHorseLibrary())return false;
  try{
   if(horseIdentityBySlot.every(id=>id<18))
    localStorage.setItem(RUNNER_LINEUP_KEY,JSON.stringify({
     version:1,names:officialRunnerNames,identities:horseIdentityBySlot
    }));
-  // The old name key is still available for older RaceLab builds.
-  try{localStorage.setItem(RUNNER_NAMES_KEY,JSON.stringify(officialRunnerNames))}
-  catch(err){console.warn('旧版互換の馬名保存に失敗',err)}
-  return true;
- }catch(err){console.warn('枠順の保存に失敗',err);return false}
+ }catch(err){console.warn('旧枠順の互換バックアップ更新に失敗',err)}
+ try{localStorage.setItem(RUNNER_NAMES_KEY,JSON.stringify(officialRunnerNames))}
+ catch(err){console.warn('旧馬名の互換バックアップ更新に失敗',err)}
+ return true;
 }
 function refreshRunnerSelectors(){
  if(!isOfficialEighteenTest)return;
@@ -2688,6 +2689,10 @@ function initHorseLibraryEditor(){
   slotInput=document.querySelector('#librarySlot'),
   status=document.querySelector('#libraryStatus');
  const ready=()=>!playing&&raceElapsed===0;
+ let deleteConfirmId=null;
+ const clearDeleteConfirmation=()=>{deleteConfirmId=null;
+  document.querySelector('#libraryDelete').textContent='控え馬を削除する';};
+ select.addEventListener('change',clearDeleteConfirmation);
  for(let i=0;i<18;i++)slotInput.add(new Option((i+1)+'番（'+
   (officialFrameIndex(i+1)+1)+'枠）',String(i)));
  const refresh=(preferred)=>{
@@ -2766,6 +2771,26 @@ function initHorseLibraryEditor(){
   abilitySelect.dispatchEvent(new Event('change'));
   status.textContent='「'+horse.name+'」を能力編集で選択しました。';
  });
+ document.querySelector('#libraryRename').addEventListener('click',()=>{
+  if(!ready()){status.textContent='発馬機へ戻してから変更してください。';return}
+  const id=Number(select.value),horse=libraryHorse(id);
+  if(!horse)return;
+  const newName=nameInput.value.trim().slice(0,24);
+  if(!newName){status.textContent='変更後の馬名を入力してください。';return}
+  const oldName=horse.name,slot=horseIdentityBySlot.indexOf(id);
+  horse.name=newName;
+  if(slot>=0)officialRunnerNames[slot]=newName;
+  if(!persistRunnerLineup()){
+   horse.name=oldName;if(slot>=0)officialRunnerNames[slot]=oldName;
+   status.textContent='保存できず、馬名を元に戻しました。';return;
+  }
+  if(slot>=0){
+   const inputs=document.querySelectorAll('#raceNameInputs input');
+   if(inputs[slot])inputs[slot].value=newName;
+  }
+  nameInput.value='';clearDeleteConfirmation();refresh(id);
+  status.textContent='「'+oldName+'」を「'+newName+'」へ変更しました。';
+ });
  document.querySelector('#libraryDelete').addEventListener('click',()=>{
   if(!ready()){status.textContent='発馬機に戻してから削除してください。';return}
   const id=Number(select.value),slot=horseIdentityBySlot.indexOf(id);
@@ -2773,12 +2798,18 @@ function initHorseLibraryEditor(){
   if(id<18){status.textContent='既存の18頭は保護されています。';return}
   const index=horseLibrary.findIndex(h=>h.id===id);
   if(index<0)return;
+  if(deleteConfirmId!==id){
+   deleteConfirmId=id;
+   document.querySelector('#libraryDelete').textContent='確認：もう一度押すと削除';
+   status.textContent='「'+horseLibrary[index].name+'」を削除しますか？ボタンをもう一度押すと削除します。';
+   return;
+  }
   const removed=horseLibrary.splice(index,1)[0];
   if(!persistHorseLibrary()){
    horseLibrary.splice(index,0,removed);
-   status.textContent='保存できず、削除を取り消しました。';return;
+   status.textContent='保存できず、削除を取り消しました。';clearDeleteConfirmation();return;
   }
-  refresh();
+  clearDeleteConfirmation();refresh();
   status.textContent='「'+removed.name+'」を控えの登録から削除しました。';
  });
  panel.hidden=false;refresh(horseLibrary[0]?.id);
