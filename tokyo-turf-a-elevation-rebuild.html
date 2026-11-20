@@ -3384,7 +3384,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   }
   let longitudinal=distance-predictedOtherDistance;
   let side=lane-otherLane;
-  if(Math.hypot(longitudinal,side)>=1.16)continue;
+  const clearance=1.10; // 18 narrow gates start 1.12–1.15m apart
+  if(Math.hypot(longitudinal,side)>=clearance)continue;
   const originalSide=h.lane-otherLane;
   if(Math.abs(originalSide)>Math.abs(side)+.001){
    lane=h.lane;
@@ -3393,15 +3394,15 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   }
   // The runner behind yields. If a side route is already clear no braking
   // is applied. A sub-centimetre tolerance avoids oscillatory deadlocks.
-  if(Math.hypot(longitudinal,side)<1.16&&
-    predictedOtherDistance>h.distance+1e-6&&
-    Math.abs(side)<1.16){
-   const required=Math.sqrt(Math.max(0,1.16*1.16-side*side));
+  if(Math.hypot(longitudinal,side)<clearance&&
+    other.distance>h.distance+.10&&Math.abs(side)<clearance){
+   const required=Math.sqrt(Math.max(0,clearance*clearance-side*side));
    const safe=predictedOtherDistance-required-.005;
-   if(safe<distance){
-    distance=Math.max(h.distance,safe);
+   // Do not freeze a runner at the gate or due to an already-close pack.
+   // The earlier pace matching and rejected lateral move remain active.
+   if(safe>=h.distance+.026&&safe<distance){
+    distance=safe;
     speed=Math.max(0,(distance-h.distance)/dt);
-    longitudinal=distance-predictedOtherDistance;
    }
   }
  }
