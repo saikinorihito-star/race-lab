@@ -3077,26 +3077,46 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
     h.blockedFor>THREE.MathUtils.clamp(
      .9-((h.raceProfile?.trafficAbility??5)-5)*.085+
       (h.raceFlow?.trafficPatience??0),.50,1.45)&&
-    h.passUntil<=h.distance&&h.passCooldown<=h.distance&&h.passAttempts<2){
+    h.passUntil<=h.distance&&h.passCooldown<=h.distance&&
+    h.passAttempts<(activePlan.distance>=2600?3:2)){
   const bend=cornerDataAt(h.distance);
-  const innerOption=bend.kappa>.0015;
-  const desiredOptions=innerOption?
-   [h.lane+2.85,h.lane-2.75]:[h.lane-2.75];
-  for(const destination of desiredOptions){
-   if(destination>inner-.05||destination<-width/2+2)continue;
-   const free=snapshot.every(o=>{
-    if(o.idx===h.idx||o.finished)return true;
+  // Compare safe inside/outside choices and 0.65s predicted congestion.
+  // The path-length advantage of the inside lane matters most on bends.
+  const nextWidth=fieldCenterAt(activePlan,
+   Math.min(activePlan.distance,h.distance+24)).width;
+  const insideLimit=Math.min(inner-.05,fourHorseInnerLane(nextWidth)-.05);
+  const outsideLimit=Math.max(-width/2+2.0,-nextWidth/2+2.0);
+  const choices=[h.lane+2.85,h.lane-2.75].map(destination=>{
+   if(destination>insideLimit||destination<outsideLimit)return null;
+   const unsafe=snapshot.some(o=>{
+    if(o.idx===h.idx||o.finished)return false;
     const longitudinal=o.distance+o.speed*dt-distance;
-    return Math.abs(longitudinal)>9||
-     Math.abs(o.lane-destination)>2.70;
+    return Math.abs(longitudinal)<9&&
+     Math.abs(o.lane-destination)<2.70;
    });
-   if(!free)continue;
+   if(unsafe)return null;
+   const congestion=snapshot.reduce((total,o)=>{
+    if(o.idx===h.idx||o.finished)return total;
+    const gap=o.distance+o.speed*.65-(h.distance+Math.max(h.speed,13)*.65);
+    if(gap<=-3||gap>34||Math.abs(o.lane-destination)>3.0)return total;
+    return total+Math.max(0,1-gap/35)*
+     (o.speed<h.speed+.3?1.25:.52);
+   },0);
+   const isInside=destination>h.lane;
+   const bendPreference=THREE.MathUtils.clamp(bend.kappa*105,0,1);
+   const score=(isInside?.24:0)+
+    (isInside?.70:-.12)*bendPreference-
+    congestion-
+    .06*Math.abs(destination-h.lane);
+   return {destination,score};
+  }).filter(Boolean).sort((a,b)=>b.score-a.score);
+  if(choices.length){
+   const {destination}=choices[0];
    h.passGoal=destination;h.passUntil=h.distance+42;
-   h.passCooldown=h.distance+220;
+   h.passCooldown=h.distance+(activePlan.distance>=2600?180:205);
    h.blockedFor=0;h.passAttempts++;
    if(destination>h.lane)h.insidePassAttempts++;
    else h.outsidePassAttempts++;
-   break;
   }
  }
  const passing=h.passGoal!==null&&h.passUntil>h.distance&&
