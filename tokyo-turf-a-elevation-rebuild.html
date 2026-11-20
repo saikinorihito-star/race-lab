@@ -3848,8 +3848,13 @@ function animate(time){
     if(b.finished)return 1;
     return b.distance-a.distance;
    });
-   document.querySelector('#raceOrder').textContent=
-    '現在の隊列：'+order.map((h,i)=>(i+1)+'位 試験馬'+h.number+'（'+h.role+'）').join(' → ')+
+   const finalResultReady=isOfficialEighteenTest&&
+    raceFinished.length===OFFICIAL_TEST_COUNT;
+   document.querySelector('#raceOrder').textContent=finalResultReady?
+    '🏁 全18頭ゴール・着順確定｜下の「レース結果」に1〜18着、馬名、タイム、1着との差を表示':
+    '現在の隊列：'+order.map((h,i)=>(i+1)+'位 '+(
+     isOfficialEighteenTest?(officialRunnerNames[h.idx]||'試験馬'+h.number):
+     '試験馬'+h.number)+'（'+h.role+'）').join(' → ')+
     (isOfficialEighteenTest?'｜枠色・馬番：JRAの18頭枠順に対応':
   '｜ゼッケン4は正式デザインのままです。');
   }
