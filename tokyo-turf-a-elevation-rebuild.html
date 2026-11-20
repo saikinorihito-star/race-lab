@@ -1242,6 +1242,11 @@ const RACE_TREE_SITES=[
 ];
 const raceForest=new THREE.Group();
 raceForest.name='Design01_18_ThreeTreeSpecies';
+// Store each tree's original transform so that scenery can be restored in
+// course overview views without changing the approved 3D horse assets.
+const raceTreeOcclusionRecords=[];
+const raceTreeHiddenMatrix=new THREE.Matrix4().makeTranslation(0,-10000,0);
+let lastTreeOcclusionCheck=-Infinity;
 if(isOfficialEighteenTest){
  // Hide the older single broadleaf rows ONLY in the approved 18 test.
  trunks.visible=false;crowns.visible=false;caps.visible=false;
@@ -1296,6 +1301,17 @@ if(isOfficialEighteenTest){
     forestDummy.scale.set(3.5*scale,4.7*scale,3.45*scale);
    }
    forestDummy.updateMatrix();upper.setMatrixAt(i,forestDummy.matrix);
+   const meshes=[trunkMesh,lower,upper];
+   const originalMatrices=meshes.map(mesh=>{
+    const original=new THREE.Matrix4();
+    mesh.getMatrixAt(i,original);
+    return original;
+   });
+   raceTreeOcclusionRecords.push({
+    meshes,index:i,originalMatrices,hidden:false,holdUntil:0,
+    center:new THREE.Vector3(p.x,p.y+(spec.trunk+4.2)*scale,p.z),
+    radius:(type===1?8.5:11)*scale
+   });
    const palette=type===0?[0x357344,0x427c46,0x508652]:
     type===1?[0x245d3c,0x2e7044,0x386d41]:
     [0x5b8746,0x66914c,0x51814c];
@@ -1312,6 +1328,52 @@ if(isOfficialEighteenTest){
  scene.add(raceForest);
 }
 
+
+// Do not show trees in front of the horses, regardless of camera angle.
+// Update only 8 times/sec (not every WebGL frame), and keep hidden trees
+// concealed for 700 ms to avoid flicker at the edge of the camera frustum.
+function updateRaceTreeOcclusion(time){
+ if(!isOfficialEighteenTest||!raceTreeOcclusionRecords.length)return;
+ const filming=pairTrackingView(view)&&installedDesign01&&activePlan;
+ const restoring=!filming;
+ if(!restoring&&time-lastTreeOcclusionCheck<125)return;
+ lastTreeOcclusionCheck=time;
+ const modifiedMeshes=new Set();
+ if(filming)camera.updateMatrixWorld();
+ const forward=filming?camera.getWorldDirection(new THREE.Vector3()):null;
+ const focusDistance=filming?camera.position.distanceTo(controls.target):0;
+ const aspect=filming?Math.max(.42,camera.aspect):1;
+ const halfTan=filming?Math.tan(THREE.MathUtils.degToRad(camera.fov*.5)):1;
+ for(const tree of raceTreeOcclusionRecords){
+  let obscures=false;
+  if(filming&&focusDistance>.1){
+   const toTree=tree.center.clone().sub(camera.position);
+   const depth=toTree.dot(forward);
+   if(depth>.2&&depth<focusDistance+12){
+    const projected=tree.center.clone().project(camera);
+    if(Number.isFinite(projected.x+projected.y+projected.z)){
+     const verticalRadius=tree.radius/(Math.max(.75,depth)*halfTan);
+     const horizontalRadius=verticalRadius/aspect;
+     // Include the entire apparent crown, not just its central trunk.
+     obscures=projected.z>-1&&projected.z<1&&
+      Math.abs(projected.x)<1+horizontalRadius&&
+      Math.abs(projected.y)<1+verticalRadius;
+    }
+   }
+  }
+  if(obscures)tree.holdUntil=time+700;
+  const hidden=obscures||(!restoring&&tree.hidden&&time<tree.holdUntil);
+  if(hidden===tree.hidden)continue;
+  tree.hidden=hidden;
+  for(let k=0;k<tree.meshes.length;k++){
+   const mesh=tree.meshes[k];
+   mesh.setMatrixAt(tree.index,hidden?raceTreeHiddenMatrix:
+    tree.originalMatrices[k]);
+   modifiedMeshes.add(mesh);
+  }
+ }
+ for(const mesh of modifiedMeshes)mesh.instanceMatrix.needsUpdate=true;
+}
 
 // 芝9距離のS→G走行経路。コース外形・専用ポケットの座標は参考図に基づく近似。
 const RACE_DISTANCES=[1400,1600,1800,2000,2300,2400,2500,2600,3400];
@@ -3669,6 +3731,7 @@ function animate(time){
  }
  // 追尾中の自動カメラの姿勢をOrbitControlsで上書きしない。
  if(!pairTracking)controls.update();
+ updateRaceTreeOcclusion(time);
  updateRunnerNameLabels(time);
  // ピンチ操作で屋根や床の内部に入ったときは、障害物の模型だけ一時的に隠す。
  for(const item of stadiumGroups){
