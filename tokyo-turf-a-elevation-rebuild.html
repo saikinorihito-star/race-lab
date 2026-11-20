@@ -1247,6 +1247,7 @@ raceForest.name='Design01_18_ThreeTreeSpecies';
 const raceTreeOcclusionRecords=[];
 const raceTreeHiddenMatrix=new THREE.Matrix4().makeTranslation(0,-10000,0);
 let lastTreeOcclusionCheck=-Infinity;
+let lastTreeOcclusionView=null,lastTreeOcclusionShot=null;
 if(isOfficialEighteenTest){
  // Hide the older single broadleaf rows ONLY in the approved 18 test.
  trunks.visible=false;crowns.visible=false;caps.visible=false;
@@ -1336,8 +1337,12 @@ function updateRaceTreeOcclusion(time){
  if(!isOfficialEighteenTest||!raceTreeOcclusionRecords.length)return;
  const filming=pairTrackingView(view)&&installedDesign01&&activePlan;
  const restoring=!filming;
- if(!restoring&&time-lastTreeOcclusionCheck<125)return;
- lastTreeOcclusionCheck=time;
+ // Always recompute on camera/view cuts, even if less than 125ms elapsed.
+ const changedView=view!==lastTreeOcclusionView;
+ const shot=view==='broadcast'?lastBroadcastShotId:null;
+ const changedShot=shot!==lastTreeOcclusionShot;
+ if(!restoring&&!changedView&&!changedShot&&time-lastTreeOcclusionCheck<125)return;
+ lastTreeOcclusionCheck=time;lastTreeOcclusionView=view;lastTreeOcclusionShot=shot;
  const modifiedMeshes=new Set();
  if(filming)camera.updateMatrixWorld();
  const forward=filming?camera.getWorldDirection(new THREE.Vector3()):null;
