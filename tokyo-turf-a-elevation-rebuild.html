@@ -603,6 +603,15 @@ function refreshRunnerSelectors(){
     '枠） '+officialRunnerNames[i];
   }
  }
+ // A rename or gate swap must also refresh the stable-registry picker.
+ const picker=document.querySelector('#libraryHorse');
+ if(picker)for(const option of picker.options){
+  const horse=libraryHorse(Number(option.value));
+  if(!horse)continue;
+  const slot=horseIdentityBySlot.indexOf(horse.id);
+  option.textContent=(slot<0?'控え':'出走'+(slot+1)+'番')+
+   '：'+horse.name;
+ }
 }
 function initRunnerGateSwap(){
  if(!isOfficialEighteenTest)return;
