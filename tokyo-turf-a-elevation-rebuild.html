@@ -293,6 +293,7 @@ a{color:#95e8df}
   <option value="heavy">重</option>
   <option value="bad">不良</option>
  </select></label>
+<span id="goingVisualStatus" class="pill" hidden aria-live="polite">芝：良／乾いた状態</span>
 <button id="startView">発馬機・S地点を見る</button>
 <span class="pill" id="startInfo">Sはスタート位置、Gはゴール</span>
 </div>
@@ -1695,6 +1696,7 @@ function updateRaceTreeOcclusion(time){
 
 // 芝9距離のS→G走行経路。コース外形・専用ポケットの座標は参考図に基づく近似。
 const RACE_DISTANCES=[1400,1600,1800,2000,2300,2400,2500,2600,3400];
+const pocketTurfMaterials=[];
 const POCKET_DATA=[
  {distance:1800,join:958,deltaX:130,deltaZ:-65,label:'1～2コーナー間のポケット'},
  {distance:2000,join:820,deltaX:150,deltaZ:100,label:'1コーナー奥のポケット'}
@@ -1737,11 +1739,36 @@ function makePocket(spec){
  geom.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
  geom.setIndex(indices);geom.computeVertexNormals();
  const turf=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.95}));
- scene.add(turf);
- // 走路の中央の黄色い補助線は撤去。
+ scene.add(turf);pocketTurfMaterials.push(turf.material);
+ // 走路の中央の黄色い補助線は撤去.
  return {...spec,curve,length,remaining,start:curve.getPointAt(0)};
 }
 const POCKETS=new Map(POCKET_DATA.map(x=>[x.distance,makePocket(x)]));
+// Turf palettes use the existing shaders and meshes, with no extra draw calls.
+const TURF_GOING_PALETTE={
+ good:{name:'良',description:'乾いた芝',ring:0xffffff,ground:0x3d824b,
+  infield:0x46954e,pocket:0xffffff,roughness:.98},
+ slightlyHeavy:{name:'稍重',description:'やや湿った芝',ring:0xd2e1c8,ground:0x387548,
+  infield:0x438852,pocket:0xd4e4cd,roughness:.90},
+ heavy:{name:'重',description:'湿った濃い緑の芝',ring:0xa9c5ab,ground:0x35664a,
+  infield:0x3e7651,pocket:0xb2c8ae,roughness:.81},
+ bad:{name:'不良',description:'水分の多い暗い芝',ring:0x8da79a,ground:0x385b47,
+  infield:0x43634b,pocket:0x9fac94,roughness:.70}
+};
+function applyTurfGoingVisual(going){
+ if(!isOfficialEighteenTest)return;
+ const palette=TURF_GOING_PALETTE[going]||TURF_GOING_PALETTE.good;
+ matTurf.color.setHex(palette.ring);matTurf.roughness=palette.roughness;
+ ground.material.color.setHex(palette.ground);
+ infield.material.color.setHex(palette.infield);
+ for(const material of pocketTurfMaterials){
+  material.color.setHex(palette.pocket);material.roughness=palette.roughness;
+ }
+ const status=document.querySelector('#goingVisualStatus');
+ status.hidden=false;
+ status.textContent='芝：'+palette.name+'／'+palette.description;
+}
+
 // The start pockets are separate paved/grass geometry. Their former lack of
 // safety rails and the unbroken main-course outer fence made horses visibly
 // cross through barriers at both mergers.
@@ -2179,6 +2206,7 @@ function initRaceHorses(){
   buildEighteenCornerProfile();
   raceGoingAtStart=Object.hasOwn(GOING_SEVERITY,raceGoingSelect.value)?
    raceGoingSelect.value:'good';
+  applyTurfGoingVisual(raceGoingAtStart);
   const mode=raceFlowModeInput.value==='varied'?'varied':'standard',
    seed=validFlowSeed(raceFlowSeedInput.value);
   raceFlowAtStart={mode,seed,tempo:mode==='varied'?
@@ -2664,9 +2692,15 @@ if(isOfficialEighteenTest){
 if(isOfficialEighteenTest)raceGoingSelect.addEventListener('change',()=>{
  // A pending pre-start change is committed immediately; after starting
  // it affects only the next race (not the result already under way).
- if(!playing&&raceElapsed===0)
+ if(!playing&&raceElapsed===0){
   raceGoingAtStart=Object.hasOwn(GOING_SEVERITY,raceGoingSelect.value)?
    raceGoingSelect.value:'good';
+  applyTurfGoingVisual(raceGoingAtStart);
+ }else{
+  const status=document.querySelector('#goingVisualStatus');
+  status.textContent='現在の芝：'+TURF_GOING_PALETTE[raceGoingAtStart].name+
+   '／次の発走から変更を反映';
+ }
 });
 function effectiveEighteenProfile(index){
  // The original fictional profile follows the runner after a gate swap.
