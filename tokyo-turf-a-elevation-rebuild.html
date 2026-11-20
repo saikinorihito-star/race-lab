@@ -1153,12 +1153,16 @@ const ring=new THREE.Mesh(ringGeom(
  s=>offsetAt(s,MEASURE_OFFSET,.065),
  s=>offsetAt(s,MEASURE_OFFSET-renderedTurfWidthAt(s),.065)
 ),matTurf);scene.add(ring);
+// Adjacent embankments and grass bands need the SAME going appearance as the
+// track. Keep immutable base colours so 良 always restores correctly.
+const turfScenerySurfaces=[];
 // Turf boundaries: narrow walkways and inner dirt silhouette for visual orientation only.
 function borderBand(distanceA,distanceB,color){
  const geo=ringGeom(s=>offsetAt(s,distanceA(s),.015),s=>offsetAt(s,distanceB(s),.015));
  // use single material rather than copying expensive textures
  const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color,side:THREE.DoubleSide,roughness:.94}));
- scene.add(mesh);return mesh;
+ scene.add(mesh);turfScenerySurfaces.push({material:mesh.material,baseHex:color});
+ return mesh;
 }
 borderBand(s=>MEASURE_OFFSET-renderedTurfWidthAt(s)-3,
  s=>MEASURE_OFFSET-renderedTurfWidthAt(s),0x95a58e);
@@ -1169,10 +1173,13 @@ const separator=new THREE.Mesh(ringGeom(
  s=>dirtPoint(s,DIRT_OUTER_OFFSET,-.04)
 ),new THREE.MeshStandardMaterial({color:0x4b964f,side:THREE.DoubleSide,roughness:1}));
 scene.add(separator);
+turfScenerySurfaces.push({material:separator.material,baseHex:0x4b964f});
 // ダート内側と芝外側の盛り土を地面に繋ぐ。
 function slopedGround(from,to,color){
- scene.add(new THREE.Mesh(ringGeom(from,to),
-  new THREE.MeshStandardMaterial({color,side:THREE.DoubleSide,roughness:1})));
+ const mesh=new THREE.Mesh(ringGeom(from,to),
+  new THREE.MeshStandardMaterial({color,side:THREE.DoubleSide,roughness:1}));
+ scene.add(mesh);
+ turfScenerySurfaces.push({material:mesh.material,baseHex:color});
 }
 slopedGround(s=>offsetAt(s,MEASURE_OFFSET-renderedTurfWidthAt(s)-3,.015),s=>{
  const p=offsetAt(s,MEASURE_OFFSET-renderedTurfWidthAt(s)-29);p.y=.12;return p;
@@ -1786,13 +1793,13 @@ const POCKETS=new Map(POCKET_DATA.map(x=>[x.distance,makePocket(x)]));
 // Turf palettes use the existing shaders and meshes, with no extra draw calls.
 const TURF_GOING_PALETTE={
  good:{name:'良',description:'乾いた芝',ring:0xffffff,ground:0x3d824b,
-  infield:0x46954e,pocket:0xffffff,roughness:.98},
+  infield:0x46954e,pocket:0xffffff,surrounding:0xffffff,roughness:.98},
  slightlyHeavy:{name:'稍重',description:'やや湿った芝',ring:0xd2e1c8,ground:0x387548,
-  infield:0x438852,pocket:0xd4e4cd,roughness:.90},
+  infield:0x438852,pocket:0xd4e4cd,surrounding:0xdce5d4,roughness:.90},
  heavy:{name:'重',description:'湿った濃い緑の芝',ring:0xa9c5ab,ground:0x35664a,
-  infield:0x3e7651,pocket:0xb2c8ae,roughness:.81},
+  infield:0x3e7651,pocket:0xb2c8ae,surrounding:0xc4d6ca,roughness:.81},
  bad:{name:'不良',description:'水分の多い暗い芝',ring:0x8da79a,ground:0x385b47,
-  infield:0x43634b,pocket:0x9fac94,roughness:.70}
+  infield:0x43634b,pocket:0x9fac94,surrounding:0xb3c6b6,roughness:.70}
 };
 function applyTurfGoingVisual(going){
  if(!isOfficialEighteenTest)return;
@@ -1800,6 +1807,12 @@ function applyTurfGoingVisual(going){
  matTurf.color.setHex(palette.ring);matTurf.roughness=palette.roughness;
  ground.material.color.setHex(palette.ground);
  infield.material.color.setHex(palette.infield);
+ // Update the rail-side grass borders and terrain slopes too; otherwise
+ // their dry bright-green strip persists as a glaring seam in heavy going.
+ const edgeTint=new THREE.Color(palette.surrounding);
+ for(const surface of turfScenerySurfaces){
+  surface.material.color.setHex(surface.baseHex).multiply(edgeTint);
+ }
  for(const material of pocketTurfMaterials){
   material.color.setHex(palette.pocket);material.roughness=palette.roughness;
  }
