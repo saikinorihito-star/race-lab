@@ -2088,7 +2088,9 @@ function renderRaceResults(){
  const passDecisions=finishers.reduce((v,h)=>v+(h.passAttempts||0),0);
  const trafficSeconds=finishers.reduce((v,h)=>v+(h.trafficSeconds||0),0);
  const averageEnergy=finishers.reduce((v,h)=>v+(h.energy??1),0)/finishers.length;
- raceTacticsSummary.textContent='芝馬場：'+({good:'良',slightlyHeavy:'稍重',heavy:'重',bad:'不良'}[raceGoingAtStart]||'良')+
+ raceTacticsSummary.textContent='展開：'+
+  (raceFlowAtStart.mode==='varied'?'番号'+raceFlowAtStart.seed:'固定')+
+  '｜芝馬場：'+({good:'良',slightlyHeavy:'稍重',heavy:'重',bad:'不良'}[raceGoingAtStart]||'良')+
   '｜架空の展開モデル｜外に持ち出す判断 '+passDecisions+
   '回｜進路が詰まった時間（延べ）'+trafficSeconds.toFixed(1)+
   '秒｜平均残存スタミナ '+Math.round(averageEnergy*100)+'%。';
@@ -2926,7 +2928,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // Two attempts maximum per runner, 200m cooldown between attempts.
  if(h.distance>105&&h.distance<activePlan.distance-90&&
     h.blockedFor>THREE.MathUtils.clamp(
-     .9-((h.raceProfile?.trafficAbility??5)-5)*.085,.50,1.30)&&
+     .9-((h.raceProfile?.trafficAbility??5)-5)*.085+
+      (h.raceFlow?.trafficPatience??0),.50,1.45)&&
     h.passUntil<=h.distance&&h.passCooldown<=h.distance&&h.passAttempts<2){
   const destination=h.lane-2.75;
   const free=destination>-width/2+2&&snapshot.every(o=>{
@@ -3028,6 +3031,18 @@ function stepOfficialPair(tick){
       fieldCenterAt(activePlan,previousDist).p.y)/
      Math.max(1,next-previousDist)/DISPLAY_RELIEF,0,.045);
     targetSpeed+=((profile.hillAbility??5)-5)*uphill*3.6;
+    // Seeded pace variations preserve the same deterministic 60Hz engine.
+    // Early pace pressure varies with role; the end of the race can reverse it.
+    if(raceFlowAtStart.mode==='varied'&&h.raceFlow){
+     const early=1-THREE.MathUtils.smoothstep(progress18,.18,.65);
+     const mid=THREE.MathUtils.clamp(1-Math.abs(progress18-.55)*4,0,1);
+     const lateRun=THREE.MathUtils.smoothstep(progress18,
+      Math.max(.50,1-570/activePlan.distance),
+      Math.max(.68,1-170/activePlan.distance));
+     const pressure=profile.role==='逃げ'||profile.role==='先行'?1:.5;
+     targetSpeed+=h.raceFlow.early*early+h.raceFlow.middle*mid+
+      h.raceFlow.late*lateRun+raceFlowAtStart.tempo*pressure*early;
+    }
     // A fast horse explicitly assigned a closing role must not simply run
     // wire-to-wire. Bank energy in the first half, then release the pace cap
     // smoothly so the last 600m can produce a visible, actual position gain.
@@ -3071,6 +3086,14 @@ function stepOfficialPair(tick){
    const currentSlot=THREE.MathUtils.clamp(Math.round(
     (fourHorseInnerLane(widthNow)-h.lane)/PAIR_LANE_SPACING),0,3);
    h.slot=Math.min(h.slot,currentSlot);
+  }
+  if(isOfficialEighteenTest&&h.last600StartTime===null){
+   const marker=activePlan.distance-600;
+   if(h.prevDistance<marker&&h.distance>=marker){
+    const ratio=THREE.MathUtils.clamp(
+     (marker-h.prevDistance)/Math.max(1e-9,h.distance-h.prevDistance),0,1);
+    h.last600StartTime=raceElapsed-tick+ratio*tick;
+   }
   }
   if(h.distance>=activePlan.distance){
    h.finished=true;
