@@ -2623,17 +2623,24 @@ function refreshFlowStatus(){
   '展開番号'+validFlowSeed(raceFlowSeedInput.value)+
   '：同じ馬・同じ番号・同じ条件なら再現できます。';
 }
+function applyFlowBeforeStart(){
+ // Race-condition changes are committed only while at the starting gate.
+ // Once the first physics tick runs, this race's scenario stays frozen.
+ if(!playing&&raceElapsed===0&&activePlan)initRaceHorses();
+}
 if(isOfficialEighteenTest){
  document.querySelector('#raceFlowControls').hidden=false;
- raceFlowModeInput.addEventListener('change',refreshFlowStatus);
+ raceFlowModeInput.addEventListener('change',()=>{
+  refreshFlowStatus();applyFlowBeforeStart();
+ });
  raceFlowSeedInput.addEventListener('change',()=>{
   raceFlowSeedInput.value=String(validFlowSeed(raceFlowSeedInput.value));
-  refreshFlowStatus();
+  refreshFlowStatus();applyFlowBeforeStart();
  });
  document.querySelector('#raceFlowNext').addEventListener('click',()=>{
   raceFlowModeInput.value='varied';
   raceFlowSeedInput.value=String(validFlowSeed(raceFlowSeedInput.value)%999999+1);
-  refreshFlowStatus();
+  refreshFlowStatus();applyFlowBeforeStart();
  });
  refreshFlowStatus();
 }
