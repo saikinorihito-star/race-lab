@@ -3371,7 +3371,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   const congestionAt=destination=>snapshot.reduce((total,o)=>{
    if(o.idx===h.idx||o.finished)return total;
    const gap=o.distance+o.speed*.65-(h.distance+Math.max(h.speed,13)*.65);
-   if(gap<=-3||gap>34||Math.abs(o.lane-destination)>3.0)return total;
+   // A 2.85m lateral pass actually clears a runner in the old lane.
+   if(gap<=-3||gap>34||Math.abs(o.lane-destination)>2.55)return total;
    return total+Math.max(0,1-gap/35)*
     (o.speed<h.speed+.3?1.25:.52);
   },0);
