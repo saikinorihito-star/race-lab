@@ -180,6 +180,19 @@ a{color:#95e8df}
 #raceAnalysisPanel table{font-variant-numeric:tabular-nums}
 #raceAnalysisPanel .analysisScroll{overflow-x:auto;max-height:245px;overflow-y:auto}
 #raceAnalysisPanel .analysisNote{color:#b7cdd1;font-size:11px;line-height:1.6}
+#balanceAuditPanel{margin:9px 12px 14px;padding:11px;border-radius:11px;
+ border:1px solid #5b7a80;background:#18323c;font-size:12px}
+#balanceAuditPanel[hidden]{display:none!important}
+#balanceAuditPanel summary{cursor:pointer;font-weight:750;line-height:1.65}
+#balanceAuditPanel .balanceActions{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px}
+#balanceAuditPanel .balanceActions label{display:grid;gap:5px}
+#balanceAuditPanel .balanceActions button,#balanceAuditPanel .balanceActions select{min-height:44px}
+#balanceAuditPanel p{line-height:1.6;margin:8px 0;color:#bfdae0}
+#balanceAuditPanel #balanceStatus{color:#d6f1b7}
+#balanceAuditPanel .balanceTableWrap{max-height:305px;overflow:auto}
+#balanceAuditPanel table{min-width:600px;font-variant-numeric:tabular-nums}
+#balanceAuditPanel td:nth-child(n+2){text-align:right;white-space:nowrap}
+#balanceAuditPanel tr.balanceWarn td{color:#f7daa1}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script>
 </head>
@@ -416,6 +429,22 @@ a{color:#95e8df}
  </div>
  <p class="analysisNote">残り800m・400m・200mで先頭馬が通過した瞬間の順位を記録します。数値はレース計算の結果であり、実際のJRA競走データではありません。映像の「この馬を追尾」は斜め前からの手動追尾視点です。</p>
 </details>
+<details id="balanceAuditPanel" hidden>
+ <summary>⚖️ 11能力の自動バランス検証・補正</summary>
+ <p>選んだ出走馬の各能力を5と10に設定して、2つの展開番号で計44走の比較を行います。他の17頭の登録設定は変えません。結果は架空のAIモデルに対する感度検査です。</p>
+ <div class="balanceActions">
+  <label>検証する馬 <select id="balanceHorse"></select></label>
+  <button type="button" id="balanceRun">11能力を自動検証</button>
+  <button type="button" id="balanceApply" disabled>推奨補正を適用</button>
+  <button type="button" id="balanceReset">補正を初期値に戻す</button>
+ </div>
+ <p id="balanceStatus" role="status" aria-live="polite">発走前に検証できます。補正値は馬の能力値とは別に保存します。</p>
+ <div class="balanceTableWrap"><table aria-label="能力バランス自動比較">
+  <thead><tr><th>能力</th><th>5→10のタイム短縮</th><th>平均順位改善</th><th>10の1着数/2走</th><th>判定</th></tr></thead>
+  <tbody id="balanceRows"></tbody>
+ </table></div>
+ <p>判定は競馬の実測値ではなく、能力1項目だけで極端に有利になっていないかの目安です。推奨補正は影響の大きい係数だけを最大45％縮小し、既存の馬名・能力点数・枠順を保持します。</p>
+</details>
 <div class="tools" id="design01OriginalInfo" hidden><strong>正式モデル：BabylonJSで承認されたMeshy版 Design 01</strong> <span>元の馬体・顔・青白の勝負服・ゼッケン4をそのまま使用</span></div>
 <div class="tools" id="design01Loader" hidden>
  <strong>正式モデルのファイルは3D画面の中央から選択できます</strong>
@@ -594,7 +623,7 @@ function persistRunnerLineup(){
 function refreshRunnerSelectors(){
  if(!isOfficialEighteenTest)return;
  for(const selector of ['#raceSwapFrom','#raceSwapTo',
-   '#abilityHorseSelect','#analysisHorse','#cam18Follow']){
+   '#abilityHorseSelect','#analysisHorse','#balanceHorse','#cam18Follow']){
   const node=document.querySelector(selector);
   if(!node)continue;
   for(let i=0;i<18;i++){
@@ -2006,7 +2035,8 @@ function clearRaceAnalysis(){
  if(info)info.textContent='スタートすると順位・速度・余力の推移を確認できます。';
 }
 function captureRaceAnalysis(){
- if(!isOfficialEighteenTest||!activePlan||raceAnalysisSnapshots.length>=3)return;
+ if(balanceDiagnosticsRunning||!isOfficialEighteenTest||
+  !activePlan||raceAnalysisSnapshots.length>=3)return;
  const horses=raceHorses.slice(0,18);
  const leader=Math.max(...horses.map(h=>h.distance));
  const next=RACE_ANALYSIS_MARKERS[raceAnalysisSnapshots.length];
@@ -4754,6 +4784,7 @@ function resetDemo(){
 
 }
 demoBtn.addEventListener('click',()=>{
+ if(balanceAuditBusy)return;
  if(!activePlan)return;
  if(isOfficialPairTest?raceFinished.length>=OFFICIAL_TEST_COUNT:
  (travel>=activePlan.distance||fieldMode.value==='race18'&&raceFinished.length===FIELD_COUNT)){
