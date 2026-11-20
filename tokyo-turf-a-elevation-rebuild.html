@@ -154,6 +154,15 @@ a{color:#95e8df}
 #raceGateSwap button{min-height:44px;background:#246e58;border-color:#87d6b5}
 #raceGateSwap p{font-size:11px;line-height:1.65;margin:6px 0;color:#bbd7d6}
 #raceGateSwap #raceSwapStatus{font-size:12px;color:#e6efbc}
+#horseLibraryPanel{margin:9px 12px;padding:11px;background:#142b36;border:1px solid #537c80;border-radius:11px;font-size:12px}
+#horseLibraryPanel[hidden]{display:none!important}
+#horseLibraryPanel summary{font-weight:750;cursor:pointer}
+#horseLibraryPanel .libraryForm{display:grid;gap:10px;max-width:660px;margin-top:11px}
+#horseLibraryPanel .libraryForm label{display:grid;gap:5px}
+#horseLibraryPanel .libraryForm input,#horseLibraryPanel .libraryForm select{min-height:44px;width:100%;box-sizing:border-box}
+#horseLibraryPanel .libraryButtons{display:flex;flex-wrap:wrap;gap:7px}
+#horseLibraryPanel button{min-height:44px}
+#horseLibraryPanel p{line-height:1.5;color:#c4d6d6;margin:0}
 
 #raceAnalysisPanel{margin:9px 12px 14px;padding:11px;border-radius:11px;
  background:#18333d;border:1px solid #537a86;font-size:12px}
@@ -314,6 +323,23 @@ a{color:#95e8df}
  <span>馬体・テクスチャは元のデザインを共有し、骨格とギャロップは馬ごとに独立。既存の18頭試作は変更しません。</span>
  <span id="officialPairStatus" role="status">1頭テストで保存したGLBを読み込みます。</span>
 </div>
+<details id="horseLibraryPanel" hidden>
+ <summary>🐴 馬の登録・出走選択（最大100頭）</summary>
+ <div class="libraryForm">
+  <p id="libraryCount">登録馬18頭／最大100頭</p>
+  <label>新しく登録する馬名 <input id="libraryName" maxlength="24" type="text" placeholder="馬の名前を入力"/></label>
+  <button id="libraryAdd" type="button">馬を新規登録</button>
+  <label>登録済みの馬 <select id="libraryHorse"></select></label>
+  <label>出走させる馬番 <select id="librarySlot"></select></label>
+  <div class="libraryButtons">
+   <button id="libraryEnter" type="button">選んだ馬を出走枠に入れる</button>
+   <button id="libraryEdit" type="button">能力を編集する</button>
+   <button id="libraryDelete" type="button">控え馬を削除する</button>
+  </div>
+  <p>18頭の枠は固定です。出走枠の馬と交代しても登録馬の名前・11能力・脚質を維持します。レース中は出走馬を変更できません。</p>
+  <p id="libraryStatus" role="status" aria-live="polite"></p>
+ </div>
+</details>
 <details id="raceNameEditor" hidden>
  <summary>18頭の馬名を編集（端末に保存）</summary>
  <div id="raceNameInputs"></div>
@@ -448,6 +474,8 @@ const isOfficialPairTest=isDesign01Review&&(qs.get('pair')==='1'||isOfficialMult
 const OFFICIAL_TEST_COUNT=isOfficialEighteenTest?18:isOfficialEightTest?8:isOfficialFourTest?4:2;
 const RUNNER_NAMES_KEY='race-lab-official-design01-18-runner-names-v1';
 const RUNNER_LINEUP_KEY='race-lab-official-design01-18-gate-lineup-v1';
+const RUNNER_LIBRARY_KEY='race-lab-official-design01-horse-library-v1';
+const RUNNER_LIBRARY_LIMIT=100;
 function loadOfficialRunnerNames(){
  const result=Array.from({length:18},(_,i)=>'試験馬'+(i+1));
  try{
@@ -478,15 +506,68 @@ function loadSavedRunnerLineup(){
  return null;
 }
 const savedRunnerLineup=isOfficialEighteenTest?loadSavedRunnerLineup():null;
-const horseIdentityBySlot=isOfficialEighteenTest?
- (savedRunnerLineup?.identities||Array.from({length:18},(_,i)=>i)):[];
-if(savedRunnerLineup)officialRunnerNames.splice(0,18,...savedRunnerLineup.names);
-function persistRunnerLineup(){
- if(!isOfficialEighteenTest)return false;
+function loadHorseLibrary(){
  try{
-  localStorage.setItem(RUNNER_LINEUP_KEY,JSON.stringify({
-   version:1,names:officialRunnerNames,identities:horseIdentityBySlot
+  const data=JSON.parse(localStorage.getItem(RUNNER_LIBRARY_KEY)||'null');
+  if(data?.version!==1||!Array.isArray(data.horses)||
+   data.horses.length<18||data.horses.length>100||
+   !Array.isArray(data.lineup)||data.lineup.length!==18)return null;
+  const horses=data.horses;
+  if(!horses.every(h=>Number.isSafeInteger(h?.id)&&h.id>=0&&h.id<10000&&
+   typeof h.name==='string'&&h.name.trim())||
+   new Set(horses.map(h=>h.id)).size!==horses.length||
+   new Set(data.lineup).size!==18||
+   !data.lineup.every(id=>horses.some(h=>h.id===id)))return null;
+  return {horses:horses.map(h=>({id:h.id,name:h.name.trim().slice(0,24),
+   ability:h.ability&&typeof h.ability==='object'?h.ability:null})),
+   lineup:data.lineup.slice(),nextId:Math.max(
+    Number.isSafeInteger(data.nextId)?data.nextId:18,
+    ...horses.map(h=>h.id+1))};
+ }catch(e){console.warn('登録馬リストを読み込めませんでした',e)}
+ return null;
+}
+const savedHorseLibrary=isOfficialEighteenTest?loadHorseLibrary():null;
+const horseIdentityBySlot=isOfficialEighteenTest?
+ (savedHorseLibrary?.lineup||savedRunnerLineup?.identities||
+ Array.from({length:18},(_,i)=>i)):[];
+if(savedRunnerLineup&&!savedHorseLibrary)
+ officialRunnerNames.splice(0,18,...savedRunnerLineup.names);
+const horseLibrary=isOfficialEighteenTest?(savedHorseLibrary?.horses||
+ Array.from({length:18},(_,id)=>({id,
+  name:officialRunnerNames[horseIdentityBySlot.indexOf(id)]||'試験馬'+(id+1),
+  ability:null}))):[];
+let nextHorseLibraryId=savedHorseLibrary?.nextId||18;
+if(savedHorseLibrary)officialRunnerNames.splice(0,18,...horseIdentityBySlot.map(id=>
+ horseLibrary.find(h=>h.id===id)?.name||'試験馬'));
+function libraryHorse(id){return horseLibrary.find(h=>h.id===id)}
+function persistHorseLibrary(){
+ if(!isOfficialEighteenTest)return false;
+ const names=horseLibrary.map(h=>h.name);
+ try{
+  for(let i=0;i<18;i++){
+   const h=libraryHorse(horseIdentityBySlot[i]);
+   if(h)h.name=officialRunnerNames[i];
+  }
+  localStorage.setItem(RUNNER_LIBRARY_KEY,JSON.stringify({
+   version:1,nextId:nextHorseLibraryId,lineup:horseIdentityBySlot,
+   horses:horseLibrary.map(h=>({
+    id:h.id,name:h.name,
+    ability:horseAbilities[h.id]||h.ability||null
+   }))
   }));
+  return true;
+ }catch(e){
+  horseLibrary.forEach((h,i)=>{h.name=names[i]});
+  console.warn('登録馬の保存に失敗しました',e);return false;
+ }
+}
+function persistRunnerLineup(){
+ if(!isOfficialEighteenTest||!persistHorseLibrary())return false;
+ try{
+  if(horseIdentityBySlot.every(id=>id<18))
+   localStorage.setItem(RUNNER_LINEUP_KEY,JSON.stringify({
+    version:1,names:officialRunnerNames,identities:horseIdentityBySlot
+   }));
   // The old name key is still available for older RaceLab builds.
   try{localStorage.setItem(RUNNER_NAMES_KEY,JSON.stringify(officialRunnerNames))}
   catch(err){console.warn('旧版互換の馬名保存に失敗',err)}
@@ -2437,7 +2518,7 @@ const HORSE_ABILITY_KEYS=['speed','stamina','acceleration','finish','course',
 function defaultHorseAbility(index){
  return {speed:5,stamina:5,acceleration:5,finish:5,course:5,
   distance:5,composure:5,traffic:5,going:5,hill:5,start:5,
-  role:EIGHTEEN_PACE_PROFILES[index].role};
+  role:baseForRegisteredHorse(index).role};
 }
 function normalizeHorseAbility(raw,index){
  const result=defaultHorseAbility(index);
@@ -2473,6 +2554,15 @@ function loadHorseAbilities(){
  return defaults;
 }
 const horseAbilities=isOfficialEighteenTest?loadHorseAbilities():[];
+if(isOfficialEighteenTest)for(const h of horseLibrary)
+ if(h.ability)horseAbilities[h.id]=normalizeHorseAbility(h.ability,h.id);
+function baseForRegisteredHorse(id){
+ if(id<18)return EIGHTEEN_PACE_PROFILES[id];
+ const b=EIGHTEEN_PACE_PROFILES[id%18];
+ return {...b,early:b.early+((id*7)%9-4)*.013,
+  accel:b.accel+((id*11)%7-3)*.022,
+  preferredDistance:1400+(id*5%9)*250};
+}
 const raceGoingSelect=document.querySelector('#raceGoing');
 let raceGoingAtStart='good';
 if(isOfficialEighteenTest)document.querySelector('#raceGoingLabel').hidden=false;
@@ -2487,7 +2577,7 @@ if(isOfficialEighteenTest)raceGoingSelect.addEventListener('change',()=>{
 function effectiveEighteenProfile(index){
  // The original fictional profile follows the runner after a gate swap.
  const identity=horseIdentityBySlot[index]??index;
- const b=EIGHTEEN_PACE_PROFILES[identity],
+ const b=baseForRegisteredHorse(identity),
   v=horseAbilities[identity]||defaultHorseAbility(identity);
  const role=v.role,modified=role!==b.role;
  const customized=modified||HORSE_ABILITY_KEYS.some(key=>v[key]!==5);
@@ -2531,13 +2621,15 @@ function initHorseAbilityEditor(){
  const updateLabels=()=>{for(const range of Object.values(ranges))
   document.querySelector('#'+range.id+'Value').textContent=range.value;};
  const loadSelected=()=>{
-  const slot=Number(selector.value),identity=horseIdentityBySlot[slot]??slot;
+  const text=String(selector.value),slot=Number(text);
+  const identity=text.startsWith('reserve:')?Number(text.slice(8)):
+   horseIdentityBySlot[slot]??slot;
   const v=horseAbilities[identity]||defaultHorseAbility(identity);
   for(const [key,range] of Object.entries(ranges))range.value=v[key];
   roleInput.value=v.role;
   updateLabels();
   document.querySelector('#abilityDistanceHint').textContent=
-   'この馬の元の得意距離：約'+EIGHTEEN_PACE_PROFILES[identity].preferredDistance+
+   'この馬の元の得意距離：約'+baseForRegisteredHorse(identity).preferredDistance+
    'm。距離適性は他の距離への対応力を表します。';
   status.textContent='編集後は「この馬の能力を保存」を押してください。';
  };
@@ -2549,7 +2641,9 @@ function initHorseAbilityEditor(){
  roleInput.addEventListener('change',dirty);
  const persist=()=>{
   try{
-   localStorage.setItem(HORSE_ABILITIES_KEY,JSON.stringify({version:2,horses:horseAbilities}));
+   if(!persistHorseLibrary())throw new Error('登録馬の保存に失敗しました');
+   try{localStorage.setItem(HORSE_ABILITIES_KEY,JSON.stringify({version:2,horses:horseAbilities}))}
+   catch(err){console.warn('以前の能力保存キーを更新できませんでした',err)}
    return true;
   }catch(err){
    console.warn('能力の保存に失敗',err);
@@ -2558,7 +2652,9 @@ function initHorseAbilityEditor(){
   }
  };
  const saveChanges=(reset=false)=>{
-  const slot=Number(selector.value),index=horseIdentityBySlot[slot]??slot;
+  const text=String(selector.value),slot=Number(text);
+  const index=text.startsWith('reserve:')?Number(text.slice(8)):
+   horseIdentityBySlot[slot]??slot;
   const old=horseAbilities[index];
   const changes=reset?defaultHorseAbility(index):
    normalizeHorseAbility({role:roleInput.value,...Object.fromEntries(
@@ -2567,7 +2663,8 @@ function initHorseAbilityEditor(){
   if(!persist()){horseAbilities[index]=old;return}
   if(!playing&&raceElapsed===0&&activePlan)initRaceHorses();
   loadSelected();
-  status.textContent=(slot+1)+'番の馬を'+(reset?'標準に戻しました。':'保存しました。')+
+  status.textContent=(libraryHorse(index)?.name||'登録馬')+'の能力を'+
+   (reset?'標準に戻しました。':'保存しました。')+
    '次の発走から反映されます。';
  };
  document.querySelector('#abilitySave').addEventListener('click',()=>saveChanges());
