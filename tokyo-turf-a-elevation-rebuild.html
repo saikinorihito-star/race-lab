@@ -292,6 +292,7 @@ a{color:#95e8df}
    <tbody id="raceResultRows"></tbody>
   </table>
  </div>
+ <p id="raceTacticsSummary" class="resultNote"></p>
  <p class="resultNote">架空の走行モデルの結果です。ゴール時刻は60Hzの計算間隔内を補間した推定値で、実競馬の公式記録ではありません。</p>
 </details>
 <div id="message">正式な馬はBabylonJSで承認されたMeshy版のデザインだけです。元の馬体とテクスチャを保持した専用GLBを読み込み、横・斜め前・後ろから1頭走行を検証します。仮の馬を代わりに表示しません。</div>
@@ -1668,10 +1669,12 @@ let raceHorses=[],raceElapsed=0,raceFinished=[],raceAccumulator=0,raceContactWar
 const raceResultPanel=document.querySelector('#raceResults');
 const raceResultSummary=document.querySelector('#raceResultSummary');
 const raceResultRows=document.querySelector('#raceResultRows');
+const raceTacticsSummary=document.querySelector('#raceTacticsSummary');
 function clearRaceResults(){
  raceResultPanel.open=false;
  raceResultPanel.hidden=true;
  raceResultRows.replaceChildren();
+ raceTacticsSummary.textContent='';
 }
 // The order and clock are derived from the simulated 60Hz physics step,
 // not from frame rendering, video FPS, or the array's input order.
@@ -1689,7 +1692,8 @@ function renderRaceResults(){
   const delta=horse.finishTime-winTime;
   for(const value of [
    String(index+1)+'着',
-   horse.number+'番 '+name,
+   horse.number+'番 '+name+'（'+horse.role+'・余力'+Math.round(
+    (horse.energy??1)*100)+'%）',
    horse.finishTime.toFixed(2)+'秒',
    index===0?'―':'+'+Math.max(0,delta).toFixed(2)+'秒'
   ]){
@@ -1699,6 +1703,12 @@ function renderRaceResults(){
   newRows.append(row);
  });
  raceResultRows.replaceChildren(newRows);
+ const passDecisions=finishers.reduce((v,h)=>v+(h.passAttempts||0),0);
+ const trafficSeconds=finishers.reduce((v,h)=>v+(h.trafficSeconds||0),0);
+ const averageEnergy=finishers.reduce((v,h)=>v+(h.energy??1),0)/finishers.length;
+ raceTacticsSummary.textContent='架空の展開モデル｜外に持ち出す判断 '+passDecisions+
+  '回｜進路が詰まった時間（延べ）'+trafficSeconds.toFixed(1)+
+  '秒｜平均残存スタミナ '+Math.round(averageEnergy*100)+'%。';
  raceResultSummary.textContent='🏆 '+activeDistance+'m 結果｜1着 '+winner.number+
   '番 '+(officialRunnerNames[winner.idx]||'試験馬'+winner.number)+
   '（'+winTime.toFixed(2)+'秒）｜18頭の着順を見る';
