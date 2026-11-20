@@ -147,6 +147,13 @@ a{color:#95e8df}
 #abilitySave{background:#246e58;border-color:#81d4a9}
 #horseAbilityEditor .abilityHint{font-size:11px;line-height:1.65;color:#b6d1d4;margin:0}
 #abilityStatus{font-size:12px;color:#d8eebb;min-height:18px}
+#raceGateSwap{margin-top:11px;padding:10px;border:1px solid #52787c;border-radius:9px;background:#102d38}
+#raceGateSwap .swapControls{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+#raceGateSwap label{display:grid;gap:5px;min-width:130px;flex:1}
+#raceGateSwap select{width:100%;min-height:44px}
+#raceGateSwap button{min-height:44px;background:#246e58;border-color:#87d6b5}
+#raceGateSwap p{font-size:11px;line-height:1.65;margin:6px 0;color:#bbd7d6}
+#raceGateSwap #raceSwapStatus{font-size:12px;color:#e6efbc}
 
 #raceAnalysisPanel{margin:9px 12px 14px;padding:11px;border-radius:11px;
  background:#18333d;border:1px solid #537a86;font-size:12px}
@@ -303,6 +310,16 @@ a{color:#95e8df}
 <details id="raceNameEditor" hidden>
  <summary>18頭の馬名を編集（端末に保存）</summary>
  <div id="raceNameInputs"></div>
+ <div id="raceGateSwap">
+  <strong>枠順を変更（馬名と能力を一緒に移動）</strong>
+  <p>移動先にいる馬と入れ替えます。枠色・馬番は移動先の枠に合わせます。レース開始前のみ変更できます。</p>
+  <div class="swapControls">
+   <label>変更する馬 <select id="raceSwapFrom" aria-label="変更する馬"></select></label>
+   <label>移動先の馬番 <select id="raceSwapTo" aria-label="移動先の馬番"></select></label>
+   <button id="raceSwapApply" type="button">枠順を入れ替えて保存</button>
+  </div>
+  <p id="raceSwapStatus" role="status" aria-live="polite">発走前に枠順を入れ替えられます。</p>
+ </div>
 </details>
 <details id="horseAbilityEditor" hidden>
  <summary>🐎 18頭の能力を設定（速度・スタミナ・加速力・末脚・脚質）</summary>
@@ -415,6 +432,7 @@ const isOfficialMultiTest=isOfficialFourTest||isOfficialEightTest||isOfficialEig
 const isOfficialPairTest=isDesign01Review&&(qs.get('pair')==='1'||isOfficialMultiTest);
 const OFFICIAL_TEST_COUNT=isOfficialEighteenTest?18:isOfficialEightTest?8:isOfficialFourTest?4:2;
 const RUNNER_NAMES_KEY='race-lab-official-design01-18-runner-names-v1';
+const RUNNER_LINEUP_KEY='race-lab-official-design01-18-gate-lineup-v1';
 function loadOfficialRunnerNames(){
  const result=Array.from({length:18},(_,i)=>'試験馬'+(i+1));
  try{
@@ -432,6 +450,86 @@ function loadOfficialRunnerNames(){
  return result;
 }
 const officialRunnerNames=isOfficialEighteenTest?loadOfficialRunnerNames():[];
+function loadSavedRunnerLineup(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(RUNNER_LINEUP_KEY)||'null');
+  if(saved?.version!==1||!Array.isArray(saved.identities)||
+     saved.identities.length!==18||new Set(saved.identities).size!==18||
+     !saved.identities.every(id=>Number.isInteger(id)&&id>=0&&id<18)||
+     !Array.isArray(saved.names)||saved.names.length!==18)return null;
+  return {identities:saved.identities.slice(),names:saved.names.map((name,i)=>
+   typeof name==='string'&&name.trim()?name.trim().slice(0,24):'試験馬'+(i+1))};
+ }catch(err){console.warn('枠順の保存データを読み込めませんでした',err)}
+ return null;
+}
+const savedRunnerLineup=isOfficialEighteenTest?loadSavedRunnerLineup():null;
+const horseIdentityBySlot=isOfficialEighteenTest?
+ (savedRunnerLineup?.identities||Array.from({length:18},(_,i)=>i)):[];
+if(savedRunnerLineup)officialRunnerNames.splice(0,18,...savedRunnerLineup.names);
+function persistRunnerLineup(){
+ if(!isOfficialEighteenTest)return false;
+ try{
+  localStorage.setItem(RUNNER_LINEUP_KEY,JSON.stringify({
+   version:1,names:officialRunnerNames,identities:horseIdentityBySlot
+  }));
+  // The old name key is still available for older RaceLab builds.
+  try{localStorage.setItem(RUNNER_NAMES_KEY,JSON.stringify(officialRunnerNames))}
+  catch(err){console.warn('旧版互換の馬名保存に失敗',err)}
+  return true;
+ }catch(err){console.warn('枠順の保存に失敗',err);return false}
+}
+function refreshRunnerSelectors(){
+ if(!isOfficialEighteenTest)return;
+ for(const selector of ['#raceSwapFrom','#raceSwapTo',
+   '#abilityHorseSelect','#analysisHorse','#cam18Follow']){
+  const node=document.querySelector(selector);
+  if(!node)continue;
+  for(let i=0;i<18;i++){
+   const value=String(selector==='#cam18Follow'?i+1:i);
+   const option=[...node.options].find(opt=>opt.value===value);
+   if(option)option.textContent=(i+1)+'番（'+(officialFrameIndex(i+1)+1)+
+    '枠） '+officialRunnerNames[i];
+  }
+ }
+}
+function initRunnerGateSwap(){
+ if(!isOfficialEighteenTest)return;
+ const from=document.querySelector('#raceSwapFrom');
+ const to=document.querySelector('#raceSwapTo');
+ const status=document.querySelector('#raceSwapStatus');
+ for(let i=0;i<18;i++){
+  from.add(new Option((i+1)+'番 '+officialRunnerNames[i],String(i)));
+  to.add(new Option((i+1)+'番 '+officialRunnerNames[i],String(i)));
+ }
+ to.value='1';refreshRunnerSelectors();
+ document.querySelector('#raceSwapApply').addEventListener('click',()=>{
+  const a=Number(from.value),b=Number(to.value);
+  if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||a>17||b<0||b>17)return;
+  if(a===b){status.textContent='同じ馬番です。移動先を変更してください。';return}
+  if(playing||raceElapsed>0){
+   status.textContent='レース中やレース後は変更できません。「発馬機へ戻す」で初期位置に戻してください。';return;
+  }
+  const aName=officialRunnerNames[a],bName=officialRunnerNames[b];
+  const aId=horseIdentityBySlot[a],bId=horseIdentityBySlot[b];
+  officialRunnerNames[a]=bName;officialRunnerNames[b]=aName;
+  horseIdentityBySlot[a]=bId;horseIdentityBySlot[b]=aId;
+  if(!persistRunnerLineup()){
+   officialRunnerNames[a]=aName;officialRunnerNames[b]=bName;
+   horseIdentityBySlot[a]=aId;horseIdentityBySlot[b]=bId;
+   status.textContent='保存できず、以前の枠順を維持しています。';return;
+  }
+  const inputs=document.querySelectorAll('#raceNameInputs input');
+  if(inputs[a])inputs[a].value=officialRunnerNames[a];
+  if(inputs[b])inputs[b].value=officialRunnerNames[b];
+  refreshRunnerSelectors();
+  const ability=document.querySelector('#abilityHorseSelect');
+  if(ability)ability.dispatchEvent(new Event('change'));
+  if(activePlan)initRaceHorses();
+  status.textContent=aName+'を'+(b+1)+'番（'+(officialFrameIndex(b+1)+1)+
+   '枠）に変更。'+bName+'は'+(a+1)+'番に移動しました。';
+  from.value=String(b);to.value=String(a);
+ });
+}
 const runnerLabelLayer=document.querySelector('#runnerLabelLayer');
 const runnerNameLabels=[];
 if(isOfficialEighteenTest){
@@ -449,8 +547,8 @@ if(isOfficialEighteenTest){
   input.addEventListener('change',()=>{
    officialRunnerNames[i]=input.value.trim().slice(0,24)||'試験馬'+(i+1);
    input.value=officialRunnerNames[i];
-   try{localStorage.setItem(RUNNER_NAMES_KEY,JSON.stringify(officialRunnerNames))}
-   catch(error){console.warn('馬名の保存に失敗しました',error)}
+   if(!persistRunnerLineup())console.warn('馬名・枠順の保存に失敗');
+   refreshRunnerSelectors();
    const analysisSelect=document.querySelector('#analysisHorse');
    if(analysisSelect?.options[i])
     analysisSelect.options[i].textContent=(i+1)+'番 '+officialRunnerNames[i];
@@ -478,6 +576,7 @@ if(isOfficialEighteenTest){
  cam18Extras.hidden=false;
  const follow=document.querySelector('#cam18Follow');
  for(let i=1;i<=18;i++)follow.add(new Option('試験馬'+i,i+''));
+ refreshRunnerSelectors();
 }
 if(isOfficialPairTest){
  stageDock.hidden=false;
@@ -2409,6 +2508,7 @@ function initHorseAbilityEditor(){
  loadSelected();
 }
 initHorseAbilityEditor();
+initRunnerGateSwap();
 
 // 18頭専用の2D位置試験モデル。3Dモデルのシルエットを変えない。
 // スタート時は幅に合わせ18頭を並べ、前に空きができた馬から
