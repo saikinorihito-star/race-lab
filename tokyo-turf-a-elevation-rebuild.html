@@ -1618,30 +1618,33 @@ if(isOfficialEighteenTest){
    const station=start+(end-start)*Math.min(.98,fraction);
    const outside=90+((i+type*3)%5)*8; // Background trees only, no foreground occlusion
    const p=offsetAt(station,MEASURE_OFFSET-renderedTurfWidthAt(station)-outside);
+   // Outside the elevated rail embankment the scenery ground is a flat
+   // mesh at y=0. Using p.y (track elevation, 0.35–8.45m) made trees FLOAT.
+   const sceneryGroundY=0;
    const scale=.82+((i*11+type*7)%9)*.055;
    forestDummy.rotation.set(0,(i*2.2+type*.9)%6.28,0);
-   forestDummy.position.set(p.x,p.y+spec.trunk*scale/2,p.z);
+   forestDummy.position.set(p.x,sceneryGroundY+spec.trunk*scale/2,p.z);
    forestDummy.scale.set(scale,spec.trunk*scale,scale);
    forestDummy.updateMatrix();trunkMesh.setMatrixAt(i,forestDummy.matrix);
    if(type===0){
-    forestDummy.position.set(p.x,p.y+(spec.trunk+1.7)*scale,p.z);
+    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+1.7)*scale,p.z);
     forestDummy.scale.set(5.8*scale,4.2*scale,5.3*scale);
    }else if(type===1){
-    forestDummy.position.set(p.x,p.y+(spec.trunk+1.25)*scale,p.z);
+    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+1.25)*scale,p.z);
     forestDummy.scale.set(scale,scale,scale);
    }else{
-    forestDummy.position.set(p.x,p.y+(spec.trunk+2.15)*scale,p.z);
+    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+2.15)*scale,p.z);
     forestDummy.scale.set(4.25*scale,6.2*scale,3.8*scale);
    }
    forestDummy.updateMatrix();lower.setMatrixAt(i,forestDummy.matrix);
    if(type===0){
-    forestDummy.position.set(p.x+1.1*scale,p.y+(spec.trunk+4.6)*scale,p.z-.5*scale);
+    forestDummy.position.set(p.x+1.1*scale,sceneryGroundY+(spec.trunk+4.6)*scale,p.z-.5*scale);
     forestDummy.scale.set(4.3*scale,3.5*scale,4.3*scale);
    }else if(type===1){
-    forestDummy.position.set(p.x,p.y+(spec.trunk+5.5)*scale,p.z);
+    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+5.5)*scale,p.z);
     forestDummy.scale.set(.84*scale,.85*scale,.84*scale);
    }else{
-    forestDummy.position.set(p.x-.8*scale,p.y+(spec.trunk+5.9)*scale,p.z+.4*scale);
+    forestDummy.position.set(p.x-.8*scale,sceneryGroundY+(spec.trunk+5.9)*scale,p.z+.4*scale);
     forestDummy.scale.set(3.5*scale,4.7*scale,3.45*scale);
    }
    forestDummy.updateMatrix();upper.setMatrixAt(i,forestDummy.matrix);
@@ -1653,7 +1656,7 @@ if(isOfficialEighteenTest){
    });
    raceTreeOcclusionRecords.push({
     meshes,index:i,originalMatrices,hidden:false,holdUntil:0,
-    center:new THREE.Vector3(p.x,p.y+(spec.trunk+4.2)*scale,p.z),
+    center:new THREE.Vector3(p.x,sceneryGroundY+(spec.trunk+4.2)*scale,p.z),
     radius:(type===1?8.5:11)*scale
    });
    const palette=type===0?[0x357344,0x427c46,0x508652]:
