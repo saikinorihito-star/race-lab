@@ -147,6 +147,17 @@ a{color:#95e8df}
 #abilitySave{background:#246e58;border-color:#81d4a9}
 #horseAbilityEditor .abilityHint{font-size:11px;line-height:1.65;color:#b6d1d4;margin:0}
 #abilityStatus{font-size:12px;color:#d8eebb;min-height:18px}
+
+#raceAnalysisPanel{margin:9px 12px 14px;padding:11px;border-radius:11px;
+ background:#18333d;border:1px solid #537a86;font-size:12px}
+#raceAnalysisPanel[hidden]{display:none!important}
+#raceAnalysisPanel summary{cursor:pointer;font-weight:730;line-height:1.6}
+#raceAnalysisPanel .analysisActions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:11px}
+#raceAnalysisPanel .analysisActions button{min-height:44px}
+#analysisLive{padding:10px;background:#112936;border-radius:8px;line-height:1.7;margin:9px 0}
+#raceAnalysisPanel table{font-variant-numeric:tabular-nums}
+#raceAnalysisPanel .analysisScroll{overflow-x:auto;max-height:245px;overflow-y:auto}
+#raceAnalysisPanel .analysisNote{color:#b7cdd1;font-size:11px;line-height:1.6}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script>
 </head>
@@ -314,6 +325,22 @@ a{color:#95e8df}
   <p id="abilityStatus" role="status" aria-live="polite"></p>
  </div>
 </details>
+<details id="raceAnalysisPanel" hidden>
+ <summary>📈 レース展開を検証（選んだ馬の順位推移・追尾映像）</summary>
+ <div class="analysisActions">
+  <label>注目する馬 <select id="analysisHorse" aria-label="展開を確認する馬"></select></label>
+  <button type="button" id="analysisFollow">📹 この馬を追尾</button>
+  <button type="button" id="analysisBroadcast">📺 自動中継へ戻る</button>
+ </div>
+ <div id="analysisLive" aria-live="off">レースを開始すると順位と速度を表示します。</div>
+ <div class="analysisScroll">
+  <table aria-label="注目馬の通過順位">
+   <thead><tr><th>地点</th><th>順位</th><th>先頭との差</th><th>速度</th><th>余力</th></tr></thead>
+   <tbody id="analysisRows"></tbody>
+  </table>
+ </div>
+ <p class="analysisNote">残り800m・400m・200mで先頭馬が通過した瞬間の順位を記録します。数値はレース計算の結果であり、実際のJRA競走データではありません。映像の「この馬を追尾」は斜め前からの手動追尾視点です。</p>
+</details>
 <div class="tools" id="design01OriginalInfo" hidden><strong>正式モデル：BabylonJSで承認されたMeshy版 Design 01</strong> <span>元の馬体・顔・青白の勝負服・ゼッケン4をそのまま使用</span></div>
 <div class="tools" id="design01Loader" hidden>
  <strong>正式モデルのファイルは3D画面の中央から選択できます</strong>
@@ -424,6 +451,9 @@ if(isOfficialEighteenTest){
    input.value=officialRunnerNames[i];
    try{localStorage.setItem(RUNNER_NAMES_KEY,JSON.stringify(officialRunnerNames))}
    catch(error){console.warn('馬名の保存に失敗しました',error)}
+   const analysisSelect=document.querySelector('#analysisHorse');
+   if(analysisSelect?.options[i])
+    analysisSelect.options[i].textContent=(i+1)+'番 '+officialRunnerNames[i];
    const abilitySelect=document.querySelector('#abilityHorseSelect');
    if(abilitySelect?.options[i])
     abilitySelect.options[i].textContent=(i+1)+'番 '+officialRunnerNames[i];
@@ -1716,6 +1746,108 @@ function clearRaceResults(){
  raceResultRows.replaceChildren();
  raceTacticsSummary.textContent='';
 }
+// 18-runner checkpoints are sampled from the same 60Hz physics state as
+// the approved GLB positions. This is an inspectable numeric companion to
+// the live camera, not a separate animation or an invented video recording.
+const RACE_ANALYSIS_MARKERS=[800,400,200];
+let raceAnalysisSnapshots=[],lastRaceAnalysisPaint=-Infinity;
+function clearRaceAnalysis(){
+ raceAnalysisSnapshots=[];lastRaceAnalysisPaint=-Infinity;
+ const tbody=document.querySelector('#analysisRows');
+ if(tbody)tbody.replaceChildren();
+ const info=document.querySelector('#analysisLive');
+ if(info)info.textContent='スタートすると順位・速度・余力の推移を確認できます。';
+}
+function captureRaceAnalysis(){
+ if(!isOfficialEighteenTest||!activePlan||raceAnalysisSnapshots.length>=3)return;
+ const horses=raceHorses.slice(0,18);
+ const leader=Math.max(...horses.map(h=>h.distance));
+ const next=RACE_ANALYSIS_MARKERS[raceAnalysisSnapshots.length];
+ if(leader<activePlan.distance-next)return;
+ const ranking=[...horses].sort((a,b)=>b.distance-a.distance||a.number-b.number);
+ raceAnalysisSnapshots.push({
+  remaining:next,leaderDistance:leader,
+  entries:horses.map(h=>({
+   idx:h.idx,rank:ranking.findIndex(item=>item.idx===h.idx)+1,
+   gap:Math.max(0,leader-h.distance),speed:h.speed,energy:h.energy??1
+  }))
+ });
+}
+function renderRaceAnalysis(time){
+ if(!isOfficialEighteenTest)return;
+ const panel=document.querySelector('#raceAnalysisPanel');
+ if(!panel||panel.hidden||!panel.open||time-lastRaceAnalysisPaint<600)return;
+ lastRaceAnalysisPaint=time;
+ const selected=Number(document.querySelector('#analysisHorse').value);
+ const horse=raceHorses[selected];
+ if(!horse)return;
+ const ranking=[...raceHorses.slice(0,18)].sort((a,b)=>{
+  if(a.finished&&b.finished)return a.finishTime-b.finishTime;
+  if(a.finished)return -1;
+  if(b.finished)return 1;
+  return b.distance-a.distance||a.number-b.number;
+ });
+ const rank=ranking.findIndex(x=>x.idx===selected)+1;
+ const leadDist=Math.max(...raceHorses.slice(0,18).map(h=>h.distance));
+ const name=officialRunnerNames[selected]||'試験馬'+(selected+1);
+ const state=horse.finished?'ゴール':'走行中';
+ document.querySelector('#analysisLive').textContent=
+  (selected+1)+'番 '+name+'｜'+state+'・'+rank+'位／18頭'+
+  '｜走行 '+Math.round(horse.distance)+'m'+
+  '｜速度 '+horse.speed.toFixed(2)+'m/s'+
+  '｜先頭との差 '+Math.max(0,leadDist-horse.distance).toFixed(1)+'m'+
+  '｜余力 '+Math.round((horse.energy??1)*100)+'%'+
+  '｜脚質 '+horse.role;
+ const tbody=document.querySelector('#analysisRows');
+ const fragment=document.createDocumentFragment();
+ for(const snap of raceAnalysisSnapshots){
+  const entry=snap.entries[selected];
+  const tr=document.createElement('tr');
+  for(const text of [
+   '残り'+snap.remaining+'m',entry.rank+'位',
+   entry.gap.toFixed(1)+'m',
+   entry.speed.toFixed(2)+'m/s',
+   Math.round(entry.energy*100)+'%'
+  ]){
+   const td=document.createElement('td');td.textContent=text;tr.append(td);
+  }
+  fragment.append(tr);
+ }
+ if(horse.finished&&raceFinished.length===18){
+  const tr=document.createElement('tr');
+  for(const text of [
+   'ゴール',rank+'着',
+   (horse.finishTime-Math.min(...raceHorses.slice(0,18).map(h=>h.finishTime))).toFixed(2)+'秒',
+   '―',Math.round(horse.energy*100)+'%'
+  ]){
+   const td=document.createElement('td');td.textContent=text;tr.append(td);
+  }
+  fragment.append(tr);
+ }
+ tbody.replaceChildren(fragment);
+}
+function initRaceAnalysis(){
+ if(!isOfficialEighteenTest)return;
+ const panel=document.querySelector('#raceAnalysisPanel');
+ const select=document.querySelector('#analysisHorse');
+ for(let i=0;i<18;i++)select.add(new Option(
+  (i+1)+'番 '+officialRunnerNames[i],String(i)));
+ select.addEventListener('change',()=>{
+  lastRaceAnalysisPaint=-Infinity;renderRaceAnalysis(performance.now());
+ });
+ document.querySelector('#analysisFollow').addEventListener('click',()=>{
+  camera18Follow.value=String(Number(select.value)+1);
+  resetCamera18();setView('front3q');
+ });
+ document.querySelector('#analysisBroadcast').addEventListener('click',()=>{
+  camera18Follow.value='auto';resetCamera18();setView('broadcast');
+ });
+ panel.hidden=false;
+ panel.addEventListener('toggle',()=>{
+  if(panel.open){lastRaceAnalysisPaint=-Infinity;renderRaceAnalysis(performance.now())}
+ });
+}
+initRaceAnalysis();
 // The order and clock are derived from the simulated 60Hz physics step,
 // not from frame rendering, video FPS, or the array's input order.
 function renderRaceResults(){
@@ -1812,6 +1944,7 @@ console.assert([24,28,31,36,41].every(w=>
 function initRaceHorses(){
  raceElapsed=0;raceFinished=[];raceAccumulator=0;raceContactWarnings=0;
  clearRaceResults();
+ if(isOfficialEighteenTest)clearRaceAnalysis();
  const width=activePlan?fieldCenterAt(activePlan,0).width:31;
  raceHorses=Array.from({length:FIELD_COUNT},(_,i)=>({
   number:i+1,idx:i,distance:0,postDistance:0,speed:0,finished:false,finishTime:null,
@@ -2486,6 +2619,7 @@ function stepOfficialPair(tick){
    raceFinished.push(h.number);
   }
  }
+ if(isOfficialEighteenTest)captureRaceAnalysis();
 }
 function updateRace(dt){
  // iPhoneのフレームレートに依存しない固定時間刻み。
@@ -4010,6 +4144,7 @@ function animate(time){
  }
  positionRunner();positionFieldHorses();updateOfficialPair(dt);
  syncStageStartButton();
+ renderRaceAnalysis(time);
  let pairTracking=false;
  if(fieldMode.value!=='single'){
   gateOpening=travel>0?Math.min(1,gateOpening+dt*(isOfficialEighteenTest?15:4)):0;updateGateDoors();
