@@ -134,7 +134,7 @@ a{color:#95e8df}
 
 #horseAbilityEditor{margin:8px 12px;padding:11px;border:1px solid #527c79;
  background:#152d36;border-radius:11px;font-size:13px}
-#horseAbilityEditor[hidden]{display:none!important}
+#horseAbilityEditor[hidden],#raceGoingLabel[hidden]{display:none!important}
 #horseAbilityEditor summary{cursor:pointer;font-weight:750;line-height:1.6}
 #horseAbilityEditor .abilityForm{display:grid;gap:10px;max-width:670px;margin-top:12px}
 #horseAbilityEditor .abilityRow{display:grid;grid-template-columns:91px minmax(0,1fr) 30px;gap:8px;align-items:center}
@@ -2477,6 +2477,13 @@ const raceGoingSelect=document.querySelector('#raceGoing');
 let raceGoingAtStart='good';
 if(isOfficialEighteenTest)document.querySelector('#raceGoingLabel').hidden=false;
 const GOING_SEVERITY={good:0,slightlyHeavy:.3,heavy:.7,bad:1};
+if(isOfficialEighteenTest)raceGoingSelect.addEventListener('change',()=>{
+ // A pending pre-start change is committed immediately; after starting
+ // it affects only the next race (not the result already under way).
+ if(!playing&&raceElapsed===0)
+  raceGoingAtStart=Object.hasOwn(GOING_SEVERITY,raceGoingSelect.value)?
+   raceGoingSelect.value:'good';
+});
 function effectiveEighteenProfile(index){
  // The original fictional profile follows the runner after a gate swap.
  const identity=horseIdentityBySlot[index]??index;
