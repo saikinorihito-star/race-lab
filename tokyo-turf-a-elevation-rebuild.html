@@ -1787,6 +1787,10 @@ function initRaceHorses(){
    h.role=isOfficialEighteenTest?EIGHTEEN_PACE_PROFILES[i].role:
     isOfficialEightTest?EIGHT_PACE_PROFILES[i].role:['逃げ','先行','差し','追込'][i];
    h.prevDistance=h.distance;h.prevPostDistance=h.postDistance;
+   if(isOfficialEighteenTest){
+    h.energy=1;h.blockedFor=0;h.trafficSeconds=0;
+    h.passGoal=null;h.passUntil=0;h.passCooldown=0;h.passAttempts=0;
+   }
   }
  }
 }
@@ -2115,7 +2119,9 @@ const EIGHTEEN_PACE_PROFILES=Array.from({length:18},(_,idx)=>{
   accel:3.12+(idx*7%9)*.037,
   early:15.78+(idx*11%15)*.037,
   kickStart:type==='追込'?.37:type==='差し'?.29:.72,
-  kick:type==='追込'?.76:type==='差し'?.52:type==='中団'?.31:.18};
+  kick:type==='追込'?.76:type==='差し'?.52:type==='中団'?.31:.18,
+  endurance:.84+(idx*13%17)*.009,
+  finishStrength:.72+(idx*5%11)*.045};
 });
 // 18頭専用の2D位置試験モデル。3Dモデルのシルエットを変えない。
 // スタート時は幅に合わせ18頭を並べ、前に空きができた馬から
@@ -2175,7 +2181,42 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   if(Math.abs(along)<EIGHTEEN_MERGE_LONGITUDINAL_BUFFER&&other.lane>h.lane)
    lane=Math.min(lane,other.lane-2.35);
  }
- lane=THREE.MathUtils.clamp(Math.max(h.lane,lane),-width/2+1.48,inner-.05);
+ // An outside pass begins only if the whole destination corridor is free.
+ // Two attempts maximum per runner, 200m cooldown between attempts.
+ if(h.distance>105&&h.distance<activePlan.distance-90&&h.blockedFor>.9&&
+    h.passUntil<=h.distance&&h.passCooldown<=h.distance&&h.passAttempts<2){
+  const destination=h.lane-2.75;
+  const free=destination>-width/2+2&&snapshot.every(o=>{
+   if(o.idx===h.idx||o.finished)return true;
+   const longitudinal=o.distance+o.speed*dt-distance;
+   return Math.abs(longitudinal)>9||
+    Math.abs(o.lane-destination)>2.75;
+  });
+  if(free){
+   h.passGoal=destination;h.passUntil=h.distance+42;
+   h.passCooldown=h.distance+220;
+   h.blockedFor=0;h.passAttempts++;
+  }
+ }
+ const passing=h.passGoal!==null&&h.passUntil>h.distance&&
+  h.passGoal<h.lane-.08;
+ if(passing){
+  const clear=snapshot.every(o=>{
+   if(o.idx===h.idx||o.finished)return true;
+   const longitudinal=o.distance+o.speed*dt-distance;
+   return Math.abs(longitudinal)>7.5||o.lane>h.lane+1.6||
+    o.lane<h.passGoal-2.7;
+  });
+  if(clear){
+   const step=Math.min(lateralRate*dt,inwardBudget,h.lane-h.passGoal);
+   lane=h.lane-step;
+  }else lane=h.lane;
+ }else{
+  h.passGoal=null;
+  // Keep the approved no-instant-jump constraint when NOT passing.
+  lane=Math.max(h.lane,lane);
+ }
+ lane=THREE.MathUtils.clamp(lane,-width/2+1.48,inner-.05);
  return {distance,lane,speed};
 }
 function stepOfficialPair(tick){
@@ -2216,13 +2257,38 @@ function stepOfficialPair(tick){
    const progress=h.distance/Math.max(1,activePlan.distance);
    const launch=THREE.MathUtils.clamp((h.distance-180)/540,0,1);
    const late=THREE.MathUtils.clamp((progress-profile.kickStart)/.24,0,1);
-   const targetSpeed=profile.early+profile.kick*launch+
+   let targetSpeed=profile.early+profile.kick*launch+
     ((i===3||i===7)?late*.22:0);
+   if(isOfficialEighteenTest){
+    const remaining=Math.max(0,activePlan.distance-h.distance);
+    const progress18=h.distance/Math.max(1,activePlan.distance);
+    const energy=h.energy??1;
+    const closing=THREE.MathUtils.smoothstep(455-remaining,0,370);
+    const earlyBonus=profile.role==='逃げ'?.20:
+     profile.role==='先行'?.10:profile.role==='追込'?-.15:0;
+    targetSpeed=profile.early+earlyBonus*Math.max(0,1-progress18*2.2)+
+     profile.kick*profile.finishStrength*closing*(.38+.62*energy)-
+     (1-energy)*(1.30-profile.endurance)*.82;
+    const blocked=previous.some(o=>o.idx!==h.idx&&!o.finished&&
+     o.distance>h.distance&&o.distance-h.distance<13&&
+     Math.abs(o.lane-h.lane)<2.5&&o.speed+.25<targetSpeed);
+    h.blockedFor=blocked?(h.blockedFor||0)+tick:
+     Math.max(0,(h.blockedFor||0)-tick*1.6);
+    if(blocked)h.trafficSeconds=(h.trafficSeconds||0)+tick;
+   }
    // 4頭は承認済みの挙動を維持。8頭はより大きな馬群用の独立AI。
    const result=isOfficialEighteenTest?
     eighteenHorseSafeStep(h,previous,tick,targetSpeed):
     isOfficialEightTest?eightHorseSafeStep(h,previous,tick,targetSpeed):
     fourHorseSafeStep(h,previous,tick,targetSpeed);
+   if(isOfficialEighteenTest){
+    const travelled=Math.max(0,result.distance-h.distance);
+    const effort=THREE.MathUtils.clamp((result.speed-14.4)/2.6,0,1.6);
+    const load=Math.sqrt(activePlan.distance/1800);
+    const cost=travelled/Math.max(1,activePlan.distance)*
+     (.37+.29*effort)*load/Math.max(.72,profile.endurance);
+    h.energy=THREE.MathUtils.clamp((h.energy??1)-cost,.07,1);
+   }
    h.distance=result.distance;h.speed=result.speed;
    h.sideSpeed=(result.lane-h.lane)/tick;
    h.lane=result.lane;h.targetLane=result.lane;
