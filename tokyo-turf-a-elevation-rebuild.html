@@ -2131,7 +2131,8 @@ const EIGHTEEN_PACE_PROFILES=Array.from({length:18},(_,idx)=>{
   kickStart:type==='追込'?.37:type==='差し'?.29:.72,
   kick:type==='追込'?.76:type==='差し'?.52:type==='中団'?.31:.18,
   endurance:.84+(idx*13%17)*.009,
-  finishStrength:.72+(idx*5%11)*.045};
+  finishStrength:.72+(idx*5%11)*.045,
+  preferredDistance:1400+(idx*5%9)*250};
 });
 // 18頭専用の2D位置試験モデル。3Dモデルのシルエットを変えない。
 // スタート時は幅に合わせ18頭を並べ、前に空きができた馬から
@@ -2276,9 +2277,11 @@ function stepOfficialPair(tick){
     const closing=THREE.MathUtils.smoothstep(455-remaining,0,370);
     const earlyBonus=profile.role==='逃げ'?.20:
      profile.role==='先行'?.10:profile.role==='追込'?-.15:0;
+    const fit=1-Math.min(1,Math.abs(activePlan.distance-profile.preferredDistance)/1900);
     targetSpeed=profile.early+earlyBonus*Math.max(0,1-progress18*2.2)+
      profile.kick*profile.finishStrength*closing*(.38+.62*energy)-
-     (1-energy)*(1.30-profile.endurance)*.82;
+     (1-energy)*(1.30-profile.endurance)*.82+
+     (fit-.5)*.70;
     const blocked=previous.some(o=>o.idx!==h.idx&&!o.finished&&
      o.distance>h.distance&&o.distance-h.distance<13&&
      Math.abs(o.lane-h.lane)<2.5&&o.speed+.25<targetSpeed);
