@@ -271,6 +271,13 @@ a{color:#95e8df}
 <option value="2600">芝2600m（仮配置）</option>
 <option value="3400">芝3400m</option>
 </select></label>
+<label id="raceGoingLabel" hidden>馬場状態
+ <select id="raceGoing" aria-label="レースの芝馬場状態">
+  <option value="good" selected>良</option>
+  <option value="slightlyHeavy">稍重</option>
+  <option value="heavy">重</option>
+  <option value="bad">不良</option>
+ </select></label>
 <button id="startView">発馬機・S地点を見る</button>
 <span class="pill" id="startInfo">Sはスタート位置、Gはゴール</span>
 </div>
@@ -322,15 +329,22 @@ a{color:#95e8df}
  </div>
 </details>
 <details id="horseAbilityEditor" hidden>
- <summary>🐎 18頭の能力を設定（速度・スタミナ・瞬発力・コース適性・末脚・脚質）</summary>
+ <summary>🐎 18頭の能力設定（11能力・10段階＋脚質）</summary>
  <div class="abilityForm">
   <label>編集する馬 <select id="abilityHorseSelect" aria-label="能力を編集する馬"></select></label>
-  <p class="abilityHint">0〜100の範囲で50は元の能力です。「コース適性」は東京競馬場・芝Aへの適性。枠を変更しても能力は馬と一緒に移動します。保存後、次の発走から反映します。</p>
-  <div class="abilityRow"><label for="abilitySpeed">速度</label><input id="abilitySpeed" type="range" min="0" max="100" value="50"/><output id="abilitySpeedValue" for="abilitySpeed">50</output></div>
-  <div class="abilityRow"><label for="abilityStamina">スタミナ</label><input id="abilityStamina" type="range" min="0" max="100" value="50"/><output id="abilityStaminaValue" for="abilityStamina">50</output></div>
-  <div class="abilityRow"><label for="abilityAcceleration">瞬発力</label><input id="abilityAcceleration" type="range" min="0" max="100" value="50"/><output id="abilityAccelerationValue" for="abilityAcceleration">50</output></div>
-  <div class="abilityRow"><label for="abilityCourse">コース適性</label><input id="abilityCourse" type="range" min="0" max="100" value="50"/><output id="abilityCourseValue" for="abilityCourse">50</output></div>
-  <div class="abilityRow"><label for="abilityFinish">末脚</label><input id="abilityFinish" type="range" min="0" max="100" value="50"/><output id="abilityFinishValue" for="abilityFinish">50</output></div>
+  <p class="abilityHint">数値能力はすべて1〜10の10段階、5が以前の50に相当する標準値です。保存済みの0〜100は自動的に引き継ぎます。脚質は5種類から選択します。</p>
+  <p id="abilityDistanceHint" class="abilityHint">距離適性は元の得意距離から離れた距離への対応力、コース適性は東京芝Aへの適性です。</p>
+  <div class="abilityRow"><label for="abilitySpeed">速度</label><input id="abilitySpeed" type="range" min="1" max="10" step="1" value="5"/><output id="abilitySpeedValue" for="abilitySpeed">5</output></div>
+  <div class="abilityRow"><label for="abilityStamina">スタミナ</label><input id="abilityStamina" type="range" min="1" max="10" step="1" value="5"/><output id="abilityStaminaValue" for="abilityStamina">5</output></div>
+  <div class="abilityRow"><label for="abilityAcceleration">瞬発力</label><input id="abilityAcceleration" type="range" min="1" max="10" step="1" value="5"/><output id="abilityAccelerationValue" for="abilityAcceleration">5</output></div>
+  <div class="abilityRow"><label for="abilityCourse">コース適性</label><input id="abilityCourse" type="range" min="1" max="10" step="1" value="5"/><output id="abilityCourseValue" for="abilityCourse">5</output></div>
+  <div class="abilityRow"><label for="abilityDistance">距離適性</label><input id="abilityDistance" type="range" min="1" max="10" step="1" value="5"/><output id="abilityDistanceValue" for="abilityDistance">5</output></div>
+  <div class="abilityRow"><label for="abilityComposure">折り合い</label><input id="abilityComposure" type="range" min="1" max="10" step="1" value="5"/><output id="abilityComposureValue" for="abilityComposure">5</output></div>
+  <div class="abilityRow"><label for="abilityTraffic">馬群対応力</label><input id="abilityTraffic" type="range" min="1" max="10" step="1" value="5"/><output id="abilityTrafficValue" for="abilityTraffic">5</output></div>
+  <div class="abilityRow"><label for="abilityGoing">馬場状態適性</label><input id="abilityGoing" type="range" min="1" max="10" step="1" value="5"/><output id="abilityGoingValue" for="abilityGoing">5</output></div>
+  <div class="abilityRow"><label for="abilityHill">坂適性</label><input id="abilityHill" type="range" min="1" max="10" step="1" value="5"/><output id="abilityHillValue" for="abilityHill">5</output></div>
+  <div class="abilityRow"><label for="abilityStart">スタート能力</label><input id="abilityStart" type="range" min="1" max="10" step="1" value="5"/><output id="abilityStartValue" for="abilityStart">5</output></div>
+  <div class="abilityRow"><label for="abilityFinish">末脚</label><input id="abilityFinish" type="range" min="1" max="10" step="1" value="5"/><output id="abilityFinishValue" for="abilityFinish">5</output></div>
   <label>脚質 <select id="abilityRole">
    <option value="逃げ">逃げ</option><option value="先行">先行</option>
    <option value="中団">中団</option><option value="差し">差し</option>
@@ -2410,11 +2424,14 @@ const EIGHTEEN_PACE_PROFILES=Array.from({length:18},(_,idx)=>{
 });
 // Per-horse ability editing applies to 18-horse AI only. The approved
 // GLB design and other runner counts retain their existing behavior.
-const HORSE_ABILITIES_KEY='race-lab-design01-18-abilities-v1';
+const HORSE_ABILITIES_KEY='race-lab-design01-18-abilities-v2';
+const HORSE_ABILITIES_LEGACY_KEY='race-lab-design01-18-abilities-v1';
 const HORSE_ROLE_OPTIONS=['逃げ','先行','中団','差し','追込'];
-const HORSE_ABILITY_KEYS=['speed','stamina','acceleration','finish','course'];
+const HORSE_ABILITY_KEYS=['speed','stamina','acceleration','finish','course',
+ 'distance','composure','traffic','going','hill','start'];
 function defaultHorseAbility(index){
- return {speed:50,stamina:50,acceleration:50,finish:50,course:50,
+ return {speed:5,stamina:5,acceleration:5,finish:5,course:5,
+  distance:5,composure:5,traffic:5,going:5,hill:5,start:5,
   role:EIGHTEEN_PACE_PROFILES[index].role};
 }
 function normalizeHorseAbility(raw,index){
@@ -2423,18 +2440,31 @@ function normalizeHorseAbility(raw,index){
  for(const key of HORSE_ABILITY_KEYS){
   const val=raw[key];
   if(typeof val==='number'&&Number.isFinite(val))
-   result[key]=THREE.MathUtils.clamp(Math.round(val),0,100);
+   result[key]=THREE.MathUtils.clamp(Math.round(val),1,10);
  }
  if(HORSE_ROLE_OPTIONS.includes(raw.role))result.role=raw.role;
  return result;
 }
+// Read version 1 without modifying it: 50->5, 100->10, 0->1.
 function loadHorseAbilities(){
  const defaults=Array.from({length:18},(_,i)=>defaultHorseAbility(i));
  try{
   const data=JSON.parse(localStorage.getItem(HORSE_ABILITIES_KEY)||'null');
-  if(data?.version===1&&Array.isArray(data.horses))
+  if(data?.version===2&&Array.isArray(data.horses))
    return defaults.map((_,i)=>normalizeHorseAbility(data.horses[i],i));
- }catch(err){console.warn('能力設定の読込に失敗。標準値を使用',err)}
+ }catch(err){console.warn('10段階データの読込に失敗',err)}
+ try{
+  const old=JSON.parse(localStorage.getItem(HORSE_ABILITIES_LEGACY_KEY)||'null');
+  if(old?.version===1&&Array.isArray(old.horses))
+   return defaults.map((_,i)=>{
+    const raw=old.horses[i],migrated={};
+    for(const key of ['speed','stamina','acceleration','finish','course'])
+     if(typeof raw?.[key]==='number'&&Number.isFinite(raw[key]))
+      migrated[key]=THREE.MathUtils.clamp(Math.round(raw[key]/10),1,10);
+    if(HORSE_ROLE_OPTIONS.includes(raw?.role))migrated.role=raw.role;
+    return normalizeHorseAbility(migrated,i);
+   });
+ }catch(err){console.warn('以前の能力データの読込に失敗',err)}
  return defaults;
 }
 const horseAbilities=isOfficialEighteenTest?loadHorseAbilities():[];
@@ -2444,15 +2474,21 @@ function effectiveEighteenProfile(index){
  const b=EIGHTEEN_PACE_PROFILES[identity],
   v=horseAbilities[identity]||defaultHorseAbility(identity);
  const role=v.role,modified=role!==b.role;
- const customized=modified||HORSE_ABILITY_KEYS.some(key=>v[key]!==50);
+ const customized=modified||HORSE_ABILITY_KEYS.some(key=>v[key]!==5);
  const kickByRole={逃げ:.18,先行:.18,中団:.31,差し:.52,追込:.76};
  const timingByRole={逃げ:.72,先行:.72,中団:.72,差し:.29,追込:.37};
  return {...b,role,customized,baseEarly:b.early,
-  courseBonus:(v.course-50)*.010,
-  early:b.early+(v.speed-50)*.017,
-  accel:b.accel*(1+(v.acceleration-50)*.010),
-  endurance:THREE.MathUtils.clamp(b.endurance*(1+(v.stamina-50)*.006),.65,1.30),
-  finishStrength:b.finishStrength*(1+(v.finish-50)*.014),
+  courseBonus:(v.course-5)*.10,
+  distanceAbility:v.distance,
+  composureAbility:v.composure,
+  trafficAbility:v.traffic,
+  goingAbility:v.going,
+  hillAbility:v.hill,
+  startAbility:v.start,
+  early:b.early+(v.speed-5)*.17,
+  accel:b.accel*(1+(v.acceleration-5)*.10),
+  endurance:THREE.MathUtils.clamp(b.endurance*(1+(v.stamina-5)*.06),.65,1.30),
+  finishStrength:b.finishStrength*(1+(v.finish-5)*.14),
   kick:modified?kickByRole[role]:b.kick,
   kickStart:modified?timingByRole[role]:b.kickStart};
 }
@@ -2467,6 +2503,12 @@ function initHorseAbilityEditor(){
   stamina:document.querySelector('#abilityStamina'),
   acceleration:document.querySelector('#abilityAcceleration'),
   course:document.querySelector('#abilityCourse'),
+  distance:document.querySelector('#abilityDistance'),
+  composure:document.querySelector('#abilityComposure'),
+  traffic:document.querySelector('#abilityTraffic'),
+  going:document.querySelector('#abilityGoing'),
+  hill:document.querySelector('#abilityHill'),
+  start:document.querySelector('#abilityStart'),
   finish:document.querySelector('#abilityFinish')
  };
  for(let i=0;i<18;i++)selector.add(new Option((i+1)+'番 '+officialRunnerNames[i],String(i)));
@@ -2478,6 +2520,9 @@ function initHorseAbilityEditor(){
   for(const [key,range] of Object.entries(ranges))range.value=v[key];
   roleInput.value=v.role;
   updateLabels();
+  document.querySelector('#abilityDistanceHint').textContent=
+   'この馬の元の得意距離：約'+EIGHTEEN_PACE_PROFILES[identity].preferredDistance+
+   'm。距離適性は他の距離への対応力を表します。';
   status.textContent='編集後は「この馬の能力を保存」を押してください。';
  };
  const dirty=()=>{
@@ -2488,7 +2533,7 @@ function initHorseAbilityEditor(){
  roleInput.addEventListener('change',dirty);
  const persist=()=>{
   try{
-   localStorage.setItem(HORSE_ABILITIES_KEY,JSON.stringify({version:1,horses:horseAbilities}));
+   localStorage.setItem(HORSE_ABILITIES_KEY,JSON.stringify({version:2,horses:horseAbilities}));
    return true;
   }catch(err){
    console.warn('能力の保存に失敗',err);
