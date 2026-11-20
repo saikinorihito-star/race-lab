@@ -193,6 +193,66 @@ a{color:#95e8df}
 #balanceAuditPanel table{min-width:600px;font-variant-numeric:tabular-nums}
 #balanceAuditPanel td:nth-child(n+2){text-align:right;white-space:nowrap}
 #balanceAuditPanel tr.balanceWarn td{color:#f7daa1}
+
+/* iPhone portrait race broadcast: only the 18-horse mode uses this layout.
+   Course editing and desktop controls remain available outside watch mode. */
+#raceWatchHeader[hidden],#raceWatchRoster[hidden],#raceWatchSlope[hidden]{display:none!important}
+#raceWatchHeader{background:#070b0c;color:#fff;padding:calc(env(safe-area-inset-top) + 5px) 8px 7px;position:relative;z-index:8}
+.watchHeadLine{display:flex;align-items:center;gap:7px;min-height:26px}
+#watchCourse{font-size:14px;font-weight:850;white-space:nowrap}
+#watchRemain{font-size:12px;font-weight:750;color:#f5e4ac;margin-left:auto;white-space:nowrap}
+#watchEditToggle{min-height:29px;font-size:11px;padding:3px 7px;border:1px solid #52646a;background:#1d2930;white-space:nowrap}
+#watchOverviewFrame{position:relative;width:100%;height:39px;margin:5px 0 6px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
+#watchOverviewCanvas{width:100%;height:100%;display:block}
+#watchPackGap{position:absolute;right:6px;top:2px;font-size:10px;font-weight:750;color:#fff;background:#13231dcc;padding:1px 4px;border-radius:3px;pointer-events:none}
+#watchDockSlot{min-height:0}
+#raceWatchRoster{background:#040708;color:#fff;min-height:0;overflow:hidden;border-top:2px solid #5b6d58;padding:5px 7px calc(4px + env(safe-area-inset-bottom))}
+.watchRosterTitle{display:flex;gap:8px;justify-content:space-between;align-items:center;min-height:19px;font-size:11px;font-weight:750}
+#watchRosterStatus{font-size:10px;color:#a8bdc2;font-weight:500}
+#watchRosterGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:repeat(9,minmax(0,1fr));grid-auto-flow:column;gap:0 8px;height:calc(100% - 19px);min-height:0}
+.watchHorseRow{display:flex;align-items:center;gap:3px;min-width:0;border-bottom:1px solid #263037;white-space:nowrap;font-size:11px;line-height:1.05}
+.watchHorseRow.leading{background:#2d3925}
+.watchHorseFrame{flex:0 0 23px;min-width:23px;max-width:23px;height:17px;border-radius:3px;display:grid;place-items:center;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums}
+.watchHorseName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:720}
+.watchHorseRank{flex:0 0 25px;text-align:right;color:#c4d0cb;font-size:10px;font-variant-numeric:tabular-nums}
+#raceWatchSlope{position:absolute;left:7px;bottom:7px;z-index:4;width:158px;pointer-events:none;padding:5px 7px 4px;border:1px solid #a9c6a2;border-radius:5px;background:#123b29d9;color:#fff;box-shadow:0 2px 5px #0008}
+#watchSlopeTitle{font-size:10px;font-weight:800;white-space:nowrap}
+#watchSlopeCanvas{display:block;width:100%;height:38px}
+#watchSlopeCaption{font-size:9px;color:#e5fae5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.official18.race-watch-portrait{height:100dvh;overflow:hidden;background:#030608}
+body.official18.race-watch-portrait > header{display:none}
+body.official18.race-watch-portrait main{width:100%;max-width:none;height:100dvh;margin:0;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) calc(clamp(196px,26dvh,246px) + env(safe-area-inset-bottom))}
+body.official18.race-watch-portrait:not(.race-watch-editing) main > :not(#raceWatchHeader):not(#stage):not(#raceWatchRoster){display:none!important}
+body.official18.race-watch-portrait #raceWatchHeader{display:block}
+body.official18.race-watch-portrait #raceWatchRoster{display:block}
+body.official18.race-watch-portrait #stage{height:100%!important;min-height:0!important;min-width:0;overflow:hidden}
+body.official18.race-watch-portrait:not(.race-watch-editing) #telemetry{display:none!important}
+body.official18.race-watch-portrait #stageDock{position:relative;left:auto;right:auto;top:auto;bottom:auto;z-index:10;width:100%;display:flex;align-items:center;justify-content:space-between;gap:4px;pointer-events:auto}
+body.official18.race-watch-portrait #stageDock[hidden]{display:none!important}
+body.official18.race-watch-portrait #cameraAdjustTools{flex:0 0 auto;min-width:0}
+body.official18.race-watch-portrait #cameraAdjustToggle{min-height:36px;padding:4px 7px;font-size:10px;border-radius:7px;white-space:nowrap}
+body.official18.race-watch-portrait #raceSpeedButtons{position:static;right:auto;bottom:auto;display:flex;gap:4px;flex:0 0 auto}
+body.official18.race-watch-portrait #raceSpeedButtons[hidden]{display:none!important}
+body.official18.race-watch-portrait #raceSpeedButtons button{min-width:46px;min-height:36px;padding:4px;font-size:11px;border-radius:7px}
+body.official18.race-watch-portrait #stageStartBtn{min-width:84px;min-height:36px;padding:4px 7px;font-size:11px;border-radius:7px;box-shadow:none;flex:0 0 auto}
+body.official18.race-watch-portrait #cameraAdjustPanel{position:fixed;left:7px;top:calc(env(safe-area-inset-top) + 115px);bottom:auto;max-height:calc(100dvh - env(safe-area-inset-top) - 140px);width:min(340px,calc(100vw - 14px));z-index:40}
+body.official18.race-watch-portrait.race-watch-editing{height:auto;min-height:100dvh;overflow:auto}
+body.official18.race-watch-portrait.race-watch-editing main{display:block;height:auto;min-height:100dvh;overflow:visible}
+body.official18.race-watch-portrait.race-watch-editing #raceWatchHeader{position:sticky;top:0;z-index:25}
+body.official18.race-watch-portrait.race-watch-editing #stage{height:min(48dvh,430px)!important;min-height:270px!important}
+body.official18.race-watch-portrait.race-watch-editing #raceWatchRoster{display:none}
+body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:none}
+@media(max-height:740px){
+ body.official18.race-watch-portrait main{grid-template-rows:auto minmax(0,1fr) calc(184px + env(safe-area-inset-bottom))}
+ body.official18.race-watch-portrait #raceWatchHeader{padding-top:calc(env(safe-area-inset-top) + 2px);padding-bottom:4px}
+ body.official18.race-watch-portrait #watchOverviewFrame{height:31px;margin:3px 0 4px}
+ body.official18.race-watch-portrait #raceSpeedButtons button,
+ body.official18.race-watch-portrait #stageStartBtn,
+ body.official18.race-watch-portrait #cameraAdjustToggle{min-height:31px}
+ .watchHorseRow{font-size:10px}
+ .watchHorseFrame{height:15px}
+}
+
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script>
 </head>
@@ -203,6 +263,18 @@ a{color:#95e8df}
 </header>
 <main>
 <div class="pillrow"><span class="pill">芝A｜1周2,083.1m／幅31～41m</span><span class="pill">芝直線525.9m／高低差2.7m</span><span class="pill">ダート｜1周1,899m／幅25m</span><span class="pill">ダート直線501.6m／高低差2.5m</span><span class="pill">左回り</span></div>
+<section id="raceWatchHeader" hidden aria-label="レース全体像と操作">
+ <div class="watchHeadLine">
+  <strong id="watchCourse">東京 芝A 1400m</strong>
+  <span id="watchRemain">残り1400m</span>
+  <button type="button" id="watchEditToggle" aria-expanded="false">⚙ 設定・編集</button>
+ </div>
+ <div id="watchOverviewFrame">
+  <canvas id="watchOverviewCanvas" aria-label="レースの先頭から最後尾までの馬群位置"></canvas>
+  <span id="watchPackGap">馬群差 0m</span>
+ </div>
+ <div id="watchDockSlot"></div>
+</section>
 <div id="stage">
  <div id="telemetry">3Dコースを準備中…</div>
  <div id="broadcastCameraLabel" hidden>📺 中継：ゲート・発走</div>
@@ -261,6 +333,11 @@ a{color:#95e8df}
   </div>
   <button id="stageStartBtn" type="button" aria-label="レースをスタート">▶ スタート</button>
  </div>
+ <div id="raceWatchSlope" hidden aria-label="東京芝Aコースの最後の坂を示す標高断面">
+  <div id="watchSlopeTitle">最後の坂｜残り700～0m</div>
+  <canvas id="watchSlopeCanvas"></canvas>
+  <div id="watchSlopeCaption">公式図をもとにした標高の近似</div>
+ </div>
  <div id="design01Overlay" hidden>
   <div id="design01OverlayPanel">
    <strong>正式な馬の3Dデータが未読込です</strong>
@@ -270,6 +347,10 @@ a{color:#95e8df}
   </div>
  </div>
 </div>
+<section id="raceWatchRoster" hidden aria-label="出走馬18頭の一覧">
+ <div class="watchRosterTitle"><span>出走馬 18頭</span><span id="watchRosterStatus">馬番・枠色・現在順位</span></div>
+ <div id="watchRosterGrid" role="list"></div>
+</section>
 <div class="tools" id="views">
 <button data-view="broadcast" hidden>📺 自動中継（自動切替）</button>
 <button data-view="all" class="selected">全景</button>
@@ -5138,6 +5219,172 @@ if(isOfficialPairTest){
 resize();setView('all');selectRace();updateDesign01Panel();setView(
  isOfficialEighteenTest?'broadcast':isOfficialPairTest?'field':
  (isDesign01Review?'side':'start'));
+
+// iPhone portrait observation layout. Uses live race state, the existing
+// frame-colour table and the Tokyo turf A elevation approximation; no
+// invented race entrants, odds, slopes or racing conditions.
+const watchPortraitMedia=window.matchMedia('(max-width:760px) and (orientation: portrait)');
+const watchHeader=document.querySelector('#raceWatchHeader');
+const watchRoster=document.querySelector('#raceWatchRoster');
+const watchSlope=document.querySelector('#raceWatchSlope');
+const watchDockSlot=document.querySelector('#watchDockSlot');
+const watchEditToggle=document.querySelector('#watchEditToggle');
+const watchOverviewCanvas=document.querySelector('#watchOverviewCanvas');
+const watchSlopeCanvas=document.querySelector('#watchSlopeCanvas');
+const watchRows=[];
+let lastWatchPaint=-Infinity;
+function watchCanvasContext(canvas){
+ const w=canvas.clientWidth,h=canvas.clientHeight;
+ if(!w||!h)return null;
+ const dpr=Math.min(2,window.devicePixelRatio||1);
+ const pxW=Math.round(w*dpr),pxH=Math.round(h*dpr);
+ if(canvas.width!==pxW||canvas.height!==pxH){canvas.width=pxW;canvas.height=pxH}
+ const ctx=canvas.getContext('2d');
+ if(!ctx)return null;
+ ctx.setTransform(dpr,0,0,dpr,0,0);
+ ctx.clearRect(0,0,w,h);
+ return {ctx,w,h};
+}
+function paintWatchOverview(horses){
+ const out=watchCanvasContext(watchOverviewCanvas);
+ if(!out||!horses.length)return;
+ const {ctx,w,h}=out;
+ ctx.fillStyle='#273d32';ctx.fillRect(0,0,w,h);
+ ctx.fillStyle='#6d805a';ctx.fillRect(4,5,w-8,h-10);
+ ctx.strokeStyle='#e5eadb';ctx.lineWidth=1;
+ ctx.strokeRect(4.5,5.5,w-9,h-11);
+ ctx.setLineDash([5,6]);ctx.strokeStyle='#d2dac0';
+ ctx.beginPath();ctx.moveTo(4,h/2);ctx.lineTo(w-4,h/2);ctx.stroke();
+ ctx.setLineDash([]);
+ const lead=Math.max(...horses.map(h=>h.distance));
+ const tail=Math.min(...horses.map(h=>h.distance));
+ const fieldSpread=lead-tail;
+ const span=Math.max(35,fieldSpread+12);
+ const trackWidth=Math.max(1,w-26);
+ const track=horses.slice().sort((a,b)=>a.distance-b.distance);
+ const raceWidth=activePlan?fieldCenterAt(activePlan,lead).width:36;
+ for(const horse of track){
+  // Longitude is relative to the leader, so a closely grouped field
+  // remains visible even when the race is several laps long.
+  const x=10+(span-(lead-horse.distance)-5)/span*trackWidth;
+  const y=9+THREE.MathUtils.clamp(
+   (raceWidth/2-horse.lane)/raceWidth,0,1)*(h-18);
+  const c=RACE_FRAME_COLORS[officialFrameIndex(horse.number)];
+  ctx.beginPath();ctx.arc(THREE.MathUtils.clamp(x,9,w-9),
+   THREE.MathUtils.clamp(y,9,h-9),6.6,0,Math.PI*2);
+  ctx.fillStyle=c.hex;ctx.fill();
+  ctx.lineWidth=1.2;ctx.strokeStyle='#0c1715';ctx.stroke();
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='bold 8px system-ui';ctx.fillStyle=c.ink;
+  ctx.fillText(String(horse.number),THREE.MathUtils.clamp(x,9,w-9),
+   THREE.MathUtils.clamp(y,9,h-9));
+ }
+ document.querySelector('#watchPackGap').textContent=
+  '先頭～最後尾 '+fieldSpread.toFixed(1)+'m';
+}
+function paintWatchSlope(leaderDistance){
+ const out=watchCanvasContext(watchSlopeCanvas);
+ if(!out||!activePlan)return;
+ const {ctx,w,h}=out,left=3,right=w-3,top=3,bottom=h-5;
+ const yAt=alt=>bottom-(alt+2.7)/2.7*(bottom-top);
+ const xAt=remaining=>left+(700-remaining)/700*(right-left);
+ ctx.beginPath();
+ for(let i=0;i<=70;i++){
+  const remain=700-i*10;
+  const x=xAt(remain),y=yAt(relativeAltitude(remain));
+  if(!i)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+ }
+ ctx.strokeStyle='#e3f1df';ctx.lineWidth=2;ctx.stroke();
+ let remain=null;
+ if(!activePlan.pocket||leaderDistance>=activePlan.pocket.length){
+  const progressed=leaderDistance-(activePlan.pocket?activePlan.pocket.length:0);
+  remain=remainingAtStation(activePlan.startStation+Math.max(0,progressed));
+ }
+ const label=document.querySelector('#watchSlopeCaption');
+ if(remain!==null&&remain<=700){
+  const x=xAt(remain),y=yAt(relativeAltitude(remain));
+  ctx.beginPath();ctx.arc(x,y,3.7,0,Math.PI*2);
+  ctx.fillStyle='#ffd55c';ctx.fill();
+  label.textContent='現在位置 ● 残り'+Math.round(remain)+'m｜標高は推定';
+ }else label.textContent=
+  activePlan.pocket&&leaderDistance<activePlan.pocket.length?
+  'ポケット走行中｜合流後に位置を表示':'最後の700mで現在位置を表示';
+}
+function renderRaceWatchUI(time,force=false){
+ if(!isOfficialEighteenTest||!activePlan||
+    !document.body.classList.contains('race-watch-portrait'))return;
+ if(!force&&time-lastWatchPaint<230)return;
+ lastWatchPaint=time;
+ const horses=raceHorses.slice(0,18);
+ if(horses.length!==18)return;
+ const ordered=horses.slice().sort((a,b)=>{
+  if(a.finished&&b.finished)return (a.finishTime??Infinity)-(b.finishTime??Infinity);
+  if(a.finished)return -1;
+  if(b.finished)return 1;
+  return b.distance-a.distance||a.number-b.number;
+ });
+ const places=new Map(ordered.map((h,i)=>[h.idx,i+1]));
+ for(let i=0;i<18;i++){
+  const r=watchRows[i],h=horses[i];
+  if(!r)continue;
+  const name=officialRunnerNames[i]||'試験馬'+(i+1);
+  if(r.name.textContent!==name){r.name.textContent=name;r.item.title=(i+1)+'番 '+name}
+  const rank=places.get(h.idx)||i+1;
+  const text=rank+'位';
+  if(r.rank.textContent!==text)r.rank.textContent=text;
+  r.item.classList.toggle('leading',rank===1);
+ }
+ const leader=ordered[0].distance;
+ const remaining=Math.max(0,Math.ceil(activePlan.distance-leader));
+ document.querySelector('#watchCourse').textContent='東京 芝A '+activeDistance+'m';
+ document.querySelector('#watchRemain').textContent=
+  remaining===0?'ゴール':'残り '+remaining+'m';
+ document.querySelector('#watchRosterStatus').textContent=
+  raceFinished.length===18?'着順確定':'馬番・枠色・現在順位';
+ paintWatchOverview(horses);
+ paintWatchSlope(leader);
+}
+function setWatchPortraitLayout(){
+ if(!isOfficialEighteenTest)return;
+ const active=watchPortraitMedia.matches;
+ document.body.classList.toggle('race-watch-portrait',active);
+ watchHeader.hidden=!active;watchRoster.hidden=!active;watchSlope.hidden=!active;
+ if(active){
+  if(stageDock.parentElement!==watchDockSlot)watchDockSlot.append(stageDock);
+ }else{
+  document.body.classList.remove('race-watch-editing');
+  if(stageDock.parentElement!==stage)stage.append(stageDock);
+  watchEditToggle.setAttribute('aria-expanded','false');
+  watchEditToggle.textContent='⚙ 設定・編集';
+ }
+ requestAnimationFrame(()=>{resize();renderRaceWatchUI(performance.now(),true)});
+}
+function setupRaceWatchUI(){
+ if(!isOfficialEighteenTest)return;
+ const grid=document.querySelector('#watchRosterGrid');
+ for(let i=0;i<18;i++){
+  const item=document.createElement('div');item.className='watchHorseRow';
+  item.setAttribute('role','listitem');
+  const frame=document.createElement('span');frame.className='watchHorseFrame';
+  const colors=RACE_FRAME_COLORS[officialFrameIndex(i+1)];
+  frame.style.background=colors.hex;frame.style.color=colors.ink;
+  frame.textContent=String(i+1);
+  const name=document.createElement('span');name.className='watchHorseName';
+  const rank=document.createElement('span');rank.className='watchHorseRank';
+  item.append(frame,name,rank);grid.append(item);
+  watchRows.push({item,frame,name,rank});
+ }
+ watchEditToggle.addEventListener('click',()=>{
+  const editing=document.body.classList.toggle('race-watch-editing');
+  watchEditToggle.textContent=editing?'↩ 観戦画面へ':'⚙ 設定・編集';
+  watchEditToggle.setAttribute('aria-expanded',String(editing));
+  if(!editing)window.scrollTo({top:0,behavior:'instant'});
+  requestAnimationFrame(()=>{resize();renderRaceWatchUI(performance.now(),true)});
+ });
+ watchPortraitMedia.addEventListener('change',setWatchPortraitLayout);
+ setWatchPortraitLayout();
+}
+
 function animate(time){
  requestAnimationFrame(animate);
  if(graphicsContextLost){
@@ -5170,6 +5417,7 @@ function animate(time){
  positionRunner();positionFieldHorses();updateOfficialPair(dt);
  syncStageStartButton();
  renderRaceAnalysis(time);
+ renderRaceWatchUI(time);
  let pairTracking=false;
  if(fieldMode.value!=='single'){
   gateOpening=travel>0?Math.min(1,gateOpening+dt*(isOfficialEighteenTest?15:4)):0;updateGateDoors();
@@ -5268,6 +5516,7 @@ function animate(time){
   maxFrameMs=0;slowFrames=0;
  }
 }
+setupRaceWatchUI();
 animate(0);
 </script>
 </body></html>
