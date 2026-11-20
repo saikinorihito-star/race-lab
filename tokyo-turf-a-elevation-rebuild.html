@@ -1992,7 +1992,8 @@ function renderRaceResults(){
  const passDecisions=finishers.reduce((v,h)=>v+(h.passAttempts||0),0);
  const trafficSeconds=finishers.reduce((v,h)=>v+(h.trafficSeconds||0),0);
  const averageEnergy=finishers.reduce((v,h)=>v+(h.energy??1),0)/finishers.length;
- raceTacticsSummary.textContent='架空の展開モデル｜外に持ち出す判断 '+passDecisions+
+ raceTacticsSummary.textContent='芝馬場：'+({good:'良',slightlyHeavy:'稍重',heavy:'重',bad:'不良'}[raceGoingAtStart]||'良')+
+  '｜架空の展開モデル｜外に持ち出す判断 '+passDecisions+
   '回｜進路が詰まった時間（延べ）'+trafficSeconds.toFixed(1)+
   '秒｜平均残存スタミナ '+Math.round(averageEnergy*100)+'%。';
  raceResultSummary.textContent='🏆 '+activeDistance+'m 結果｜1着 '+winner.number+
@@ -2058,7 +2059,11 @@ console.assert([24,28,31,36,41].every(w=>
 function initRaceHorses(){
  raceElapsed=0;raceFinished=[];raceAccumulator=0;raceContactWarnings=0;
  clearRaceResults();
- if(isOfficialEighteenTest)clearRaceAnalysis();
+ if(isOfficialEighteenTest){
+  clearRaceAnalysis();
+  raceGoingAtStart=Object.hasOwn(GOING_SEVERITY,raceGoingSelect.value)?
+   raceGoingSelect.value:'good';
+ }
  const width=activePlan?fieldCenterAt(activePlan,0).width:31;
  raceHorses=Array.from({length:FIELD_COUNT},(_,i)=>({
   number:i+1,idx:i,distance:0,postDistance:0,speed:0,finished:false,finishTime:null,
@@ -2468,6 +2473,10 @@ function loadHorseAbilities(){
  return defaults;
 }
 const horseAbilities=isOfficialEighteenTest?loadHorseAbilities():[];
+const raceGoingSelect=document.querySelector('#raceGoing');
+let raceGoingAtStart='good';
+if(isOfficialEighteenTest)document.querySelector('#raceGoingLabel').hidden=false;
+const GOING_SEVERITY={good:0,slightlyHeavy:.3,heavy:.7,bad:1};
 function effectiveEighteenProfile(index){
  // The original fictional profile follows the runner after a gate swap.
  const identity=horseIdentityBySlot[index]??index;
@@ -2602,8 +2611,13 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // One simultaneous gate release: individual speeds diverge after 12m.
  const commonLaunch=h.distance<12;
  if(commonLaunch)desiredSpeed=15.8;
+ const profile=h.raceProfile||EIGHTEEN_PACE_PROFILES[h.idx];
+ // Shared first 12m preserves synchronous launch; runners then separate.
+ const launchPhase=commonLaunch?0:
+  1-THREE.MathUtils.smoothstep(h.distance,12,110);
+ desiredSpeed+=((profile.startAbility??5)-5)*.10*launchPhase;
  const acceleration=commonLaunch?3.32:
-  (h.raceProfile?.accel??EIGHTEEN_PACE_PROFILES[h.idx].accel);
+  profile.accel*(1+((profile.startAbility??5)-5)*.055*launchPhase);
  let speed=h.speed+THREE.MathUtils.clamp(desiredSpeed-h.speed,
   -(desiredSpeed<h.speed?4.4:acceleration)*dt,acceleration*dt);
  speed=Math.max(Math.min(EIGHTEEN_MIN_ROLL_BASE+
@@ -2623,7 +2637,9 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  }
  // An outside pass begins only if the whole destination corridor is free.
  // Two attempts maximum per runner, 200m cooldown between attempts.
- if(h.distance>105&&h.distance<activePlan.distance-90&&h.blockedFor>.9&&
+ if(h.distance>105&&h.distance<activePlan.distance-90&&
+    h.blockedFor>THREE.MathUtils.clamp(
+     .9-((h.raceProfile?.trafficAbility??5)-5)*.085,.50,1.30)&&
     h.passUntil<=h.distance&&h.passCooldown<=h.distance&&h.passAttempts<2){
   const destination=h.lane-2.75;
   const free=destination>-width/2+2&&snapshot.every(o=>{
@@ -2712,6 +2728,19 @@ function stepOfficialPair(tick){
      profile.kick*profile.finishStrength*closing*(.38+.62*energy)-
      (1-energy)*(1.30-profile.endurance)*.82+
      (fit-.5)*.70+(profile.courseBonus??0);
+    // Resilience across distances beyond the runner's inherited preference.
+    targetSpeed+=((profile.distanceAbility??5)-5)*.095*(1-fit);
+    // Changing going is a race condition; 良/5 has zero new effect.
+    const wet=GOING_SEVERITY[raceGoingAtStart]??0;
+    targetSpeed+=wet*(-.34+((profile.goingAbility??5)-5)*.115);
+    // Use unexaggerated course elevation. DISPLAY_RELIEF affects 3D only.
+    const next=Math.min(activePlan.distance,h.distance+12);
+    const previousDist=Math.max(0,h.distance-12);
+    const uphill=THREE.MathUtils.clamp(
+     (fieldCenterAt(activePlan,next).p.y-
+      fieldCenterAt(activePlan,previousDist).p.y)/
+     Math.max(1,next-previousDist)/DISPLAY_RELIEF,0,.045);
+    targetSpeed+=((profile.hillAbility??5)-5)*uphill*3.6;
     // A fast horse explicitly assigned a closing role must not simply run
     // wire-to-wire. Bank energy in the first half, then release the pace cap
     // smoothly so the last 600m can produce a visible, actual position gain.
@@ -2741,8 +2770,10 @@ function stepOfficialPair(tick){
     const travelled=Math.max(0,result.distance-h.distance);
     const effort=THREE.MathUtils.clamp((result.speed-14.4)/2.6,0,1.6);
     const load=Math.sqrt(activePlan.distance/1800);
+    const earlyShare=Math.max(0,1-(h.distance/activePlan.distance)/.70);
+    const composure=1-((profile.composureAbility??5)-5)*.06*earlyShare;
     const cost=travelled/Math.max(1,activePlan.distance)*
-     (.37+.29*effort)*load/Math.max(.72,profile.endurance);
+     (.37+.29*effort)*load/Math.max(.72,profile.endurance)*composure;
     h.energy=THREE.MathUtils.clamp((h.energy??1)-cost,.07,1);
    }
    h.distance=result.distance;h.speed=result.speed;
