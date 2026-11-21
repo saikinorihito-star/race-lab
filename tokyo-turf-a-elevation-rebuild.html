@@ -2167,12 +2167,15 @@ function seekRaceSeconds(delta){
  }else initRaceHorses();
  let ticks=0;
  while(raceElapsed+RACE_TICK/2<target&&raceFinished.length<OFFICIAL_TEST_COUNT&&ticks<15000){
-  stepOfficialPair(RACE_TICK);ticks++;
+  stepOfficialPair(RACE_TICK);saveRaceSeekState();ticks++;
  }
  raceAccumulator=0;
  travel=Math.max(...raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>h.distance));
  gateOpening=travel>0?1:0;updateGateDoors();gateRoot.visible=travel<105;
- clearRaceResults();demoBtn.textContent='再開';camera18CutPending=true;
+ clearRaceResults();
+ if(raceFinished.length===OFFICIAL_TEST_COUNT)renderRaceResults();
+ demoBtn.textContent=raceFinished.length===OFFICIAL_TEST_COUNT?'ゴール・もう一度':'再開';
+ camera18CutPending=true;
  lastWatchPaint=-Infinity;updateOfficialPair(0);renderRaceWatchUI(performance.now(),true);
  syncStageStartButton();
 }
@@ -5311,25 +5314,29 @@ function paintWatchOverview(horses){
  ctx.setLineDash([]);
  // Entire panel is the position map. No separate number legend,
  // rank grid, or black bar is rendered below the track.
- const lead=Math.max(...horses.map(h=>h.distance));
- const tail=Math.min(...horses.map(h=>h.distance));
+ // Follow the same physical distance used by the 3D horses, including
+ // their run-out beyond the finish line. Race distance alone becomes identical
+ // for every finisher and otherwise gives a false 0m field spread.
+ const progressOf=horse=>horse.distance+(horse.postDistance||0);
+ const lead=Math.max(...horses.map(progressOf));
+ const tail=Math.min(...horses.map(progressOf));
  const fieldSpread=lead-tail;
  const span=Math.max(40,fieldSpread+16);
  const trackWidth=Math.max(1,w-34);
  const midpoint=(lead+tail)/2;
- const currentWidth=activePlan?fieldCenterAt(activePlan,lead).width:36;
+ const currentWidth=activePlan?fieldCenterAt(activePlan,Math.min(lead,activePlan.distance)).width:36;
  const coords=horses.map(horse=>{
   const x=THREE.MathUtils.clamp(w/2+
-   (horse.distance-midpoint)/span*trackWidth,12,w-12);
+   (progressOf(horse)-midpoint)/span*trackWidth,12,w-12);
   const y=trackTop+12+THREE.MathUtils.clamp(
    (currentWidth/2-horse.lane)/currentWidth,0,1)*(trackHeight-24);
   return {horse,x,y,frame:RACE_FRAME_COLORS[officialFrameIndex(horse.number)]};
  });
  // Numbered markers follow the actual physics distance and retain rank order.
- const marks=[...coords].sort((a,b)=>a.horse.distance-b.horse.distance||b.horse.number-a.horse.number);
- // At the starting gate, horses can overlap exactly as they do on track.
- // Gradually introduce label spacing only after the field is under way.
- const separation=THREE.MathUtils.smoothstep(lead,25,85);
+ const marks=[...coords].sort((a,b)=>progressOf(a.horse)-progressOf(b.horse)||b.horse.number-a.horse.number);
+ // Let horses overlap when physically bunched, at the gate or later.
+ // Numbered circles spread only when real distance gaps grow.
+ const separation=THREE.MathUtils.smoothstep(fieldSpread,1,25);
  const gap=Math.min(16,(w-24)/Math.max(1,marks.length-1))*separation;
  const placed=marks.map(mark=>({mark,x:mark.x,y:THREE.MathUtils.clamp(mark.y,11,h-11)}));
  for(let i=1;i<placed.length;i++)placed[i].x=Math.max(placed[i].x,placed[i-1].x+gap);
@@ -5434,7 +5441,7 @@ function paintWatchSlope(leaderDistance){
 function renderRaceWatchUI(time,force=false){
  if(!isOfficialEighteenTest||!activePlan||
     !document.body.classList.contains('race-watch-portrait'))return;
- if(!force&&time-lastWatchPaint<230)return;
+ if(!force&&time-lastWatchPaint<120)return;
  lastWatchPaint=time;
  const horses=raceHorses.slice(0,18);
  if(horses.length!==18)return;
@@ -5461,7 +5468,7 @@ function renderRaceWatchUI(time,force=false){
  const remaining=Math.max(0,Math.ceil(activePlan.distance-leader));
  document.querySelector('#watchCourse').textContent='東京 芝A '+activeDistance+'m';
  document.querySelector('#watchRemain').textContent=
-  remaining===0?'ゴール':'残り '+remaining+'m';
+  raceFinished.length===18?'全頭ゴール':remaining===0?'先頭ゴール':'残り '+remaining+'m';
  document.querySelector('#watchRosterStatus').textContent=
   raceFinished.length===18?'着順確定':'馬番・枠色・現在順位';
  paintWatchOverview(horses);
@@ -5473,7 +5480,7 @@ function setWatchPortraitLayout(){
  document.body.classList.toggle('race-watch-portrait',active);
  document.querySelector("#watchSeekBack").hidden=!active;
  document.querySelector("#watchSeekForward").hidden=!active;
- if(!active)document.body.classList.remove("camera-panel-open");
+ document.body.classList.toggle("camera-panel-open",active&&!cameraAdjustPanel.hidden);
  watchHeader.hidden=!active;watchRoster.hidden=!active;watchSlope.hidden=!active;
  if(active){
   if(stageDock.parentElement!==watchDockSlot)watchDockSlot.append(stageDock);
