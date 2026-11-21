@@ -5861,7 +5861,7 @@ const raceBgmVolume=document.querySelector('#raceBgmVolume');
 const raceBgmStatus=document.querySelector('#raceBgmStatus');
 const raceBgmVolumeValue=document.querySelector('#raceBgmVolumeValue');
 const raceBgmAudio=new Audio();
-raceBgmAudio.loop=true;raceBgmAudio.preload='auto';raceBgmAudio.playsInline=true;
+raceBgmAudio.loop=true;raceBgmAudio.preload='auto';raceBgmAudio.playsInline=true;raceBgmAudio.volume=0;
 let raceBgmEnabled=true,raceBgmLoaded=false,raceBgmUrl=null;
 let raceBgmDB=null,raceBgmPending=null,lastBgmRaceSync=-Infinity;
 const RACE_BGM_DB_KEY='cinematic-intro-120s-v1';
