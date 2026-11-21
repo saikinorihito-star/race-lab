@@ -5327,7 +5327,10 @@ function paintWatchOverview(horses){
  });
  // Numbered markers follow the actual physics distance and retain rank order.
  const marks=[...coords].sort((a,b)=>a.horse.distance-b.horse.distance||b.horse.number-a.horse.number);
- const gap=Math.min(16,(w-24)/Math.max(1,marks.length-1));
+ // At the starting gate, horses can overlap exactly as they do on track.
+ // Gradually introduce label spacing only after the field is under way.
+ const separation=THREE.MathUtils.smoothstep(lead,25,85);
+ const gap=Math.min(16,(w-24)/Math.max(1,marks.length-1))*separation;
  const placed=marks.map(mark=>({mark,x:mark.x,y:THREE.MathUtils.clamp(mark.y,11,h-11)}));
  for(let i=1;i<placed.length;i++)placed[i].x=Math.max(placed[i].x,placed[i-1].x+gap);
  if(placed.at(-1).x>w-12){
@@ -5336,7 +5339,7 @@ function paintWatchOverview(horses){
  if(placed[0].x<12){const shift=12-placed[0].x;for(const p of placed)p.x+=shift}
  for(let i=0;i<placed.length;i++){
   const p=placed[i],near=placed.slice(0,i).filter(o=>Math.abs(o.x-p.x)<15.5);
-  if(near.some(o=>Math.abs(o.y-p.y)<15.5)){
+  if(separation>.95&&near.some(o=>Math.abs(o.y-p.y)<15.5)){
    for(const y of [11,h/2,h-11])
     if(near.every(o=>Math.hypot(o.x-p.x,o.y-y)>=15.5)){p.y=y;break}
   }
