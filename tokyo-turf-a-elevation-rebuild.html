@@ -1094,14 +1094,14 @@ const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x9ec8dd);
 scene.fog=new THREE.FogExp2(0x9ec8dd,isOfficialMultiTest?.000055:.00011); // 4頭では遠景をより鮮明に
 const camera=new THREE.PerspectiveCamera(43,1,.15,6000);
-const renderer=new THREE.WebGLRenderer({antialias:!(isOfficialEightTest||isOfficialEighteenTest),powerPreference:'high-performance'});
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
 // The approved Meshy horse's meshes and textures are untouched. On iPhone,
 // reduce the pair-test fill rate only; original 1/18-horse modes are unchanged.
 // Higher internal raster resolution cures 4-horse background blur without
 // modifying the approved 3D horse or textures. A visible quality switch lets
 // iPhone users choose a faster render if the frame interval grows.
-const renderDprLevels=isOfficialEighteenTest?{sharp:1.75,standard:1.40,light:1.08}:{sharp:1.35,standard:1.05,light:.90};
-const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?1.40:
+const renderDprLevels=isOfficialEighteenTest?{sharp:2.0,standard:1.65,light:1.15}:{sharp:1.35,standard:1.05,light:.90};
+const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?2.0:
  renderDprLevels[renderQuality.value]||1.05):1.4;
 renderer.setPixelRatio(Math.min(initialDpr,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
@@ -1144,7 +1144,7 @@ function applyRenderQuality(){
   renderDprLevels[renderQuality.value]||1.05,window.devicePixelRatio||1));
  renderer.setSize(stage.clientWidth,stage.clientHeight,false);
 }
-let auto18Dpr=1.40,auto18ObservedFps=0;
+let auto18Dpr=2.0,auto18ObservedFps=0;
 renderQuality.addEventListener('change',()=>{
  // A user action is the ONLY time drawing-buffer resolution is reallocated.
  applyRenderQuality();
