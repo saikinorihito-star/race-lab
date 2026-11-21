@@ -5280,46 +5280,39 @@ function paintWatchOverview(horses){
    (currentWidth/2-horse.lane)/currentWidth,0,1)*(trackHeight-24);
   return {horse,x,y,frame:RACE_FRAME_COLORS[officialFrameIndex(horse.number)]};
  });
- for(const mark of coords){
-  const {x,y,frame}=mark;
-  ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);
-  ctx.fillStyle=frame.hex;ctx.fill();
-  ctx.lineWidth=1.3;ctx.strokeStyle='#14221a';ctx.stroke();
-  if(mark.horse.idx===watchSelectedHorseIndex){
-   ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);
-   ctx.lineWidth=2.5;ctx.strokeStyle='#ffe07c';ctx.stroke();
+ // One circle per runner. Do not draw a second dot, connector lines or
+ // constantly rearranged labels: those caused crowding and visual flicker.
+ // Use a deterministic order and stable three-row collision placement.
+ const placed=[];
+ const radius=7.5;
+ for(const mark of [...coords].sort((a,b)=>a.horse.number-b.horse.number)){
+  const rowStep=16;
+  const baseY=THREE.MathUtils.clamp(mark.y,11,h-11);
+  const rows=[baseY,THREE.MathUtils.clamp(baseY-rowStep,11,h-11),
+   THREE.MathUtils.clamp(baseY+rowStep,11,h-11)];
+  const offsets=[0,-16,16,-32,32,-48,48,-64,64];
+  let choice=null;
+  for(const dy of rows){
+   for(const dx of offsets){
+    const x=THREE.MathUtils.clamp(mark.x+dx,11,w-11);
+    const y=dy;
+    if(placed.every(p=>Math.hypot(p.x-x,p.y-y)>=16)){
+     choice={x,y};break;
+    }
+   }
+   if(choice)break;
   }
+  if(!choice)choice={x:mark.x,y:baseY};
+  placed.push({...choice,mark});
  }
- // Every horse must have a readable number, including in a tightly packed field.
- // Keep the true position as the small coloured dot, and place the numbered
- // label nearby with collision avoidance when several horses overlap.
- const labels=[];
- const radius=7.5,minGap=16.5;
- const order=[...coords].sort((a,b)=>b.x-a.x||a.y-b.y||a.horse.number-b.horse.number);
- for(const mark of order){
-  const offsets=[[0,0],[0,-15],[0,15],[-16,0],[16,0],
-   [-16,-15],[16,-15],[-16,15],[16,15],[-32,0],[32,0],
-   [-32,-15],[32,-15],[-32,15],[32,15]];
-  let best=null;
-  for(const [dx,dy] of offsets){
-   const x=THREE.MathUtils.clamp(mark.x+dx,11,w-11);
-   const y=THREE.MathUtils.clamp(mark.y+dy,11,h-11);
-   const nearest=labels.reduce((d,p)=>Math.min(d,Math.hypot(x-p.x,y-p.y)),Infinity);
-   const score=(nearest>=minGap?1000:nearest*10)-Math.hypot(dx,dy);
-   if(!best||score>best.score)best={x,y,score};
-   if(nearest>=minGap&&dx===0&&dy===0)break;
-  }
-  labels.push({...best,mark});
- }
- for(const label of labels){
-  const {x,y,mark}=label;
-  if(Math.hypot(x-mark.x,y-mark.y)>9){
-   ctx.beginPath();ctx.moveTo(mark.x,mark.y);ctx.lineTo(x,y);
-   ctx.strokeStyle='#e4ead8';ctx.lineWidth=.8;ctx.stroke();
-  }
+ for(const {x,y,mark} of placed){
   ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);
   ctx.fillStyle=mark.frame.hex;ctx.fill();
   ctx.lineWidth=1.4;ctx.strokeStyle='#14221a';ctx.stroke();
+  if(mark.horse.idx===watchSelectedHorseIndex){
+   ctx.beginPath();ctx.arc(x,y,radius+2.5,0,Math.PI*2);
+   ctx.lineWidth=2;ctx.strokeStyle='#ffe07c';ctx.stroke();
+  }
   ctx.fillStyle=mark.frame.ink;
   ctx.font='900 10px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(String(mark.horse.number),x,y+.4);
