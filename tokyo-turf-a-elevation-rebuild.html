@@ -4433,8 +4433,13 @@ function updateOfficialPair(dt){
   // In 4-horse formation, animation phase follows actual travel distance;
   // stationary/accelerating horses must not gallop at full speed in place.
   // The approved 2-horse animation timeline stays unchanged.
+  // 18-horse mode: slightly quicker leg turnover (+15%) without changing
+  // actual distance, horse speed, collisions, ranks, or camera timing.
+  // Distance-based phase also stays deterministic through +/-10s seeking.
+  const gaitDistance=(state.distance+(state.postDistance||0))*
+   (isOfficialEighteenTest?1.15:1);
   const gaitTime=isOfficialMultiTest?
-   (state.distance+(state.postDistance||0))/16.0+
+   gaitDistance/16.0+
     (isOfficialEighteenTest?Math.min(1,Math.max(0,(state.distance-12)/24)):1)*i*.07:
    shownTime*Math.min(2,Number(rate.value))+i*.07;
   h.mixer.setTime(gaitTime);
