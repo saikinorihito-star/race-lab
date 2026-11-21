@@ -5860,7 +5860,7 @@ function triggerHoofbeat(level,pitch,at,launch=false){
  const voice=context.createGain();
  source.buffer=launch?hoofStartBuffer:hoofAudioBuffer;
  source.playbackRate.value=pitch;
- voice.gain.value=Math.min(.78,Math.max(.04,level));
+ voice.gain.value=Math.min(.78,Math.max(0,level));
  source.connect(voice);voice.connect(hoofMasterGain);
  source.onended=()=>{source.disconnect();voice.disconnect()};
  source.start(Math.max(at,context.currentTime));
