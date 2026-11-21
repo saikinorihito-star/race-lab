@@ -219,7 +219,7 @@ body.official18.race-watch-portrait #watchDockSlot #stageDock{background:transpa
 .watchHorseFrame{flex:0 0 23px;min-width:23px;max-width:23px;height:17px;border-radius:3px;display:grid;place-items:center;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums}
 .watchHorseName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:720}
 .watchHorseRank{flex:0 0 25px;text-align:right;color:#c4d0cb;font-size:10px;font-variant-numeric:tabular-nums}
-#raceWatchSlope{position:relative;left:auto;bottom:auto;z-index:4;width:min(200px,calc((100vw - 20px) * .666667));pointer-events:none;padding:3px 6px 2px;margin:3px 0 4px;border:1px solid #a9c6a2;border-radius:5px;background:#123b29ed;color:#fff;box-shadow:0 2px 5px #0008}
+#raceWatchSlope{position:absolute;left:8px;top:8px;bottom:auto;z-index:12;width:min(200px,calc((100vw - 20px) * .666667));pointer-events:none;padding:3px 6px 2px;margin:0;border:1px solid #a9c6a2;border-radius:5px;background:#123b29ed;color:#fff;box-shadow:0 2px 5px #0008}
 #watchSlopeTitle{font-size:10px;font-weight:850;line-height:1.15;white-space:nowrap}
 #watchSlopeCanvas{display:block;width:100%;height:24px}
 #watchSlopeAxis{display:flex;justify-content:space-between;gap:6px;font-size:8px;line-height:1.2;color:#d7e7db}
@@ -279,14 +279,14 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  <div id="watchOverviewFrame">
   <canvas id="watchOverviewCanvas" aria-label="18頭の走行位置。選択した馬は黄色い輪で示します"></canvas>
  </div>
-  <div id="raceWatchSlope" hidden aria-label="東京芝Aコース全周の高低差と先頭馬の現在位置">
+ </section>
+<div id="stage">
+ <div id="raceWatchSlope" hidden aria-label="東京芝Aコース全周の高低差と先頭馬の現在位置">
   <div id="watchSlopeTitle">東京芝A 全周高低差｜計算中</div>
   <canvas id="watchSlopeCanvas" aria-label="東京競馬場芝Aの1周の標高断面図、黄色い点は先頭馬の現在位置"></canvas>
   <div id="watchSlopeAxis"><span>1周 2083m</span><span>ゴール</span></div>
   <div id="watchSlopeCaption">黄色の点：先頭馬の現在位置｜標高は近似</div>
  </div>
-</section>
-<div id="stage">
  <div id="telemetry">3Dコースを準備中…</div>
  <div id="broadcastCameraLabel" hidden>📺 中継：ゲート・発走</div>
  <div id="runnerLabelLayer" hidden aria-hidden="true"></div>
