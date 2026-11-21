@@ -243,6 +243,16 @@ body.official18.race-watch-portrait #stage{height:100%!important;min-height:0!im
 body.official18.race-watch-portrait:not(.race-watch-editing) #telemetry{display:none!important}
 #hoofSoundToggle{min-height:23px;padding:2px 9px;border:1px solid #6caca2;border-radius:7px;font-size:10px;font-weight:750;color:#eafff5;background:#19443a;touch-action:manipulation}
 #hoofSoundToggle[aria-pressed="false"]{color:#adbfc1;background:#26383d;border-color:#5b7072}
+#raceBgmToggle{min-height:23px;padding:2px 6px;border:1px solid #638eac;border-radius:7px;font-size:10px;font-weight:750;color:#edfbff;background:#214353;touch-action:manipulation;white-space:nowrap}
+#raceBgmToggle[aria-pressed="false"]{color:#b6c4c8;background:#25363d;border-color:#51666c}
+#raceBgmControls{display:grid;gap:7px;margin-top:8px;padding:9px;border:1px solid #527e90;border-radius:9px;background:#152e3d;pointer-events:auto}
+#raceBgmControls strong{font-size:12px;color:#d8f3fb}
+#raceBgmControls label{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+#raceBgmControls input[type=file]{width:100%;max-width:100%;font-size:11px;color:#d7eaf5;pointer-events:auto}
+#raceBgmControls input[type=range]{flex:1;min-width:70px;accent-color:#b5dfef;touch-action:pan-x;pointer-events:auto}
+#raceBgmControls output{font-size:11px;min-width:34px;text-align:right}
+#raceBgmStatus{font-size:11px;line-height:1.5;color:#c4e2e9;overflow-wrap:anywhere}
+@media(max-width:370px){#raceConditionWatchLabel{font-size:8px}#watchPackGap{font-size:8px}#raceBgmToggle{font-size:9px;padding:2px 4px}}
 #hoofSoundVolumeRow{display:flex;align-items:center;gap:7px;margin-top:9px;padding-top:9px;border-top:1px solid #42616b;color:#e1f3f7}
 #hoofSoundVolume{width:min(160px,44vw);accent-color:#87e2c1;touch-action:pan-x}
 #hoofSoundVolumeValue{min-width:35px;font-size:11px}
@@ -296,7 +306,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <button type="button" id="watchEditToggle" aria-expanded="false">⚙ 設定・編集</button>
  </div>
  <div id="watchDockSlot"></div>
- <div id="watchMapLegend"><button id="hoofSoundToggle" type="button" aria-pressed="true" aria-label="馬の足音を消す">🔊 足音</button><span id="raceConditionWatchLabel">☀ 晴／良</span><span id="watchPackGap">先頭～最後尾 0m</span></div>
+ <div id="watchMapLegend"><button id="hoofSoundToggle" type="button" aria-pressed="true" aria-label="馬の足音を消す">🔊 足音</button><button id="raceBgmToggle" type="button" aria-pressed="false" aria-label="BGMを選ぶ">♫ BGM未設定</button><span id="raceConditionWatchLabel">☀ 晴／良</span><span id="watchPackGap">先頭～最後尾 0m</span></div>
  <div id="watchOverviewFrame">
   <canvas id="watchOverviewCanvas" aria-label="18頭の走行位置。選択した馬は黄色い輪で示します"></canvas>
  </div>
@@ -367,6 +377,14 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
      <input id="hoofSoundVolume" type="range" min="0" max="100" value="35" step="5" aria-label="馬の足音の音量"/>
      <output id="hoofSoundVolumeValue">35%</output>
     </label>
+    <div id="raceBgmControls">
+     <strong>♫ レースBGM｜2番・映画風（120秒）</strong>
+     <label for="raceBgmFile">BGMファイル（最初に一度だけ選択）</label>
+     <input id="raceBgmFile" type="file" accept="audio/mpeg,audio/*" aria-label="2番の120秒BGMを選択"/>
+     <div id="raceBgmStatus" role="status" aria-live="polite">音源未登録｜120秒のMP3を選んでください</div>
+     <label for="raceBgmVolume">BGM音量<input id="raceBgmVolume" type="range" min="0" max="100" step="5" value="25" aria-label="BGMの音量"/><output id="raceBgmVolumeValue">25%</output></label>
+     <div class="camNote">足音とは別の音量です。レースの一時停止・再開・10秒送りに連動し、曲を繰り返します。音源は同じ端末に保存します。</div>
+    </div>
    </div>
   </div>
   <div id="raceSpeedButtons" hidden role="group" aria-label="レース倍速">
@@ -5274,7 +5292,7 @@ function syncStageStartButton(){
 stageStartBtn.addEventListener('click',()=>{
  if(!isOfficialPairTest)return;
  // iOS Safari requires AudioContext.resume() directly inside the user tap.
- if(isOfficialEighteenTest&&!playing)unlockHoofAudio();
+ if(isOfficialEighteenTest&&!playing){unlockHoofAudio();playRaceBgmFromGesture()}
  demoBtn.click();
  syncStageStartButton();
 });
@@ -5353,7 +5371,7 @@ function resetDemo(){
 demoBtn.addEventListener('click',()=>{
  if(balanceAuditBusy)return;
  if(!activePlan)return;
- if(isOfficialEighteenTest&&!playing)unlockHoofAudio();
+ if(isOfficialEighteenTest&&!playing){unlockHoofAudio();playRaceBgmFromGesture()}
  if(isOfficialPairTest?raceFinished.length>=OFFICIAL_TEST_COUNT:
  (travel>=activePlan.distance||fieldMode.value==='race18'&&raceFinished.length===FIELD_COUNT)){
   travel=0;gateOpening=0;initRaceHorses();updateGateDoors();positionFieldHorses();
@@ -5835,6 +5853,118 @@ function updateTurfSpray(dt){
   turfSprayColorAttribute.needsUpdate=true;
  }
 }
+// Chosen #2 cinematic BGM, supplied as a local MP3 and remembered in IndexedDB.
+// No music playback is possible until the original file has been provided.
+const raceBgmToggle=document.querySelector('#raceBgmToggle');
+const raceBgmInput=document.querySelector('#raceBgmFile');
+const raceBgmVolume=document.querySelector('#raceBgmVolume');
+const raceBgmStatus=document.querySelector('#raceBgmStatus');
+const raceBgmVolumeValue=document.querySelector('#raceBgmVolumeValue');
+const raceBgmAudio=new Audio();
+raceBgmAudio.loop=true;raceBgmAudio.preload='auto';raceBgmAudio.playsInline=true;
+let raceBgmEnabled=true,raceBgmLoaded=false,raceBgmUrl=null;
+let raceBgmDB=null,raceBgmPending=null,lastBgmRaceSync=-Infinity;
+const RACE_BGM_DB_KEY='cinematic-intro-120s-v1';
+function syncRaceBgmControls(){
+ const enabled=raceBgmLoaded&&raceBgmEnabled&&Number(raceBgmVolume.value)>0;
+ raceBgmToggle.textContent=!raceBgmLoaded?'♫ BGM未設定':enabled?'♫ BGMオン':'♫ BGMオフ';
+ raceBgmToggle.setAttribute('aria-pressed',String(enabled));
+ raceBgmToggle.setAttribute('aria-label',!raceBgmLoaded?'BGMの音源を選択':enabled?'BGMを消す':'BGMを再生');
+ raceBgmVolumeValue.textContent=raceBgmVolume.value+'%';
+}
+function installRaceBgmBlob(blob,restored=false){
+ if(!blob||!blob.size)return;
+ raceBgmAudio.pause();
+ if(raceBgmUrl)URL.revokeObjectURL(raceBgmUrl);
+ raceBgmUrl=URL.createObjectURL(blob);
+ raceBgmAudio.src=raceBgmUrl;
+ raceBgmAudio.load();
+ raceBgmLoaded=true;lastBgmRaceSync=-Infinity;
+ raceBgmStatus.textContent=restored?'保存済みのBGMを復元しました':'120秒のBGMを登録しました。レース開始で再生します';
+ syncRaceBgmControls();
+}
+function persistRaceBgm(blob){
+ if(!raceBgmDB){raceBgmPending=blob;return}
+ try{
+  const tx=raceBgmDB.transaction('tracks','readwrite');
+  tx.objectStore('tracks').put(blob,RACE_BGM_DB_KEY);
+  tx.onerror=()=>{raceBgmStatus.textContent='再生可能ですが端末保存には失敗しました'};
+ }catch(error){console.warn('BGM保存エラー',error)}
+}
+function loadRememberedRaceBgm(){
+ if(!isOfficialEighteenTest||!window.indexedDB)return;
+ try{
+  const req=window.indexedDB.open('RaceLabUserAudio',1);
+  req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('tracks'))req.result.createObjectStore('tracks')};
+  req.onsuccess=()=>{
+   raceBgmDB=req.result;
+   if(raceBgmPending){persistRaceBgm(raceBgmPending);raceBgmPending=null}
+   const get=raceBgmDB.transaction('tracks','readonly').objectStore('tracks').get(RACE_BGM_DB_KEY);
+   get.onsuccess=()=>{if(get.result&&!raceBgmLoaded)installRaceBgmBlob(get.result,true)};
+  };
+  req.onerror=()=>{raceBgmStatus.textContent='音源を選択できます（端末への保存は利用できません）'};
+ }catch(error){console.warn('BGM保存領域を開けません',error)}
+}
+function seekRaceBgm(force=false){
+ if(!raceBgmLoaded)return;
+ if(!force&&Math.abs(raceElapsed-lastBgmRaceSync)<1.5)return;
+ lastBgmRaceSync=raceElapsed;
+ const d=Number.isFinite(raceBgmAudio.duration)&&raceBgmAudio.duration>0?raceBgmAudio.duration:120;
+ const next=((raceElapsed%d)+d)%d;
+ const delta=Math.abs(next-raceBgmAudio.currentTime);
+ if(force||(delta>1.25&&delta<d-1.25)){
+  try{raceBgmAudio.currentTime=next}catch(error){}
+ }
+}
+function playRaceBgmFromGesture(){
+ if(!isOfficialEighteenTest||!raceBgmLoaded||!raceBgmEnabled||Number(raceBgmVolume.value)===0)return;
+ // iPhone Safari requires play() in the actual tap handler.
+ if(raceFinished.length>=OFFICIAL_TEST_COUNT){
+  try{raceBgmAudio.currentTime=0}catch(error){}
+ }else seekRaceBgm(true);
+ const task=raceBgmAudio.play();
+ if(task&&typeof task.catch==='function')task.catch(()=>{
+  raceBgmStatus.textContent='再生するには「♫ BGM」ボタンをタップしてください';
+ });
+}
+function updateRaceBgm(){
+ if(!isOfficialEighteenTest||!raceBgmLoaded)return;
+ const audible=playing&&installedDesign01&&raceBgmEnabled&&
+  Number(raceBgmVolume.value)>0&&document.visibilityState!=='hidden';
+ if(!audible){
+  if(!raceBgmAudio.paused)raceBgmAudio.pause();
+  if(!playing&&raceElapsed===0)seekRaceBgm(true);
+  return;
+ }
+ const fade=THREE.MathUtils.smoothstep(raceElapsed,0,2.5);
+ const desired=Number(raceBgmVolume.value)/100*fade;
+ if(Math.abs(raceBgmAudio.volume-desired)>.012)raceBgmAudio.volume=desired;
+ seekRaceBgm();
+}
+raceBgmToggle.addEventListener('click',()=>{
+ if(!raceBgmLoaded){raceBgmInput.click();return}
+ raceBgmEnabled=!raceBgmEnabled;syncRaceBgmControls();
+ if(raceBgmEnabled&&playing)playRaceBgmFromGesture();
+ else if(!raceBgmEnabled)raceBgmAudio.pause();
+});
+raceBgmVolume.addEventListener('input',()=>{
+ syncRaceBgmControls();
+ if(playing&&raceBgmEnabled&&raceBgmLoaded&&raceBgmAudio.paused)
+  playRaceBgmFromGesture();
+});
+raceBgmInput.addEventListener('change',()=>{
+ const blob=raceBgmInput.files?.[0];
+ if(!blob)return;
+ if(blob.type&&!blob.type.startsWith('audio/')&&!/\.(mp3|m4a|wav|ogg)$/i.test(blob.name)){
+  raceBgmStatus.textContent='MP3などの音声ファイルを選択してください';
+  return;
+ }
+ installRaceBgmBlob(blob);persistRaceBgm(blob);
+ if(playing)playRaceBgmFromGesture();
+});
+if(isOfficialEighteenTest)loadRememberedRaceBgm();
+syncRaceBgmControls();
+window.addEventListener('pagehide',()=>raceBgmAudio.pause());
 // Lightweight synthesized gallop: original sound generated by the Web Audio API.
 // On iOS, an AudioContext may start only from a user gesture (race start or
 // the explicit unmute button). No external audio or copyrighted recordings.
@@ -6065,6 +6195,7 @@ function animate(time){
  positionRunner();positionFieldHorses();updateOfficialPair(dt);
  updateTurfSpray(dt);
  updateHoofSound();
+ updateRaceBgm();
  updateRaceRain(time);
  syncStageStartButton();
  renderRaceAnalysis(time);
