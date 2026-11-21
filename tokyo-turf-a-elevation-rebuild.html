@@ -2468,7 +2468,10 @@ function officialPairVisualState(index){
  const lane=isOfficialMultiTest?
  THREE.MathUtils.lerp(h.prevLane??h.lane,h.lane,alpha):
  officialReviewLane(width,index,distance);
- const lateralSpeed=isOfficialMultiTest?(h.lane-(h.prevLane??h.lane))/RACE_TICK:0;
+ // Width changes must not rotate the horse as though it steered outward.
+ const lateralSpeed=isOfficialMultiTest?
+  (isOfficialEighteenTest?(h.smoothedSideSpeed??0):
+   (h.lane-(h.prevLane??h.lane))/RACE_TICK):0;
  return {distance,postDistance,lane,
   speed:h.speed,sideSpeed:lateralSpeed,alpha};
 }
@@ -5338,12 +5341,12 @@ function paintWatchOverview(horses){
  const span=Math.max(40,fieldSpread+16);
  const trackWidth=Math.max(1,w-34);
  const midpoint=(lead+tail)/2;
- const currentWidth=activePlan?fieldCenterAt(activePlan,Math.min(lead,activePlan.distance)).width:36;
  const coords=horses.map(horse=>{
   const x=THREE.MathUtils.clamp(w/2+
    (progressOf(horse)-midpoint)/span*trackWidth,12,w-12);
+  const localWidth=activePlan?fieldCenterAt(activePlan,horse.distance).width:36;
   const y=trackTop+12+THREE.MathUtils.clamp(
-   (currentWidth/2-horse.lane)/currentWidth,0,1)*(trackHeight-24);
+   (localWidth/2-horse.lane)/localWidth,0,1)*(trackHeight-24);
   return {horse,x,y,frame:RACE_FRAME_COLORS[officialFrameIndex(horse.number)]};
  });
  // Numbered markers follow the actual physics distance and retain rank order.
