@@ -22,6 +22,8 @@ main{max-width:1320px;margin:0 auto}
  font-weight:750;pointer-events:none;line-height:1.5}
 #stage{height:min(69svh,720px);min-height:370px;position:relative;background:linear-gradient(#a2d1da,#cce5da);overflow:hidden;touch-action:none}
 #stage canvas{display:block}
+#raceRainCanvas{position:absolute;inset:0;z-index:2;width:100%;height:100%;pointer-events:none;touch-action:none}
+#raceRainCanvas[hidden]{display:none!important}
 #telemetry{position:absolute;left:10px;top:10px;z-index:3;padding:8px 10px;border-radius:9px;background:#112736e8;color:#ecfff9;font-size:12px;line-height:1.55;border:1px solid #456b79;pointer-events:none}
 #help{position:absolute;bottom:10px;left:10px;right:10px;text-align:center;background:#123042c9;padding:7px 9px;font-size:11px;border-radius:8px;color:#f1ffff;pointer-events:none}
 #message{font-size:12px;line-height:1.55;color:#d5edfa;padding:9px 12px;background:#1d3540;border-bottom:1px solid #345769}
@@ -95,6 +97,12 @@ a{color:#95e8df}
 #cam18Extras select{min-width:0;max-width:100%;pointer-events:auto}
 #cam18Extras output{color:#c5fbf3;font-variant-numeric:tabular-nums;text-align:right;font-size:11px}
 #cam18Extras .camNote{font-size:11px;line-height:1.55;color:#aadddd}
+#raceConditionQuickControls{margin:9px 0;padding:9px;border:1px solid #4e7e82;border-radius:9px;background:#153740;display:grid;gap:7px}
+#raceConditionQuickControls[hidden]{display:none!important}
+#raceConditionQuickControls strong{font-size:12px;color:#e4fff5}
+#raceConditionQuickControls label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}
+#raceConditionQuickControls select{min-height:36px;min-width:122px;padding:5px 8px;font-size:12px}
+#raceConditionQuickNotice{font-size:10px;line-height:1.55;color:#c2dddd}
 #cam18Extras .camReset{min-height:39px;border-color:#85aabb}
 #stage canvas{touch-action:none}
 #design01OverlayPanel{width:min(100%,470px);padding:19px 18px;border-radius:16px;background:#112734ee;border:1px solid #78a8aa;color:#f0f9f9;box-shadow:0 14px 36px #0b1415bb;pointer-events:auto}
@@ -343,6 +351,12 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
      <button type="button" data-cam-adjust="far" aria-label="縮小">－ 引く</button>
      <button type="button" data-cam-adjust="reset" style="grid-column:span 2">↺ 視点を戻す</button>
     </div>
+    <div id="raceConditionQuickControls" hidden>
+     <strong>レース条件</strong>
+     <label>天候 <select id="raceWeatherQuick" aria-label="天候の設定"><option value="sunny">☀ 晴</option><option value="cloudy">☁ 曇</option><option value="rain">☔ 雨</option></select></label>
+     <label>芝馬場 <select id="raceGoingQuick" aria-label="馬場状態の設定"><option value="good">良</option><option value="slightlyHeavy">稍重</option><option value="heavy">重</option><option value="bad">不良</option></select></label>
+     <div id="raceConditionQuickNotice">雨でも良馬場を選べます。</div>
+    </div>
     <label>画質 <select id="renderQuality" aria-label="4頭テストの画質">
      <option value="sharp" selected>鮮明（推奨）</option>
      <option value="standard">標準</option>
@@ -406,7 +420,9 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 <option value="2600">芝2600m（仮配置）</option>
 <option value="3400">芝3400m</option>
 </select></label>
-<label id="raceGoingLabel" hidden>馬場状態
+<label id="raceWeatherLabel" hidden>天候
+<select id="raceWeather" aria-label="レースの天候"><option value="sunny" selected>☀ 晴</option><option value="cloudy">☁ 曇</option><option value="rain">☔ 雨</option></select></label>
+<label id="raceGoingLabel" hidden>芝馬場状態
  <select id="raceGoing" aria-label="レースの芝馬場状態">
   <option value="good" selected>良</option>
   <option value="slightlyHeavy">稍重</option>
@@ -2443,7 +2459,11 @@ function initRaceHorses(){
   buildEighteenCornerProfile();
   raceGoingAtStart=Object.hasOwn(GOING_SEVERITY,raceGoingSelect.value)?
    raceGoingSelect.value:'good';
+  raceWeatherAtStart=Object.hasOwn(RACE_WEATHERS,raceWeatherSelect.value)?
+   raceWeatherSelect.value:'sunny';
   applyTurfGoingVisual(raceGoingAtStart);
+  applyRaceWeatherVisual(raceWeatherAtStart);
+  syncRaceConditionControls();
   const mode=raceFlowModeInput.value==='varied'?'varied':'standard',
    seed=validFlowSeed(raceFlowSeedInput.value);
   raceFlowAtStart={mode,seed,tempo:mode==='varied'?
@@ -2912,10 +2932,65 @@ function baseForRegisteredHorse(id){
   accel:b.accel+((id*11)%7-3)*.022,
   preferredDistance:1400+(id*5%9)*250};
 }
-const raceGoingSelect=document.querySelector('#raceGoing');
-let raceGoingAtStart='good';
-if(isOfficialEighteenTest)document.querySelector('#raceGoingLabel').hidden=false;
+const raceGoingSelect=document.querySelector('#raceGoing'),
+ raceGoingQuick=document.querySelector('#raceGoingQuick'),
+ raceWeatherSelect=document.querySelector('#raceWeather'),
+ raceWeatherQuick=document.querySelector('#raceWeatherQuick');
+let raceGoingAtStart='good',raceWeatherAtStart='sunny';
+const RACE_WEATHERS={sunny:{name:'晴',sky:0x9ec8dd,light:1.95,fog:.000055},
+ cloudy:{name:'曇',sky:0x9caeb8,light:1.45,fog:.000065},
+ rain:{name:'雨',sky:0x748e9e,light:1.12,fog:.00009}};
+if(isOfficialEighteenTest){
+ document.querySelector('#raceGoingLabel').hidden=false;
+ document.querySelector('#raceWeatherLabel').hidden=false;
+ document.querySelector('#raceConditionQuickControls').hidden=false;
+}
 const GOING_SEVERITY={good:0,slightlyHeavy:.3,heavy:.7,bad:1};
+function syncRaceConditionControls(){
+ if(!isOfficialEighteenTest)return;
+ raceWeatherQuick.value=raceWeatherSelect.value;
+ raceGoingQuick.value=raceGoingSelect.value;
+ const going=TURF_GOING_PALETTE[raceGoingAtStart]?.name||'良';
+ const weather=RACE_WEATHERS[raceWeatherAtStart]?.name||'晴';
+ const changed=raceElapsed>0||
+  raceWeatherSelect.value!==raceWeatherAtStart||
+  raceGoingSelect.value!==raceGoingAtStart;
+ document.querySelector('#raceConditionQuickNotice').textContent=
+  '現在：'+weather+'／芝'+going+
+  (changed?'｜変更は次の発走から反映':'｜天候と馬場は別々に設定できます');
+}
+function applyRaceWeatherVisual(weather){
+ if(!isOfficialEighteenTest)return;
+ const choice=RACE_WEATHERS[weather]||RACE_WEATHERS.sunny;
+ scene.background.setHex(choice.sky);
+ scene.fog.color.setHex(choice.sky);
+ scene.fog.density=choice.fog;
+ sun.intensity=choice.light;
+ const status=document.querySelector('#goingVisualStatus');
+ status.hidden=false;
+ status.textContent='天候：'+choice.name+'／芝：'+
+  (TURF_GOING_PALETTE[raceGoingAtStart]?.name||'良')+
+  '（天候と馬場は独立）';
+}
+function setRaceCondition(kind,value){
+ if(!isOfficialEighteenTest)return;
+ if(kind==='weather')raceWeatherSelect.value=value;
+ else raceGoingSelect.value=value;
+ if(!playing&&raceElapsed===0){
+  raceWeatherAtStart=raceWeatherSelect.value;
+  raceGoingAtStart=raceGoingSelect.value;
+  applyTurfGoingVisual(raceGoingAtStart);
+  applyRaceWeatherVisual(raceWeatherAtStart);
+ }
+ syncRaceConditionControls();
+}
+if(isOfficialEighteenTest){
+ raceWeatherSelect.addEventListener('change',()=>setRaceCondition('weather',raceWeatherSelect.value));
+ raceWeatherQuick.addEventListener('change',()=>setRaceCondition('weather',raceWeatherQuick.value));
+ raceGoingSelect.addEventListener('change',()=>setRaceCondition('going',raceGoingSelect.value));
+ raceGoingQuick.addEventListener('change',()=>setRaceCondition('going',raceGoingQuick.value));
+ syncRaceConditionControls();
+}
 const raceFlowModeInput=document.querySelector('#raceFlowMode'),
  raceFlowSeedInput=document.querySelector('#raceFlowSeed'),
  raceFlowStatus=document.querySelector('#raceFlowStatus');
@@ -2964,19 +3039,8 @@ if(isOfficialEighteenTest){
  });
  refreshFlowStatus();
 }
-if(isOfficialEighteenTest)raceGoingSelect.addEventListener('change',()=>{
- // A pending pre-start change is committed immediately; after starting
- // it affects only the next race (not the result already under way).
- if(!playing&&raceElapsed===0){
-  raceGoingAtStart=Object.hasOwn(GOING_SEVERITY,raceGoingSelect.value)?
-   raceGoingSelect.value:'good';
-  applyTurfGoingVisual(raceGoingAtStart);
- }else{
-  const status=document.querySelector('#goingVisualStatus');
-  status.textContent='現在の芝：'+TURF_GOING_PALETTE[raceGoingAtStart].name+
-   '／次の発走から変更を反映';
- }
-});
+// Weather and going settings are handled by setRaceCondition.
+
 function effectiveEighteenProfile(index,overrideAbility=null){
  // The original fictional profile follows the runner after a gate swap.
  const identity=horseIdentityBySlot[index]??index;
@@ -5933,6 +5997,38 @@ hoofSoundVolume.addEventListener('input',()=>{
  syncHoofSoundControls();
 });
 syncHoofSoundControls();
+// Screen-space rain: 1 lightweight overlay, without extra 3D draw calls.
+const raceRainCanvas=isOfficialEighteenTest?document.createElement('canvas'):null;
+const raceRainContext=raceRainCanvas?raceRainCanvas.getContext('2d'):null;
+let lastRainPaint=-Infinity;
+if(raceRainCanvas){
+ raceRainCanvas.id='raceRainCanvas';raceRainCanvas.hidden=true;
+ raceRainCanvas.setAttribute('aria-hidden','true');stage.appendChild(raceRainCanvas);
+}
+function updateRaceRain(time){
+ if(!raceRainCanvas||!raceRainContext)return;
+ if(raceWeatherAtStart!=='rain'){
+  raceRainCanvas.hidden=true;return;
+ }
+ if(time-lastRainPaint<38)return;
+ lastRainPaint=time;raceRainCanvas.hidden=false;
+ const w=Math.max(1,Math.round(stage.clientWidth));
+ const h=Math.max(1,Math.round(stage.clientHeight));
+ if(raceRainCanvas.width!==w||raceRainCanvas.height!==h){
+  raceRainCanvas.width=w;raceRainCanvas.height=h;
+ }
+ const ctx=raceRainContext;ctx.clearRect(0,0,w,h);
+ const t=time*.001;
+ for(let i=0;i<92;i++){
+  const depth=.5+(i%6)/10;
+  const x=((i*73.83+t*(59+depth*100))%(w+110))-55;
+  const y=((i*117.43+t*(230+depth*135))%(h+80))-40;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-3-depth*3,y+8+depth*15);
+  ctx.lineWidth=.5+depth*.55;
+  ctx.strokeStyle='rgba(223,238,249,'+(.12+depth*.16).toFixed(3)+')';
+  ctx.stroke();
+ }
+}
 function animate(time){
  requestAnimationFrame(animate);
  if(graphicsContextLost){
@@ -5965,6 +6061,7 @@ function animate(time){
  positionRunner();positionFieldHorses();updateOfficialPair(dt);
  updateTurfSpray(dt);
  updateHoofSound();
+ updateRaceRain(time);
  syncStageStartButton();
  renderRaceAnalysis(time);
  renderRaceWatchUI(time);
