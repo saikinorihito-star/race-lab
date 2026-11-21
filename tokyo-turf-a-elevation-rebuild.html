@@ -207,20 +207,6 @@ a{color:#95e8df}
 #watchOverviewFrame{position:relative;width:100%;height:104px;margin:3px 0 5px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
 #watchOverviewCanvas{width:100%;height:100%;display:block}
 #watchPackGap{font-size:10px;font-weight:750;color:#fff;pointer-events:none}
-#watchHorseNameStrip{display:flex;gap:5px;overflow-x:auto;overflow-y:hidden;
- -webkit-overflow-scrolling:touch;scrollbar-width:thin;overscroll-behavior-x:contain;
- width:100%;min-height:34px;margin:0 0 5px;align-items:center;padding:1px 0 2px;
- touch-action:pan-x}
-.watchNameChip{display:inline-flex;flex:0 0 auto;gap:5px;align-items:center;
- min-width:95px;max-width:160px;min-height:30px;border-radius:6px;
- background:#192c34;border:1px solid #49616a;color:#fff;
- padding:3px 6px;font-size:11px;line-height:1;white-space:nowrap}
-.watchNameChip .watchChipNumber{font-weight:850;border-radius:3px;
- width:21px;min-width:21px;height:20px;display:grid;place-items:center}
-.watchNameChip .watchChipName{max-width:120px;overflow:hidden;text-overflow:ellipsis;
- white-space:nowrap;font-weight:650}
-.watchNameChip.selected{border-color:#f6dc83;background:#36503f;
- box-shadow:0 0 0 1px #f6dc8360}
 #watchDockSlot{min-height:0}
 #raceWatchRoster{background:#040708;color:#fff;min-height:0;overflow:hidden;border-top:2px solid #5b6d58;padding:5px 7px calc(4px + env(safe-area-inset-bottom))}
 .watchRosterTitle{display:flex;gap:8px;justify-content:space-between;align-items:center;min-height:19px;font-size:11px;font-weight:750}
@@ -228,6 +214,7 @@ a{color:#95e8df}
 #watchRosterGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:repeat(9,minmax(0,1fr));grid-auto-flow:column;gap:0 8px;height:calc(100% - 19px);min-height:0}
 .watchHorseRow{display:flex;align-items:center;gap:3px;min-width:0;border-bottom:1px solid #263037;white-space:nowrap;font-size:11px;line-height:1.05}
 .watchHorseRow.leading{background:#2d3925}
+.watchHorseRow.selected{outline:1px solid #ffe07c;outline-offset:-1px}
 .watchHorseFrame{flex:0 0 23px;min-width:23px;max-width:23px;height:17px;border-radius:3px;display:grid;place-items:center;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums}
 .watchHorseName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:720}
 .watchHorseRank{flex:0 0 25px;text-align:right;color:#c4d0cb;font-size:10px;font-variant-numeric:tabular-nums}
@@ -238,10 +225,10 @@ a{color:#95e8df}
 #watchSlopeCaption{font-size:9px;color:#e5fae5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.official18.race-watch-portrait{height:100dvh;overflow:hidden;background:#030608}
 body.official18.race-watch-portrait > header{display:none}
-body.official18.race-watch-portrait main{width:100%;max-width:none;height:100dvh;margin:0;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr)}
-body.official18.race-watch-portrait:not(.race-watch-editing) main > :not(#raceWatchHeader):not(#stage){display:none!important}
+body.official18.race-watch-portrait main{width:100%;max-width:none;height:100dvh;margin:0;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) calc(clamp(196px,26dvh,246px) + env(safe-area-inset-bottom))}
+body.official18.race-watch-portrait:not(.race-watch-editing) main > :not(#raceWatchHeader):not(#stage):not(#raceWatchRoster){display:none!important}
 body.official18.race-watch-portrait #raceWatchHeader{display:block}
-body.official18.race-watch-portrait #raceWatchRoster{display:none!important}
+body.official18.race-watch-portrait #raceWatchRoster{display:block}
 body.official18.race-watch-portrait #stage{height:100%!important;min-height:0!important;min-width:0;overflow:hidden}
 body.official18.race-watch-portrait:not(.race-watch-editing) #telemetry{display:none!important}
 body.official18.race-watch-portrait #stageDock{position:relative;left:auto;right:auto;top:auto;bottom:auto;z-index:10;width:100%;display:flex;align-items:center;justify-content:space-between;gap:4px;pointer-events:auto}
@@ -260,7 +247,7 @@ body.official18.race-watch-portrait.race-watch-editing #stage{height:min(48dvh,4
 body.official18.race-watch-portrait.race-watch-editing #raceWatchRoster{display:none}
 body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:none}
 @media(max-height:740px){
- body.official18.race-watch-portrait main{grid-template-rows:auto minmax(0,1fr)}
+ body.official18.race-watch-portrait main{grid-template-rows:auto minmax(0,1fr) calc(184px + env(safe-area-inset-bottom))}
  body.official18.race-watch-portrait #raceWatchHeader{padding-top:calc(env(safe-area-inset-top) + 2px);padding-bottom:4px}
  body.official18.race-watch-portrait #watchOverviewFrame{height:83px;margin:3px 0 4px}
  body.official18.race-watch-portrait #raceSpeedButtons button,
@@ -286,11 +273,10 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <span id="watchRemain">残り1400m</span>
   <button type="button" id="watchEditToggle" aria-expanded="false">⚙ 設定・編集</button>
  </div>
- <div id="watchMapLegend"><span>馬群位置｜馬名をタップして選択</span><span id="watchPackGap">先頭～最後尾 0m</span></div>
+ <div id="watchMapLegend"><span>馬群位置・枠色で表示</span><span id="watchPackGap">先頭～最後尾 0m</span></div>
  <div id="watchOverviewFrame">
   <canvas id="watchOverviewCanvas" aria-label="18頭の走行位置。選択した馬は黄色い輪で示します"></canvas>
  </div>
- <div id="watchHorseNameStrip" role="group" aria-label="18頭の馬名。横にスワイプして全頭を確認できます"></div>
  <div id="watchDockSlot"></div>
 </section>
 <div id="stage">
@@ -5251,7 +5237,6 @@ const watchEditToggle=document.querySelector('#watchEditToggle');
 const watchOverviewCanvas=document.querySelector('#watchOverviewCanvas');
 const watchSlopeCanvas=document.querySelector('#watchSlopeCanvas');
 const watchRows=[];
-const watchHorseNameChips=[];
 let watchSelectedHorseIndex=null;
 let lastWatchPaint=-Infinity;
 function watchCanvasContext(canvas){
@@ -5414,14 +5399,8 @@ function renderRaceWatchUI(time,force=false){
   const text=rank+'位';
   if(r.rank.textContent!==text)r.rank.textContent=text;
   r.item.classList.toggle('leading',rank===1);
-  const chip=watchHorseNameChips[i];
-  if(chip){
-   if(chip.name.textContent!==name)chip.name.textContent=name;
-   chip.button.title=(i+1)+'番 '+name+'／'+rank+'位';
-   chip.button.setAttribute('aria-label',(i+1)+'番 '+name+'、現在'+rank+'位');
-   chip.button.classList.toggle('selected',i===watchSelectedHorseIndex);
-   chip.button.setAttribute('aria-pressed',String(i===watchSelectedHorseIndex));
-  }
+  r.item.classList.toggle('selected',i===watchSelectedHorseIndex);
+
  }
  const leader=ordered[0].distance;
  const remaining=Math.max(0,Math.ceil(activePlan.distance-leader));
@@ -5437,7 +5416,7 @@ function setWatchPortraitLayout(){
  if(!isOfficialEighteenTest)return;
  const active=watchPortraitMedia.matches;
  document.body.classList.toggle('race-watch-portrait',active);
- watchHeader.hidden=!active;watchRoster.hidden=true;watchSlope.hidden=!active;
+ watchHeader.hidden=!active;watchRoster.hidden=!active;watchSlope.hidden=!active;
  if(active){
   if(stageDock.parentElement!==watchDockSlot)watchDockSlot.append(stageDock);
  }else{
@@ -5461,27 +5440,12 @@ function setupRaceWatchUI(){
   const name=document.createElement('span');name.className='watchHorseName';
   const rank=document.createElement('span');rank.className='watchHorseRank';
   item.append(frame,name,rank);grid.append(item);
-  watchRows.push({item,frame,name,rank});
- }
- // Retain a compact ONE-row name strip instead of the removed two-column roster.
- // Every horse is reachable by horizontal swiping on iPhone.
- const strip=document.querySelector('#watchHorseNameStrip');
- for(let i=0;i<18;i++){
-  const button=document.createElement('button');
-  button.type='button';button.className='watchNameChip';
-  const number=document.createElement('span');
-  number.className='watchChipNumber';number.textContent=String(i+1);
-  const c=RACE_FRAME_COLORS[officialFrameIndex(i+1)];
-  number.style.background=c.hex;number.style.color=c.ink;
-  const name=document.createElement('span');name.className='watchChipName';
-  name.textContent=officialRunnerNames[i]||'試験馬'+(i+1);
-  button.append(number,name);
-  button.addEventListener('click',()=>{
+  // Tapping a name highlights that runner in the upper location map.
+  item.addEventListener('click',()=>{
    watchSelectedHorseIndex=watchSelectedHorseIndex===i?null:i;
    renderRaceWatchUI(performance.now(),true);
   });
-  strip.append(button);
-  watchHorseNameChips.push({button,name,number});
+  watchRows.push({item,frame,name,rank});
  }
  watchEditToggle.addEventListener('click',()=>{
   const editing=document.body.classList.toggle('race-watch-editing');
