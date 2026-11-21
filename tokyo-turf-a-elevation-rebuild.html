@@ -202,9 +202,11 @@ a{color:#95e8df}
 #watchCourse{font-size:14px;font-weight:850;white-space:nowrap}
 #watchRemain{font-size:12px;font-weight:750;color:#f5e4ac;margin-left:auto;white-space:nowrap}
 #watchEditToggle{min-height:29px;font-size:11px;padding:3px 7px;border:1px solid #52646a;background:#1d2930;white-space:nowrap}
-#watchOverviewFrame{position:relative;width:100%;height:39px;margin:5px 0 6px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
+#watchMapLegend{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:3px;font-size:10px;color:#cce1d1;min-height:13px}
+#watchMapLegend span{white-space:nowrap}
+#watchOverviewFrame{position:relative;width:100%;height:78px;margin:3px 0 5px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
 #watchOverviewCanvas{width:100%;height:100%;display:block}
-#watchPackGap{position:absolute;right:6px;top:2px;font-size:10px;font-weight:750;color:#fff;background:#13231dcc;padding:1px 4px;border-radius:3px;pointer-events:none}
+#watchPackGap{font-size:10px;font-weight:750;color:#fff;pointer-events:none}
 #watchDockSlot{min-height:0}
 #raceWatchRoster{background:#040708;color:#fff;min-height:0;overflow:hidden;border-top:2px solid #5b6d58;padding:5px 7px calc(4px + env(safe-area-inset-bottom))}
 .watchRosterTitle{display:flex;gap:8px;justify-content:space-between;align-items:center;min-height:19px;font-size:11px;font-weight:750}
@@ -215,9 +217,9 @@ a{color:#95e8df}
 .watchHorseFrame{flex:0 0 23px;min-width:23px;max-width:23px;height:17px;border-radius:3px;display:grid;place-items:center;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums}
 .watchHorseName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:720}
 .watchHorseRank{flex:0 0 25px;text-align:right;color:#c4d0cb;font-size:10px;font-variant-numeric:tabular-nums}
-#raceWatchSlope{position:absolute;left:7px;bottom:7px;z-index:4;width:158px;pointer-events:none;padding:5px 7px 4px;border:1px solid #a9c6a2;border-radius:5px;background:#123b29d9;color:#fff;box-shadow:0 2px 5px #0008}
-#watchSlopeTitle{font-size:10px;font-weight:800;white-space:nowrap}
-#watchSlopeCanvas{display:block;width:100%;height:38px}
+#raceWatchSlope{position:absolute;left:7px;bottom:7px;z-index:4;width:175px;pointer-events:none;padding:5px 7px 4px;border:1px solid #a9c6a2;border-radius:5px;background:#123b29e8;color:#fff;box-shadow:0 2px 5px #0008}
+#watchSlopeTitle{font-size:12px;font-weight:850;white-space:nowrap}
+#watchSlopeCanvas{display:block;width:100%;height:40px}
 #watchSlopeCaption{font-size:9px;color:#e5fae5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.official18.race-watch-portrait{height:100dvh;overflow:hidden;background:#030608}
 body.official18.race-watch-portrait > header{display:none}
@@ -245,7 +247,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 @media(max-height:740px){
  body.official18.race-watch-portrait main{grid-template-rows:auto minmax(0,1fr) calc(184px + env(safe-area-inset-bottom))}
  body.official18.race-watch-portrait #raceWatchHeader{padding-top:calc(env(safe-area-inset-top) + 2px);padding-bottom:4px}
- body.official18.race-watch-portrait #watchOverviewFrame{height:31px;margin:3px 0 4px}
+ body.official18.race-watch-portrait #watchOverviewFrame{height:62px;margin:3px 0 4px}
  body.official18.race-watch-portrait #raceSpeedButtons button,
  body.official18.race-watch-portrait #stageStartBtn,
  body.official18.race-watch-portrait #cameraAdjustToggle{min-height:31px}
@@ -269,9 +271,9 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <span id="watchRemain">残り1400m</span>
   <button type="button" id="watchEditToggle" aria-expanded="false">⚙ 設定・編集</button>
  </div>
+ <div id="watchMapLegend"><span>馬群位置・馬番は現在順位順</span><span id="watchPackGap">先頭～最後尾 0m</span></div>
  <div id="watchOverviewFrame">
-  <canvas id="watchOverviewCanvas" aria-label="レースの先頭から最後尾までの馬群位置"></canvas>
-  <span id="watchPackGap">馬群差 0m</span>
+  <canvas id="watchOverviewCanvas" aria-label="上段に馬群の位置、下段に全18頭の馬番を順位順に表示"></canvas>
  </div>
  <div id="watchDockSlot"></div>
 </section>
@@ -334,9 +336,9 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <button id="stageStartBtn" type="button" aria-label="レースをスタート">▶ スタート</button>
  </div>
  <div id="raceWatchSlope" hidden aria-label="東京芝Aコースの最後の坂を示す標高断面">
-  <div id="watchSlopeTitle">最後の坂｜残り700～0m</div>
+  <div id="watchSlopeTitle">現在の勾配｜計算中</div>
   <canvas id="watchSlopeCanvas"></canvas>
-  <div id="watchSlopeCaption">公式図をもとにした標高の近似</div>
+  <div id="watchSlopeCaption">先頭馬の位置・コース模型による推定</div>
  </div>
  <div id="design01Overlay" hidden>
   <div id="design01OverlayPanel">
@@ -5249,66 +5251,117 @@ function paintWatchOverview(horses){
  const out=watchCanvasContext(watchOverviewCanvas);
  if(!out||!horses.length)return;
  const {ctx,w,h}=out;
- ctx.fillStyle='#273d32';ctx.fillRect(0,0,w,h);
- ctx.fillStyle='#6d805a';ctx.fillRect(4,5,w-8,h-10);
- ctx.strokeStyle='#e5eadb';ctx.lineWidth=1;
- ctx.strokeRect(4.5,5.5,w-9,h-11);
- ctx.setLineDash([5,6]);ctx.strokeStyle='#d2dac0';
- ctx.beginPath();ctx.moveTo(4,h/2);ctx.lineTo(w-4,h/2);ctx.stroke();
- ctx.setLineDash([]);
+ const small=h<72;
+ const divider=small?25:31;
+ const trackTop=3,trackHeight=divider-5;
+ ctx.fillStyle='#243c32';ctx.fillRect(0,0,w,h);
+ ctx.fillStyle='#6c805d';ctx.fillRect(4,trackTop,w-8,trackHeight);
+ ctx.strokeStyle='#dce4d1';ctx.lineWidth=1;
+ ctx.strokeRect(4.5,trackTop+.5,w-9,trackHeight-1);
+ ctx.beginPath();ctx.moveTo(4,divider+.5);ctx.lineTo(w-4,divider+.5);
+ ctx.strokeStyle='#455d4e';ctx.stroke();
  const lead=Math.max(...horses.map(h=>h.distance));
  const tail=Math.min(...horses.map(h=>h.distance));
  const fieldSpread=lead-tail;
  const span=Math.max(35,fieldSpread+12);
  const trackWidth=Math.max(1,w-26);
- const track=horses.slice().sort((a,b)=>a.distance-b.distance);
- const raceWidth=activePlan?fieldCenterAt(activePlan,lead).width:36;
- for(const horse of track){
-  // Longitude is relative to the leader, so a closely grouped field
-  // remains visible even when the race is several laps long.
+ const currentWidth=activePlan?fieldCenterAt(activePlan,lead).width:36;
+ const ordered=horses.slice().sort((a,b)=>{
+  if(a.finished&&b.finished)return (a.finishTime??Infinity)-(b.finishTime??Infinity);
+  if(a.finished)return -1;
+  if(b.finished)return 1;
+  return b.distance-a.distance||a.number-b.number;
+ });
+ // The upper strip conveys the actual simulated longitudinal/lateral
+ // position; use small dots to avoid overlapping number glyphs.
+ for(const horse of horses){
   const x=10+(span-(lead-horse.distance)-5)/span*trackWidth;
-  const y=9+THREE.MathUtils.clamp(
-   (raceWidth/2-horse.lane)/raceWidth,0,1)*(h-18);
+  const y=trackTop+4+THREE.MathUtils.clamp(
+   (currentWidth/2-horse.lane)/currentWidth,0,1)*(trackHeight-8);
   const c=RACE_FRAME_COLORS[officialFrameIndex(horse.number)];
-  ctx.beginPath();ctx.arc(THREE.MathUtils.clamp(x,9,w-9),
-   THREE.MathUtils.clamp(y,9,h-9),6.6,0,Math.PI*2);
+  ctx.beginPath();ctx.arc(THREE.MathUtils.clamp(x,7,w-7),y,
+   small?3.3:4.1,0,Math.PI*2);
   ctx.fillStyle=c.hex;ctx.fill();
-  ctx.lineWidth=1.2;ctx.strokeStyle='#0c1715';ctx.stroke();
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font='bold 8px system-ui';ctx.fillStyle=c.ink;
-  ctx.fillText(String(horse.number),THREE.MathUtils.clamp(x,9,w-9),
-   THREE.MathUtils.clamp(y,9,h-9));
+  ctx.lineWidth=.75;ctx.strokeStyle='#14251c';ctx.stroke();
+ }
+ // The lower two rows are a legible legend, in LIVE race order, containing
+ // every number at least 20px apart even when the pack is tightly bunched.
+ const numberedHeight=h-divider;
+ const rowHeight=numberedHeight/2;
+ const chipRadius=Math.min(9,rowHeight*.44,w/9*.27);
+ for(let rank=0;rank<ordered.length;rank++){
+  const horse=ordered[rank],column=rank%9,row=Math.floor(rank/9);
+  const x=(column+.5)*w/9;
+  const y=divider+(row+.5)*rowHeight;
+  const c=RACE_FRAME_COLORS[officialFrameIndex(horse.number)];
+  ctx.beginPath();ctx.arc(x,y,chipRadius,0,Math.PI*2);
+  ctx.fillStyle=c.hex;ctx.fill();
+  ctx.lineWidth=1;ctx.strokeStyle='#101a18';ctx.stroke();
+  ctx.font='800 '+(small?'9':'10')+'px system-ui';
+  ctx.fillStyle=c.ink;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(String(horse.number),x,y+.3);
  }
  document.querySelector('#watchPackGap').textContent=
   '先頭～最後尾 '+fieldSpread.toFixed(1)+'m';
 }
+// Unenhanced Tokyo turf A profile: the local gradient is a model-based
+// estimate, not a measured JRA grade. A 24m centered difference limits
+// rapid changes caused by interpolation between profile anchor points.
+function watchModelAltitudeAt(distance){
+ if(!activePlan)return null;
+ const pocket=activePlan.pocket?.length||0;
+ if(distance<pocket)return null;
+ return relativeAltitude(remainingAtStation(
+  activePlan.startStation+distance-pocket));
+}
+function watchCurrentGrade(distance){
+ if(!activePlan)return null;
+ const half=12;
+ const before=watchModelAltitudeAt(distance-half);
+ const after=watchModelAltitudeAt(distance+half);
+ if(before===null||after===null)return null;
+ return (after-before)/(half*2)*100;
+}
 function paintWatchSlope(leaderDistance){
  const out=watchCanvasContext(watchSlopeCanvas);
  if(!out||!activePlan)return;
- const {ctx,w,h}=out,left=3,right=w-3,top=3,bottom=h-5;
- const yAt=alt=>bottom-(alt+2.7)/2.7*(bottom-top);
- const xAt=remaining=>left+(700-remaining)/700*(right-left);
- ctx.beginPath();
- for(let i=0;i<=70;i++){
-  const remain=700-i*10;
-  const x=xAt(remain),y=yAt(relativeAltitude(remain));
-  if(!i)ctx.moveTo(x,y);else ctx.lineTo(x,y);
- }
- ctx.strokeStyle='#e3f1df';ctx.lineWidth=2;ctx.stroke();
- let remain=null;
- if(!activePlan.pocket||leaderDistance>=activePlan.pocket.length){
-  const progressed=leaderDistance-(activePlan.pocket?activePlan.pocket.length:0);
-  remain=remainingAtStation(activePlan.startStation+Math.max(0,progressed));
- }
+ const {ctx,w,h}=out;
  const label=document.querySelector('#watchSlopeCaption');
- if(remain!==null&&remain<=700){
-  const x=xAt(remain),y=yAt(relativeAltitude(remain));
-  ctx.beginPath();ctx.arc(x,y,3.7,0,Math.PI*2);
-  ctx.fillStyle='#ffd55c';ctx.fill();
-  label.textContent='現在位置 ● 残り'+Math.round(remain)+'m｜標高は推定';
- }else label.textContent=
-  activePlan.pocket&&leaderDistance<activePlan.pocket.length?
-  'ポケット走行中｜合流後に位置を表示':'最後の700mで現在位置を表示';
+ const title=document.querySelector('#watchSlopeTitle');
+ const grade=watchCurrentGrade(leaderDistance);
+ if(grade===null){
+  title.textContent='現在の勾配｜未算出';
+  label.textContent='ポケット区間は標高の近似対象外';
+  return;
+ }
+ const state=grade>.05?'上り':grade<-.05?'下り':'ほぼ平坦';
+ const sign=grade>0?'+':'';
+ title.textContent='現在の勾配 '+sign+grade.toFixed(1)+'% '+state;
+ label.textContent='先頭馬の地点｜前後24mの推定勾配';
+ // Plot a moving 100m local window instead of the static last-700m hill.
+ const range=50,samples=40,points=[];
+ for(let i=0;i<=samples;i++){
+  const d=leaderDistance-range+(2*range*i/samples);
+  const altitude=watchModelAltitudeAt(d);
+  if(altitude!==null)points.push({x:i/samples,altitude});
+ }
+ if(points.length<2)return;
+ const min=Math.min(...points.map(p=>p.altitude));
+ const max=Math.max(...points.map(p=>p.altitude));
+ const diff=Math.max(.25,max-min);
+ const py=alt=>h-5-(alt-(min+max)/2)/diff*(h-12)-(h-12)/2;
+ ctx.strokeStyle='#e8f7de';ctx.lineWidth=2;
+ ctx.beginPath();
+ points.forEach((p,i)=>{
+  const x=3+p.x*(w-6),y=py(p.altitude);
+  if(!i)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+ });
+ ctx.stroke();
+ const here=watchModelAltitudeAt(leaderDistance);
+ if(here!==null){
+  ctx.beginPath();ctx.arc(w/2,py(here),4,0,Math.PI*2);
+  ctx.fillStyle='#ffd85a';ctx.fill();
+ }
 }
 function renderRaceWatchUI(time,force=false){
  if(!isOfficialEighteenTest||!activePlan||
