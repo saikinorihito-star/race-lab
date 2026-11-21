@@ -204,10 +204,11 @@ a{color:#95e8df}
 #watchEditToggle{min-height:29px;font-size:11px;padding:3px 7px;border:1px solid #52646a;background:#1d2930;white-space:nowrap}
 #watchMapLegend{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:3px;font-size:10px;color:#cce1d1;min-height:13px}
 #watchMapLegend span{white-space:nowrap}
-#watchOverviewFrame{position:relative;width:100%;height:104px;margin:3px 0 5px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
+#watchOverviewFrame{position:relative;width:100%;height:56px;margin:3px 0 5px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
 #watchOverviewCanvas{width:100%;height:100%;display:block}
 #watchPackGap{font-size:10px;font-weight:750;color:#fff;pointer-events:none}
-#watchDockSlot{min-height:0}
+#watchDockSlot{min-height:0;margin:4px 0 2px;width:100%}
+body.official18.race-watch-portrait #watchDockSlot #stageDock{background:transparent;box-shadow:none}
 #raceWatchRoster{background:#040708;color:#fff;min-height:0;overflow:hidden;border-top:2px solid #5b6d58;padding:5px 7px calc(4px + env(safe-area-inset-bottom))}
 .watchRosterTitle{display:flex;gap:8px;justify-content:space-between;align-items:center;min-height:19px;font-size:11px;font-weight:750}
 #watchRosterStatus{font-size:10px;color:#a8bdc2;font-weight:500}
@@ -249,7 +250,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 @media(max-height:740px){
  body.official18.race-watch-portrait main{grid-template-rows:auto minmax(0,1fr) calc(184px + env(safe-area-inset-bottom))}
  body.official18.race-watch-portrait #raceWatchHeader{padding-top:calc(env(safe-area-inset-top) + 2px);padding-bottom:4px}
- body.official18.race-watch-portrait #watchOverviewFrame{height:83px;margin:3px 0 4px}
+ body.official18.race-watch-portrait #watchOverviewFrame{height:49px;margin:3px 0 4px}
  body.official18.race-watch-portrait #raceSpeedButtons button,
  body.official18.race-watch-portrait #stageStartBtn,
  body.official18.race-watch-portrait #cameraAdjustToggle{min-height:31px}
@@ -273,11 +274,11 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <span id="watchRemain">残り1400m</span>
   <button type="button" id="watchEditToggle" aria-expanded="false">⚙ 設定・編集</button>
  </div>
+ <div id="watchDockSlot"></div>
  <div id="watchMapLegend"><span>馬群位置・枠色で表示</span><span id="watchPackGap">先頭～最後尾 0m</span></div>
  <div id="watchOverviewFrame">
   <canvas id="watchOverviewCanvas" aria-label="18頭の走行位置。選択した馬は黄色い輪で示します"></canvas>
  </div>
- <div id="watchDockSlot"></div>
 </section>
 <div id="stage">
  <div id="telemetry">3Dコースを準備中…</div>
