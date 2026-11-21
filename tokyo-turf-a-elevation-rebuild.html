@@ -240,6 +240,9 @@ body.official18.race-watch-portrait #raceSpeedButtons{position:static;right:auto
 body.official18.race-watch-portrait #raceSpeedButtons[hidden]{display:none!important}
 body.official18.race-watch-portrait #raceSpeedButtons button{min-width:46px;min-height:36px;padding:4px;font-size:11px;border-radius:7px}
 body.official18.race-watch-portrait #stageStartBtn{min-width:72px;min-height:36px;padding:4px 5px;font-size:11px;border-radius:7px;box-shadow:none;flex:0 0 auto}
+#watchPlaybackGroup{display:contents}
+body.official18.race-watch-portrait #watchPlaybackGroup{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-left:auto;flex:0 0 auto;min-width:0}
+body.official18.race-watch-portrait #watchPlaybackGroup button{margin:0}
 body.official18.race-watch-portrait #watchSeekBack,body.official18.race-watch-portrait #watchSeekForward{display:block;min-width:61px;min-height:36px;padding:4px 5px;font-size:11px;font-weight:800;border:1px solid #87b4bf;border-radius:7px;background:#1b3d4b;color:white;flex:0 0 auto}
 body.official18.race-watch-portrait #watchSeekBack[hidden],body.official18.race-watch-portrait #watchSeekForward[hidden]{display:none!important}
 body.official18.race-watch-portrait.camera-panel-open #raceWatchSlope{display:none!important}
@@ -346,9 +349,11 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
    <button type="button" data-race-speed="2" aria-pressed="false">▶▶ 2倍</button>
    <button type="button" data-race-speed="4" aria-pressed="false">▶▶ 4倍</button>
   </div>
-  <button id="watchSeekBack" hidden type="button">↶ 10秒</button>
-  <button id="stageStartBtn" type="button" aria-label="レースをスタート">▶ スタート</button>
-  <button id="watchSeekForward" hidden type="button">10秒 ↷</button>
+  <div id="watchPlaybackGroup" role="group" aria-label="レース再生操作">
+   <button id="watchSeekBack" hidden type="button">↶ 10秒</button>
+   <button id="stageStartBtn" type="button" aria-label="レースをスタート">▶ スタート</button>
+   <button id="watchSeekForward" hidden type="button">10秒 ↷</button>
+  </div>
  </div>
  <div id="design01Overlay" hidden>
   <div id="design01OverlayPanel">
