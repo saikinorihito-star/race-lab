@@ -239,7 +239,11 @@ body.official18.race-watch-portrait #cameraAdjustToggle{min-height:36px;padding:
 body.official18.race-watch-portrait #raceSpeedButtons{position:static;right:auto;bottom:auto;display:flex;gap:4px;flex:0 0 auto}
 body.official18.race-watch-portrait #raceSpeedButtons[hidden]{display:none!important}
 body.official18.race-watch-portrait #raceSpeedButtons button{min-width:46px;min-height:36px;padding:4px;font-size:11px;border-radius:7px}
-body.official18.race-watch-portrait #stageStartBtn{min-width:84px;min-height:36px;padding:4px 7px;font-size:11px;border-radius:7px;box-shadow:none;flex:0 0 auto}
+body.official18.race-watch-portrait #stageStartBtn{min-width:72px;min-height:36px;padding:4px 5px;font-size:11px;border-radius:7px;box-shadow:none;flex:0 0 auto}
+body.official18.race-watch-portrait #watchSeekBack,body.official18.race-watch-portrait #watchSeekForward{display:block;min-width:61px;min-height:36px;padding:4px 5px;font-size:11px;font-weight:800;border:1px solid #87b4bf;border-radius:7px;background:#1b3d4b;color:white;flex:0 0 auto}
+body.official18.race-watch-portrait #watchSeekBack[hidden],body.official18.race-watch-portrait #watchSeekForward[hidden]{display:none!important}
+body.official18.race-watch-portrait.camera-panel-open #raceWatchSlope{display:none!important}
+@media(max-height:740px){body.official18.race-watch-portrait #watchSeekBack,body.official18.race-watch-portrait #watchSeekForward{min-height:31px}}
 body.official18.race-watch-portrait #cameraAdjustPanel{position:fixed;left:7px;top:calc(env(safe-area-inset-top) + 115px);bottom:auto;max-height:calc(100dvh - env(safe-area-inset-top) - 140px);width:min(340px,calc(100vw - 14px));z-index:40}
 body.official18.race-watch-portrait.race-watch-editing{height:auto;min-height:100dvh;overflow:auto}
 body.official18.race-watch-portrait.race-watch-editing main{display:block;height:auto;min-height:100dvh;overflow:visible}
@@ -342,7 +346,9 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
    <button type="button" data-race-speed="2" aria-pressed="false">▶▶ 2倍</button>
    <button type="button" data-race-speed="4" aria-pressed="false">▶▶ 4倍</button>
   </div>
+  <button id="watchSeekBack" hidden type="button">↶ 10秒</button>
   <button id="stageStartBtn" type="button" aria-label="レースをスタート">▶ スタート</button>
+  <button id="watchSeekForward" hidden type="button">10秒 ↷</button>
  </div>
  <div id="design01Overlay" hidden>
   <div id="design01OverlayPanel">
@@ -826,7 +832,7 @@ if(isOfficialPairTest){
 // Course construction and inspection keep their own camera controls.
 // When watching the official 18-runner race, offer only actual race cameras.
 if(isOfficialEighteenTest){
- raceSpeedButtons.hidden=false;
+ raceSpeedButtons.hidden=true;
  document.querySelector('#legacyRateLabel').hidden=true;
 }
 if(isOfficialEighteenTest){
@@ -2136,6 +2142,35 @@ function fieldLayoutCheck(plan){
 // ===== 試作：18頭それぞれの速度・走行位置・着順を持つレース展開 =====
 // JRAの馬の実測能力ではなく、シミュレーション基盤の動作確認用に固定した架空値。
 const RACE_TICK=1/60;
+const raceSeekSnapshots=[];
+function saveRaceSeekState(){
+ if(!isOfficialEighteenTest||!raceHorses.length)return;
+ const second=Math.floor(raceElapsed+1e-6);
+ if(second<1||raceSeekSnapshots.some(p=>p.second===second))return;
+ raceSeekSnapshots.push({second,time:raceElapsed,horses:structuredClone(raceHorses),
+  finished:[...raceFinished],warnings:raceContactWarnings,analysis:structuredClone(raceAnalysisSnapshots)});
+}
+function seekRaceSeconds(delta){
+ if(!isOfficialEighteenTest||!activePlan||!installedDesign01||balanceAuditBusy)return;
+ const target=Math.max(0,raceElapsed+delta);
+ const checkpoint=[...raceSeekSnapshots].reverse().find(p=>p.time<=target+1e-7);
+ playing=false;rate.value='1';raceAccumulator=0;
+ if(checkpoint){
+  raceHorses=structuredClone(checkpoint.horses);raceElapsed=checkpoint.time;
+  raceFinished=[...checkpoint.finished];raceContactWarnings=checkpoint.warnings;
+  raceAnalysisSnapshots=structuredClone(checkpoint.analysis);
+ }else initRaceHorses();
+ let ticks=0;
+ while(raceElapsed+RACE_TICK/2<target&&raceFinished.length<OFFICIAL_TEST_COUNT&&ticks<15000){
+  stepOfficialPair(RACE_TICK);ticks++;
+ }
+ raceAccumulator=0;
+ travel=Math.max(...raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>h.distance));
+ gateOpening=travel>0?1:0;updateGateDoors();gateRoot.visible=travel<105;
+ clearRaceResults();demoBtn.textContent='再開';camera18CutPending=true;
+ lastWatchPaint=-Infinity;updateOfficialPair(0);renderRaceWatchUI(performance.now(),true);
+ syncStageStartButton();
+}
 const RACE_CLEARANCE=.96;     // 近い位置にいる馬同士の横方向中心間隔の目標
 const RACE_FRONT_GAP=2.65;    // 同一進路で追突しないための前後中心間隔の目標
 let raceHorses=[],raceElapsed=0,raceFinished=[],raceAccumulator=0,raceContactWarnings=0;
@@ -2357,6 +2392,7 @@ console.assert([24,28,31,36,41].every(w=>
  })),'正式Design 01の2/4/8頭の安全な発走レーン');
 function initRaceHorses(){
  raceElapsed=0;raceFinished=[];raceAccumulator=0;raceContactWarnings=0;
+ if(isOfficialEighteenTest)raceSeekSnapshots.length=0;
  clearRaceResults();
  if(isOfficialEighteenTest){
   clearRaceAnalysis();
@@ -3738,6 +3774,7 @@ function updateRace(dt){
  let count=0;
  while(raceAccumulator>=RACE_TICK&&count<25){
   if(isOfficialPairTest)stepOfficialPair(RACE_TICK);else stepRace(RACE_TICK);
+  if(isOfficialEighteenTest)saveRaceSeekState();
   raceAccumulator-=RACE_TICK;count++;
  }
  if(isOfficialPairTest){
@@ -4601,6 +4638,7 @@ if(isOfficialPairTest){
   const opening=cameraAdjustPanel.hidden;
   cameraAdjustPanel.hidden=!opening;
   cameraAdjustToggle.setAttribute('aria-expanded',String(opening));
+  document.body.classList.toggle("camera-panel-open",opening);
  });
  for(const btn of document.querySelectorAll('[data-cam-adjust]')){
   btn.addEventListener('click',()=>adjustGroupCamera(btn.dataset.camAdjust));
@@ -5080,6 +5118,8 @@ stageStartBtn.addEventListener('click',()=>{
  demoBtn.click();
  syncStageStartButton();
 });
+document.querySelector("#watchSeekBack").addEventListener("click",()=>seekRaceSeconds(-10));
+document.querySelector("#watchSeekForward").addEventListener("click",()=>seekRaceSeconds(10));
 // Mac keyboard controls. Ignore fields and browser Cmd shortcuts.
 window.addEventListener('keydown',event=>{
  if(!isOfficialEighteenTest||event.altKey||event.metaKey||event.ctrlKey)return;
@@ -5280,41 +5320,32 @@ function paintWatchOverview(horses){
    (currentWidth/2-horse.lane)/currentWidth,0,1)*(trackHeight-24);
   return {horse,x,y,frame:RACE_FRAME_COLORS[officialFrameIndex(horse.number)]};
  });
- // One circle per runner. Do not draw a second dot, connector lines or
- // constantly rearranged labels: those caused crowding and visual flicker.
- // Use a deterministic order and stable three-row collision placement.
- const placed=[];
- const radius=7.5;
- for(const mark of [...coords].sort((a,b)=>a.horse.number-b.horse.number)){
-  const rowStep=16;
-  const baseY=THREE.MathUtils.clamp(mark.y,11,h-11);
-  const rows=[baseY,THREE.MathUtils.clamp(baseY-rowStep,11,h-11),
-   THREE.MathUtils.clamp(baseY+rowStep,11,h-11)];
-  const offsets=[0,-16,16,-32,32,-48,48,-64,64];
-  let choice=null;
-  for(const dy of rows){
-   for(const dx of offsets){
-    const x=THREE.MathUtils.clamp(mark.x+dx,11,w-11);
-    const y=dy;
-    if(placed.every(p=>Math.hypot(p.x-x,p.y-y)>=16)){
-     choice={x,y};break;
-    }
-   }
-   if(choice)break;
+ // Numbered markers follow the actual physics distance and retain rank order.
+ const marks=[...coords].sort((a,b)=>a.horse.distance-b.horse.distance||b.horse.number-a.horse.number);
+ const gap=Math.min(16,(w-24)/Math.max(1,marks.length-1));
+ const placed=marks.map(mark=>({mark,x:mark.x,y:THREE.MathUtils.clamp(mark.y,11,h-11)}));
+ for(let i=1;i<placed.length;i++)placed[i].x=Math.max(placed[i].x,placed[i-1].x+gap);
+ if(placed.at(-1).x>w-12){
+  const shift=placed.at(-1).x-(w-12);for(const p of placed)p.x-=shift;
+ }
+ if(placed[0].x<12){const shift=12-placed[0].x;for(const p of placed)p.x+=shift}
+ for(let i=0;i<placed.length;i++){
+  const p=placed[i],near=placed.slice(0,i).filter(o=>Math.abs(o.x-p.x)<15.5);
+  if(near.some(o=>Math.abs(o.y-p.y)<15.5)){
+   for(const y of [11,h/2,h-11])
+    if(near.every(o=>Math.hypot(o.x-p.x,o.y-y)>=15.5)){p.y=y;break}
   }
-  if(!choice)choice={x:mark.x,y:baseY};
-  placed.push({...choice,mark});
  }
  for(const {x,y,mark} of placed){
-  ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);
+  ctx.beginPath();ctx.arc(x,y,7.5,0,Math.PI*2);
   ctx.fillStyle=mark.frame.hex;ctx.fill();
   ctx.lineWidth=1.4;ctx.strokeStyle='#14221a';ctx.stroke();
   if(mark.horse.idx===watchSelectedHorseIndex){
-   ctx.beginPath();ctx.arc(x,y,radius+2.5,0,Math.PI*2);
+   ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);
    ctx.lineWidth=2;ctx.strokeStyle='#ffe07c';ctx.stroke();
   }
-  ctx.fillStyle=mark.frame.ink;
-  ctx.font='900 10px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle=mark.frame.ink;ctx.font='900 10px system-ui';
+  ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(String(mark.horse.number),x,y+.4);
  }
  document.querySelector('#watchPackGap').textContent=
@@ -5432,6 +5463,9 @@ function setWatchPortraitLayout(){
  if(!isOfficialEighteenTest)return;
  const active=watchPortraitMedia.matches;
  document.body.classList.toggle('race-watch-portrait',active);
+ document.querySelector("#watchSeekBack").hidden=!active;
+ document.querySelector("#watchSeekForward").hidden=!active;
+ if(!active)document.body.classList.remove("camera-panel-open");
  watchHeader.hidden=!active;watchRoster.hidden=!active;watchSlope.hidden=!active;
  if(active){
   if(stageDock.parentElement!==watchDockSlot)watchDockSlot.append(stageDock);
