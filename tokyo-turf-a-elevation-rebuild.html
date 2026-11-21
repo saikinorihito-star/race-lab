@@ -5768,7 +5768,7 @@ function updateTurfSpray(dt){
 const hoofSoundToggle=document.querySelector('#hoofSoundToggle');
 const hoofSoundVolume=document.querySelector('#hoofSoundVolume');
 const hoofSoundVolumeValue=document.querySelector('#hoofSoundVolumeValue');
-let hoofAudioContext=null,hoofAudioBuffer=null,hoofMasterGain=null;
+let hoofAudioContext=null,hoofAudioBuffer=null,hoofStartBuffer=null,hoofMasterGain=null;
 let hoofSoundEnabled=true,hoofNextBeatTime=0,hoofBeatIndex=0;
 function syncHoofSoundControls(){
  const volume=Number(hoofSoundVolume.value);
@@ -5796,19 +5796,51 @@ function unlockHoofAudio(){
    const audio=new AudioCtor();
    const master=audio.createGain();
    master.gain.value=0;
-   master.connect(audio.destination);
-   const len=Math.round(audio.sampleRate*.095);
-   const buffer=audio.createBuffer(1,len,audio.sampleRate);
-   const samples=buffer.getChannelData(0);
-   for(let j=0;j<len;j++){
-    const t=j/audio.sampleRate;
-    // Short low-frequency hoof impact plus a soft grassy attack.
-    const knock=Math.sin(2*Math.PI*(105-45*t)*t)*Math.exp(-t*42);
-    const grit=(Math.random()*2-1)*Math.exp(-t*115);
-    const wood=Math.sin(2*Math.PI*225*t)*Math.exp(-t*75);
-    samples[j]=Math.max(-1,Math.min(1,knock*.67+grit*.30+wood*.18));
+   // Protect phone speakers against several overlapping gallop impacts.
+   if(typeof audio.createDynamicsCompressor==='function'){
+    const limiter=audio.createDynamicsCompressor();
+    limiter.threshold.value=-20;
+    limiter.knee.value=15;
+    limiter.ratio.value=3.5;
+    limiter.attack.value=.003;
+    limiter.release.value=.15;
+    master.connect(limiter);limiter.connect(audio.destination);
+   }else master.connect(audio.destination);
+   function makeImpactBuffer(launch){
+    // A low, resonant hoof body with audible 140-220 Hz harmonics (small
+    // phone speakers cannot reproduce pure sub-bass). Launch impacts are
+    // longer and duller; racing impacts are more distinct and regular.
+    const duration=launch?.255:.172;
+    const len=Math.round(audio.sampleRate*duration);
+    const buffer=audio.createBuffer(1,len,audio.sampleRate);
+    const samples=buffer.getChannelData(0);
+    let noiseLow=0;
+    for(let j=0;j<len;j++){
+     const t=j/audio.sampleRate;
+     const attack=1-Math.exp(-t*530);
+     const bodyHz=launch?72:88;
+     const drop=launch?245:295;
+     const low=Math.sin(2*Math.PI*(bodyHz*t-drop*t*t))*
+      Math.exp(-t*(launch?17:25));
+     const chest=Math.sin(2*Math.PI*(launch?151:182)*t+.35)*
+      Math.exp(-t*(launch?24:37));
+     const hard=Math.sin(2*Math.PI*(launch?258:330)*t)*
+      Math.exp(-t*(launch?57:78));
+     // Filter the loose turf texture so the overall strike is a thud,
+     // not a thin plastic click or synthetic white-noise hiss.
+     const grit=Math.random()*2-1;
+     noiseLow=noiseLow*.81+grit*.19;
+     const scuff=noiseLow*Math.exp(-t*(launch?23:45));
+     const mix=launch?
+      low*.70+chest*.45+hard*.13+scuff*.25:
+      low*.59+chest*.43+hard*.25+scuff*.17;
+     samples[j]=Math.max(-.94,Math.min(.94,mix*attack*.82));
+    }
+    return buffer;
    }
-   hoofAudioContext=audio;hoofMasterGain=master;hoofAudioBuffer=buffer;
+   hoofStartBuffer=makeImpactBuffer(true);
+   hoofAudioBuffer=makeImpactBuffer(false);
+   hoofAudioContext=audio;hoofMasterGain=master;
   }
   // Call resume synchronously from an actual tap; do not await outside
   // the user activation required by Safari on iPhone.
@@ -5821,14 +5853,14 @@ function unlockHoofAudio(){
   console.warn('足音を開始できませんでした',error);
  }
 }
-function triggerHoofbeat(level,pitch,at){
+function triggerHoofbeat(level,pitch,at,launch=false){
  if(!hoofAudioContext||!hoofAudioBuffer||!hoofMasterGain)return;
  const context=hoofAudioContext;
  const source=context.createBufferSource();
  const voice=context.createGain();
- source.buffer=hoofAudioBuffer;
+ source.buffer=launch?hoofStartBuffer:hoofAudioBuffer;
  source.playbackRate.value=pitch;
- voice.gain.value=Math.min(.78,Math.max(.05,level));
+ voice.gain.value=Math.min(.78,Math.max(.04,level));
  source.connect(voice);voice.connect(hoofMasterGain);
  source.onended=()=>{source.disconnect();voice.disconnect()};
  source.start(Math.max(at,context.currentTime));
@@ -5845,21 +5877,43 @@ function updateHoofSound(){
  for(const horse of active){speedSum+=horse.speed;leader=Math.max(leader,horse.distance)}
  const meanSpeed=speedSum/active.length;
  const nearby=active.filter(h=>leader-h.distance<32).length;
- // Faster horses shorten the beat interval; a compact pack adds a gentle
- // layer of hoofbeats. The four-beat timing avoids mechanical metronome sound.
- const cadence=THREE.MathUtils.clamp(5.3+meanSpeed*.19+Math.sqrt(nearby)*.55,6,12.5);
- const groupLevel=THREE.MathUtils.clamp(.36+Math.sqrt(nearby)/Math.sqrt(18)*.45,.36,.82);
+ // First 70m: a deep, dense wave of 18 sets of hooves accelerating out
+ // of the gates. Beyond 70m: tighter, individual rhythmic impacts.
+ // Crossfade by *race distance*, not wall-clock time (so seeks also work).
+ const launchBlend=1-THREE.MathUtils.smoothstep(leader,16,78);
+ const cadence=THREE.MathUtils.clamp(
+  5.1+meanSpeed*.21+Math.sqrt(nearby)*.50,5.8,12.3);
+ const groupLevel=THREE.MathUtils.clamp(
+  .38+Math.sqrt(nearby)/Math.sqrt(18)*.47,.38,.86);
  const now=hoofAudioContext.currentTime;
  if(!hoofNextBeatTime||hoofNextBeatTime<now-.18)
   hoofNextBeatTime=now;
- const accent=[.85,.60,1,.65],spacing=[.66,.78,.61,1.95];
+ const accent=[1,.69,.91,.74],spacing=[.71,.78,.67,1.76];
  let count=0;
  while(hoofNextBeatTime<now+.065&&count<3){
   const phase=hoofBeatIndex++%4;
   const accentLevel=groupLevel*accent[phase]*
-   THREE.MathUtils.clamp(meanSpeed/16,.4,1.1);
-  const pitch=.82+(phase%3)*.075+Math.random()*.12;
-  triggerHoofbeat(accentLevel,pitch,hoofNextBeatTime);
+   THREE.MathUtils.clamp(meanSpeed/16,.30,1.1);
+  const pitch=.77+(phase%3)*.062+Math.random()*.075;
+  const beatTime=hoofNextBeatTime;
+  // Mixing two sounds produces a natural transition without suddenly
+  // switching tone, including after 10-second seek backward/forward.
+  if(launchBlend>.01){
+   triggerHoofbeat(accentLevel*launchBlend,Math.max(.68,pitch-.045),
+    beatTime,true);
+   // Slightly asynchronous hoof strikes create mass without playing 18
+   // copies at once (which would overwhelm Safari's audio engine).
+   if(nearby>=8&&phase%2===0)
+    triggerHoofbeat(accentLevel*launchBlend*.41,pitch*.91,
+     beatTime+.035,true);
+  }
+  if(launchBlend<.99){
+   triggerHoofbeat(accentLevel*(1-launchBlend),pitch,
+    beatTime,false);
+   if(nearby>=10&&phase===2)
+    triggerHoofbeat(accentLevel*(1-launchBlend)*.29,
+     pitch*1.08,beatTime+.048,false);
+  }
   hoofNextBeatTime+=spacing[phase]/cadence;
   count++;
  }
