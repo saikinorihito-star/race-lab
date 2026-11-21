@@ -217,9 +217,10 @@ a{color:#95e8df}
 .watchHorseFrame{flex:0 0 23px;min-width:23px;max-width:23px;height:17px;border-radius:3px;display:grid;place-items:center;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums}
 .watchHorseName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:720}
 .watchHorseRank{flex:0 0 25px;text-align:right;color:#c4d0cb;font-size:10px;font-variant-numeric:tabular-nums}
-#raceWatchSlope{position:absolute;left:7px;bottom:7px;z-index:4;width:175px;pointer-events:none;padding:5px 7px 4px;border:1px solid #a9c6a2;border-radius:5px;background:#123b29e8;color:#fff;box-shadow:0 2px 5px #0008}
+#raceWatchSlope{position:absolute;left:7px;bottom:7px;z-index:4;width:min(300px,calc(100vw - 20px));pointer-events:none;padding:7px 9px 5px;border:1px solid #a9c6a2;border-radius:7px;background:#123b29ed;color:#fff;box-shadow:0 2px 5px #0008}
 #watchSlopeTitle{font-size:12px;font-weight:850;white-space:nowrap}
-#watchSlopeCanvas{display:block;width:100%;height:40px}
+#watchSlopeCanvas{display:block;width:100%;height:72px}
+#watchSlopeAxis{display:flex;justify-content:space-between;gap:8px;font-size:9px;color:#d7e7db}
 #watchSlopeCaption{font-size:9px;color:#e5fae5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.official18.race-watch-portrait{height:100dvh;overflow:hidden;background:#030608}
 body.official18.race-watch-portrait > header{display:none}
@@ -336,9 +337,10 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <button id="stageStartBtn" type="button" aria-label="レースをスタート">▶ スタート</button>
  </div>
  <div id="raceWatchSlope" hidden aria-label="東京芝Aコースの最後の坂を示す標高断面">
-  <div id="watchSlopeTitle">現在の勾配｜計算中</div>
-  <canvas id="watchSlopeCanvas"></canvas>
-  <div id="watchSlopeCaption">先頭馬の位置・コース模型による推定</div>
+  <div id="watchSlopeTitle">東京芝A 全周高低差｜計算中</div>
+  <canvas id="watchSlopeCanvas" aria-label="東京競馬場芝Aの1周の標高断面図、黄色い点は先頭馬の現在位置"></canvas>
+  <div id="watchSlopeAxis"><span>1周 2083m</span><span>ゴール</span></div>
+  <div id="watchSlopeCaption">黄色の点：先頭馬の現在位置｜標高は近似</div>
  </div>
  <div id="design01Overlay" hidden>
   <div id="design01OverlayPanel">
@@ -5251,57 +5253,47 @@ function paintWatchOverview(horses){
  const out=watchCanvasContext(watchOverviewCanvas);
  if(!out||!horses.length)return;
  const {ctx,w,h}=out;
- const small=h<140;
- // Give most of the doubled map to actual horse locations.
- // Reserve a smaller lower strip for stable numbered reference markers.
- const divider=Math.round(h*.68);
- const trackTop=3,trackHeight=divider-5;
+ const trackTop=4,trackBottom=h-4,trackHeight=trackBottom-trackTop;
  ctx.fillStyle='#243c32';ctx.fillRect(0,0,w,h);
  ctx.fillStyle='#6c805d';ctx.fillRect(4,trackTop,w-8,trackHeight);
  ctx.strokeStyle='#dce4d1';ctx.lineWidth=1;
  ctx.strokeRect(4.5,trackTop+.5,w-9,trackHeight-1);
- ctx.beginPath();ctx.moveTo(4,divider+.5);ctx.lineTo(w-4,divider+.5);
- ctx.strokeStyle='#455d4e';ctx.stroke();
+ ctx.setLineDash([5,6]);ctx.strokeStyle='#a1b197';ctx.lineWidth=.7;
+ ctx.beginPath();ctx.moveTo(4,h/2);ctx.lineTo(w-4,h/2);ctx.stroke();
+ ctx.setLineDash([]);
+ // Entire panel is the position map. No separate number legend,
+ // rank grid, or black bar is rendered below the track.
  const lead=Math.max(...horses.map(h=>h.distance));
  const tail=Math.min(...horses.map(h=>h.distance));
  const fieldSpread=lead-tail;
- const span=Math.max(35,fieldSpread+12);
- const trackWidth=Math.max(1,w-26);
+ const span=Math.max(40,fieldSpread+16);
+ const trackWidth=Math.max(1,w-34);
+ const midpoint=(lead+tail)/2;
  const currentWidth=activePlan?fieldCenterAt(activePlan,lead).width:36;
- const ordered=horses.slice().sort((a,b)=>{
-  if(a.finished&&b.finished)return (a.finishTime??Infinity)-(b.finishTime??Infinity);
-  if(a.finished)return -1;
-  if(b.finished)return 1;
-  return b.distance-a.distance||a.number-b.number;
+ const coords=horses.map(horse=>{
+  const x=THREE.MathUtils.clamp(w/2+
+   (horse.distance-midpoint)/span*trackWidth,12,w-12);
+  const y=trackTop+12+THREE.MathUtils.clamp(
+   (currentWidth/2-horse.lane)/currentWidth,0,1)*(trackHeight-24);
+  return {horse,x,y,frame:RACE_FRAME_COLORS[officialFrameIndex(horse.number)]};
  });
- // The upper strip conveys the actual simulated longitudinal/lateral
- // position; use small dots to avoid overlapping number glyphs.
- for(const horse of horses){
-  const x=10+(span-(lead-horse.distance)-5)/span*trackWidth;
-  const y=trackTop+4+THREE.MathUtils.clamp(
-   (currentWidth/2-horse.lane)/currentWidth,0,1)*(trackHeight-8);
-  const c=RACE_FRAME_COLORS[officialFrameIndex(horse.number)];
-  ctx.beginPath();ctx.arc(THREE.MathUtils.clamp(x,7,w-7),y,
-   small?3.3:4.1,0,Math.PI*2);
-  ctx.fillStyle=c.hex;ctx.fill();
-  ctx.lineWidth=.75;ctx.strokeStyle='#14251c';ctx.stroke();
+ for(const mark of coords){
+  const {x,y,frame}=mark;
+  ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);
+  ctx.fillStyle=frame.hex;ctx.fill();
+  ctx.lineWidth=1.3;ctx.strokeStyle='#14221a';ctx.stroke();
  }
- // The lower two rows are a legible legend, in LIVE race order, containing
- // every number at least 20px apart even when the pack is tightly bunched.
- const numberedHeight=h-divider;
- const rowHeight=numberedHeight/2;
- const chipRadius=Math.min(9,rowHeight*.44,w/9*.27);
- for(let rank=0;rank<ordered.length;rank++){
-  const horse=ordered[rank],column=rank%9,row=Math.floor(rank/9);
-  const x=(column+.5)*w/9;
-  const y=divider+(row+.5)*rowHeight;
-  const c=RACE_FRAME_COLORS[officialFrameIndex(horse.number)];
-  ctx.beginPath();ctx.arc(x,y,chipRadius,0,Math.PI*2);
-  ctx.fillStyle=c.hex;ctx.fill();
-  ctx.lineWidth=1;ctx.strokeStyle='#101a18';ctx.stroke();
-  ctx.font='800 '+(small?'9':'10')+'px system-ui';
-  ctx.fillStyle=c.ink;ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(String(horse.number),x,y+.3);
+ // Draw the actual horse number where it fits without covering another
+ // horse. Close-knit starters remain colour-coded dots instead of
+ // overlapping illegible figures.
+ for(const mark of coords){
+  const free=coords.every(other=>other===mark||
+   Math.hypot(other.x-mark.x,other.y-mark.y)>=13.5);
+  if(!free)continue;
+  ctx.fillStyle=mark.frame.ink;
+  ctx.font='800 9px system-ui';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(String(mark.horse.number),mark.x,mark.y+.3);
  }
  document.querySelector('#watchPackGap').textContent=
   '先頭～最後尾 '+fieldSpread.toFixed(1)+'m';
@@ -5328,41 +5320,54 @@ function paintWatchSlope(leaderDistance){
  const out=watchCanvasContext(watchSlopeCanvas);
  if(!out||!activePlan)return;
  const {ctx,w,h}=out;
- const label=document.querySelector('#watchSlopeCaption');
  const title=document.querySelector('#watchSlopeTitle');
- const grade=watchCurrentGrade(leaderDistance);
- if(grade===null){
-  title.textContent='現在の勾配｜未算出';
-  label.textContent='ポケット区間は標高の近似対象外';
-  return;
+ const label=document.querySelector('#watchSlopeCaption');
+ const plot={left:6,right:w-6,top:5,bottom:h-7};
+ // The whole one-lap elevation section is always visible, independent of
+ // racing distance. The existing model uses remaining distance to the
+ // FINISH line as its horizontal coordinate.
+ const xAt=remain=>plot.left+
+  (LAP-THREE.MathUtils.clamp(remain,0,LAP))/LAP*(plot.right-plot.left);
+ const ymin=-2.7,ymax=0;
+ const yAt=alt=>plot.bottom-
+  (THREE.MathUtils.clamp(alt,ymin,ymax)-ymin)/(ymax-ymin)*
+  (plot.bottom-plot.top);
+ ctx.lineWidth=.7;ctx.strokeStyle='#7c997f';
+ for(const alt of [-2.7,-1.35,0]){
+  const y=yAt(alt);
+  ctx.beginPath();ctx.moveTo(plot.left,y);ctx.lineTo(plot.right,y);ctx.stroke();
  }
- const state=grade>.05?'上り':grade<-.05?'下り':'ほぼ平坦';
- const sign=grade>0?'+':'';
- title.textContent='現在の勾配 '+sign+grade.toFixed(1)+'% '+state;
- label.textContent='先頭馬の地点｜前後24mの推定勾配';
- // Plot a moving 100m local window instead of the static last-700m hill.
- const range=50,samples=40,points=[];
- for(let i=0;i<=samples;i++){
-  const d=leaderDistance-range+(2*range*i/samples);
-  const altitude=watchModelAltitudeAt(d);
-  if(altitude!==null)points.push({x:i/samples,altitude});
- }
- if(points.length<2)return;
- const min=Math.min(...points.map(p=>p.altitude));
- const max=Math.max(...points.map(p=>p.altitude));
- const diff=Math.max(.25,max-min);
- const py=alt=>h-5-(alt-(min+max)/2)/diff*(h-12)-(h-12)/2;
- ctx.strokeStyle='#e8f7de';ctx.lineWidth=2;
  ctx.beginPath();
- points.forEach((p,i)=>{
-  const x=3+p.x*(w-6),y=py(p.altitude);
-  if(!i)ctx.moveTo(x,y);else ctx.lineTo(x,y);
- });
- ctx.stroke();
- const here=watchModelAltitudeAt(leaderDistance);
- if(here!==null){
-  ctx.beginPath();ctx.arc(w/2,py(here),4,0,Math.PI*2);
-  ctx.fillStyle='#ffd85a';ctx.fill();
+ const samples=160;
+ for(let i=0;i<=samples;i++){
+  const remain=LAP*(1-i/samples);
+  const x=xAt(remain),y=yAt(relativeAltitude(remain));
+  if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+ }
+ ctx.strokeStyle='#e4f5df';ctx.lineWidth=2.6;ctx.stroke();
+ const grade=watchCurrentGrade(leaderDistance);
+ let remain=null;
+ if(!activePlan.pocket||leaderDistance>=activePlan.pocket.length){
+  const progressed=leaderDistance-(activePlan.pocket?activePlan.pocket.length:0);
+  remain=remainingAtStation(activePlan.startStation+Math.max(0,progressed));
+ }
+ if(remain!==null){
+  const x=xAt(remain),y=yAt(relativeAltitude(remain));
+  ctx.beginPath();ctx.moveTo(x,plot.top);ctx.lineTo(x,plot.bottom);
+  ctx.strokeStyle='#f1ce61';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.stroke();ctx.setLineDash([]);
+  ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
+  ctx.fillStyle='#ffe06c';ctx.fill();ctx.strokeStyle='#203322';ctx.lineWidth=1;ctx.stroke();
+ }
+ if(grade===null){
+  title.textContent='東京芝A 全周高低差｜勾配未算出';
+  label.textContent='ポケット走行中｜本線合流後に黄色点を表示';
+ }else{
+  const direction=grade>.05?'上り':grade<-.05?'下り':'ほぼ平坦';
+  const sign=grade>0?'+':'';
+  title.textContent='東京芝A 全周｜'+sign+grade.toFixed(1)+'% '+direction;
+  label.textContent='黄色点：先頭馬｜本線ゴールまで周回上'+
+   Math.round(remain)+'m｜標高は推定';
  }
 }
 function renderRaceWatchUI(time,force=false){
