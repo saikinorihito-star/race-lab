@@ -212,6 +212,7 @@ a{color:#95e8df}
 #watchEditToggle{min-height:29px;font-size:11px;padding:3px 7px;border:1px solid #52646a;background:#1d2930;white-space:nowrap}
 #watchMapLegend{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:3px;font-size:10px;color:#cce1d1;min-height:13px}
 #watchMapLegend span{white-space:nowrap}
+#raceConditionWatchLabel{color:#d9eee4;font-size:9px;font-weight:750}
 #watchOverviewFrame{position:relative;width:100%;height:56px;margin:3px 0 5px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
 #watchOverviewCanvas{width:100%;height:100%;display:block}
 #watchPackGap{font-size:10px;font-weight:750;color:#fff;pointer-events:none}
@@ -295,7 +296,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <button type="button" id="watchEditToggle" aria-expanded="false">⚙ 設定・編集</button>
  </div>
  <div id="watchDockSlot"></div>
- <div id="watchMapLegend"><button id="hoofSoundToggle" type="button" aria-pressed="true" aria-label="馬の足音を消す">🔊 足音</button><span id="watchPackGap">先頭～最後尾 0m</span></div>
+ <div id="watchMapLegend"><button id="hoofSoundToggle" type="button" aria-pressed="true" aria-label="馬の足音を消す">🔊 足音</button><span id="raceConditionWatchLabel">☀ 晴／良</span><span id="watchPackGap">先頭～最後尾 0m</span></div>
  <div id="watchOverviewFrame">
   <canvas id="watchOverviewCanvas" aria-label="18頭の走行位置。選択した馬は黄色い輪で示します"></canvas>
  </div>
@@ -2955,6 +2956,9 @@ function syncRaceConditionControls(){
  const changed=raceElapsed>0||
   raceWeatherSelect.value!==raceWeatherAtStart||
   raceGoingSelect.value!==raceGoingAtStart;
+ const icon=weather==='雨'?'☔':weather==='曇'?'☁':'☀';
+ document.querySelector('#raceConditionWatchLabel').textContent=
+  icon+' '+weather+'／'+going;
  document.querySelector('#raceConditionQuickNotice').textContent=
   '現在：'+weather+'／芝'+going+
   (changed?'｜変更は次の発走から反映':'｜天候と馬場は別々に設定できます');
