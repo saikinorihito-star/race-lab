@@ -204,7 +204,7 @@ a{color:#95e8df}
 #watchEditToggle{min-height:29px;font-size:11px;padding:3px 7px;border:1px solid #52646a;background:#1d2930;white-space:nowrap}
 #watchMapLegend{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:3px;font-size:10px;color:#cce1d1;min-height:13px}
 #watchMapLegend span{white-space:nowrap}
-#watchOverviewFrame{position:relative;width:66.666667%;height:156px;margin:3px auto 5px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
+#watchOverviewFrame{position:relative;width:100%;height:104px;margin:3px 0 5px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
 #watchOverviewCanvas{width:100%;height:100%;display:block}
 #watchPackGap{font-size:10px;font-weight:750;color:#fff;pointer-events:none}
 #watchDockSlot{min-height:0}
@@ -217,9 +217,9 @@ a{color:#95e8df}
 .watchHorseFrame{flex:0 0 23px;min-width:23px;max-width:23px;height:17px;border-radius:3px;display:grid;place-items:center;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums}
 .watchHorseName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:720}
 .watchHorseRank{flex:0 0 25px;text-align:right;color:#c4d0cb;font-size:10px;font-variant-numeric:tabular-nums}
-#raceWatchSlope{position:absolute;left:7px;bottom:7px;z-index:4;width:min(200px,calc(66.666667vw - 13.333333px));pointer-events:none;padding:7px 9px 5px;border:1px solid #a9c6a2;border-radius:7px;background:#123b29ed;color:#fff;box-shadow:0 2px 5px #0008}
+#raceWatchSlope{position:absolute;left:7px;bottom:7px;z-index:4;width:min(300px,calc(100vw - 20px));pointer-events:none;padding:5px 9px 4px;border:1px solid #a9c6a2;border-radius:7px;background:#123b29ed;color:#fff;box-shadow:0 2px 5px #0008}
 #watchSlopeTitle{font-size:12px;font-weight:850;white-space:nowrap}
-#watchSlopeCanvas{display:block;width:100%;height:72px}
+#watchSlopeCanvas{display:block;width:100%;height:36px}
 #watchSlopeAxis{display:flex;justify-content:space-between;gap:8px;font-size:9px;color:#d7e7db}
 #watchSlopeCaption{font-size:9px;color:#e5fae5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.official18.race-watch-portrait{height:100dvh;overflow:hidden;background:#030608}
@@ -248,7 +248,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 @media(max-height:740px){
  body.official18.race-watch-portrait main{grid-template-rows:auto minmax(0,1fr)}
  body.official18.race-watch-portrait #raceWatchHeader{padding-top:calc(env(safe-area-inset-top) + 2px);padding-bottom:4px}
- body.official18.race-watch-portrait #watchOverviewFrame{height:124px;margin:3px auto 4px}
+ body.official18.race-watch-portrait #watchOverviewFrame{height:83px;margin:3px 0 4px}
  body.official18.race-watch-portrait #raceSpeedButtons button,
  body.official18.race-watch-portrait #stageStartBtn,
  body.official18.race-watch-portrait #cameraAdjustToggle{min-height:31px}
