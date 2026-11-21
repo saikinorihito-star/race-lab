@@ -1554,6 +1554,18 @@ function makeRaceMonitorTexture(){
 const raceMonitorTexture=makeRaceMonitorTexture();
 // Sharper slanted-screen lettering without additional geometry or draw calls.
 raceMonitorTexture.anisotropy=Math.min(16,renderer.capabilities.getMaxAnisotropy());
+// The existing Tokyo-style turf visions use LIVE in-simulation coverage in
+// 18-horse mode. Non-18 modes retain the original static preview texture.
+// A separate camera and small offscreen buffer avoid recursion or a second canvas.
+const liveRaceMonitorTarget=isOfficialEighteenTest?
+ new THREE.WebGLRenderTarget(1024,176,{depthBuffer:true,stencilBuffer:false}):null;
+const liveRaceMonitorCamera=isOfficialEighteenTest?
+ new THREE.PerspectiveCamera(30,1024/176,.3,2600):null;
+if(liveRaceMonitorTarget){
+ liveRaceMonitorTarget.texture.colorSpace=THREE.SRGBColorSpace;
+ liveRaceMonitorTarget.texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+}
+let lastLiveMonitorPaint=-Infinity,lastLiveMonitorRaceTime=-Infinity;
 // コース近景で遮蔽物となる大型ビジョンを、カメラモードに応じて切り替える。
 const turfVisionGroups=[];
 function turfVision(x,z,caption){
@@ -1571,7 +1583,8 @@ function turfVision(x,z,caption){
  }
  addBox(group,0,13,.72,67.1,12.05,.20,0x60757c,.19);
  const screen=new THREE.Mesh(new THREE.PlaneGeometry(66.4,11.2),
-  new THREE.MeshBasicMaterial({map:raceMonitorTexture,side:THREE.FrontSide,toneMapped:false}));
+  new THREE.MeshBasicMaterial({map:liveRaceMonitorTarget?
+   liveRaceMonitorTarget.texture:raceMonitorTexture,side:THREE.FrontSide,toneMapped:false}));
  screen.position.set(0,13,.91);group.add(screen);
  // Stand-facing image is in front of its housing, not obscured by the slab.
  for(const px of [-11.05,11.05])addBox(group,px,13,.96,.09,11.2,.09,0x1c2833,.24);
@@ -2157,8 +2170,10 @@ function saveRaceSeekState(){
 }
 function seekRaceSeconds(delta){
  if(!isOfficialEighteenTest||!activePlan||!installedDesign01||balanceAuditBusy)return;
+ const resumeAfterSeek=playing;
  const target=Math.max(0,raceElapsed+delta);
  const checkpoint=[...raceSeekSnapshots].reverse().find(p=>p.time<=target+1e-7);
+ // Suspend only while restoring the deterministic 60 Hz race state.
  playing=false;rate.value='1';raceAccumulator=0;
  if(checkpoint){
   raceHorses=structuredClone(checkpoint.horses);raceElapsed=checkpoint.time;
@@ -2173,8 +2188,11 @@ function seekRaceSeconds(delta){
  travel=Math.max(...raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>h.distance));
  gateOpening=travel>0?1:0;updateGateDoors();gateRoot.visible=travel<105;
  clearRaceResults();
- if(raceFinished.length===OFFICIAL_TEST_COUNT)renderRaceResults();
- demoBtn.textContent=raceFinished.length===OFFICIAL_TEST_COUNT?'ゴール・もう一度':'再開';
+ const completed=raceFinished.length===OFFICIAL_TEST_COUNT;
+ if(completed)renderRaceResults();
+ // A running race keeps running after +/-10 seconds. A paused race stays paused.
+ playing=resumeAfterSeek&&!completed;
+ demoBtn.textContent=completed?'ゴール・もう一度':playing?'一時停止':'再開';
  camera18CutPending=true;
  lastWatchPaint=-Infinity;updateOfficialPair(0);renderRaceWatchUI(performance.now(),true);
  syncStageStartButton();
@@ -5252,7 +5270,9 @@ function updateSceneLabelVisibility(){
  // Screens stay in the course overview, never within 18-horse filming.
  // No per-frame monitor popping when the image crosses the camera frustum.
  turfVisionGroups.forEach(group=>{
-  group.visible=!closeViews.has(view)&&!(isOfficialEighteenTest&&pairTrackingView(view));
+  // Keep both stand-facing giant screens visible during the 18-horse race.
+  // The live feed updates only while a screen intersects the camera frustum.
+  group.visible=isOfficialEighteenTest||!closeViews.has(view);
  });
 }
 checkLabels.addEventListener('change',updateSceneLabelVisibility);
@@ -5540,6 +5560,51 @@ function setupRaceWatchUI(){
  setWatchPortraitLayout();
 }
 
+function renderLiveRaceMonitor(time){
+ if(!liveRaceMonitorTarget||!liveRaceMonitorCamera||
+    !installedDesign01||!activePlan||raceHorses.length<18)return;
+ // Refresh roughly 6 fps while moving; refresh immediately after a paused seek.
+ const pausedSeekChanged=!playing&&Math.abs(raceElapsed-lastLiveMonitorRaceTime)>.01;
+ if(!pausedSeekChanged&&time-lastLiveMonitorPaint<160)return;
+ if(!playing&&!pausedSeekChanged&&Number.isFinite(lastLiveMonitorRaceTime))return;
+ camera.updateMatrixWorld();
+ const frustum=new THREE.Frustum().setFromProjectionMatrix(
+  new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+ const screenVisible=turfVisionGroups.some(group=>{
+  if(!group.visible)return false;
+  const center=group.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,20,0));
+  return frustum.intersectsSphere(new THREE.Sphere(center,51));
+ });
+ if(!screenVisible)return;
+ const runners=raceHorses.slice(0,18).filter(h=>!h.finished);
+ const pool=runners.length?runners:raceHorses.slice(0,18);
+ const byProgress=[...pool].sort((a,b)=>b.distance-a.distance||a.number-b.number);
+ const leader=byProgress[0];
+ if(!leader)return;
+ // Pick up the front group with a real second camera following the same
+ // physics state as the main broadcast; do not loop a prerecorded image.
+ const nearFront=byProgress.filter(h=>leader.distance-h.distance<22);
+ const medianLane=nearFront.reduce((v,h)=>v+h.lane,0)/nearFront.length;
+ const focusDistance=Math.max(0,Math.min(activePlan.distance,leader.distance-7));
+ const a=fieldCenterAt(activePlan,focusDistance);
+ const side=new THREE.Vector3(a.t.z,0,-a.t.x);
+ const focus=a.p.clone().addScaledVector(side,medianLane);
+ liveRaceMonitorCamera.position.copy(focus).addScaledVector(side,-36)
+  .addScaledVector(a.t,17).add(new THREE.Vector3(0,13,0));
+ liveRaceMonitorCamera.lookAt(focus.clone().add(new THREE.Vector3(0,2,0)));
+ const oldTarget=renderer.getRenderTarget();
+ const oldVisible=turfVisionGroups.map(g=>g.visible);
+ for(const group of turfVisionGroups)group.visible=false;
+ try{
+  renderer.setRenderTarget(liveRaceMonitorTarget);
+  renderer.clear();
+  renderer.render(scene,liveRaceMonitorCamera);
+ }finally{
+  renderer.setRenderTarget(oldTarget);
+  turfVisionGroups.forEach((group,i)=>{group.visible=oldVisible[i]});
+ }
+ lastLiveMonitorPaint=time;lastLiveMonitorRaceTime=raceElapsed;
+}
 function animate(time){
  requestAnimationFrame(animate);
  if(graphicsContextLost){
@@ -5626,6 +5691,7 @@ function animate(time){
   item.cameraOccluded=insideX&&insideZ&&insideY;
   item.group.visible=showStands.checked&&!item.cameraOccluded;
  }
+ renderLiveRaceMonitor(time);
  renderer.render(scene,camera);
  fpsCount++;
  if(time-lastTime>1200){
