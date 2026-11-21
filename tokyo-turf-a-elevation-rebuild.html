@@ -3459,6 +3459,12 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  speed=Math.max(Math.min(EIGHTEEN_MIN_ROLL_BASE+
   (17-h.idx)*EIGHTEEN_MIN_ROLL_STAGGER,Math.max(0,h.speed)),speed);
  let distance=Math.min(activePlan.distance,h.distance+speed*dt);
+ // The lateral coordinate is relative to track CENTRE, which itself moves
+ // when width changes. Follow the INNER rail instead of drifting outward.
+ const widthAtNext=fieldCenterAt(activePlan,distance).width;
+ const railFrameShift=(widthAtNext-width)*.5;
+ const railHoldingLane=h.lane+railFrameShift;
+ if(h.passGoal!==null)h.passGoal+=railFrameShift;
  const inwardBudget=Math.max(0,distance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD;
  // A committed outside pass must not immediately trigger an automatic
  // inward reversal. Keep that line until the manoeuvre has paid off and
@@ -3467,12 +3473,10 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  const stillAlongside=passedHorse&&
   h.distance<passedHorse.distance+8&&h.distance<(h.outsideHoldMax||0);
  const holdingOutside=h.distance<(h.outsideHoldUntil||0)||stillAlongside;
- const futureWidth=fieldCenterAt(activePlan,
-  Math.min(activePlan.distance,h.distance+35)).width;
- const stableInner=Math.min(inner-.05,fourHorseInnerLane(futureWidth)-.05);
- let lane=holdingOutside?h.lane:
-  Math.min(stableInner,h.lane+Math.min(
-   lateralRate*dt,inwardBudget,Math.max(0,stableInner-h.lane)));
+ const stableInner=fourHorseInnerLane(widthAtNext)-.05;
+ let lane=holdingOutside?railHoldingLane:
+  Math.min(stableInner,railHoldingLane+Math.min(
+   lateralRate*dt,inwardBudget,Math.max(0,stableInner-railHoldingLane)));
  // 18 horses cannot all join one lane after the start: the 6m clearance
  // balances earlier inward moves with a realistically compact field.
  // Unlike 8 runners, the complete pack needs 2–4 lanes and some stagger.
@@ -3480,7 +3484,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   if(other.idx===h.idx||other.finished)continue;
   const along=other.distance+other.speed*dt-distance;
   if(Math.abs(along)<EIGHTEEN_MERGE_LONGITUDINAL_BUFFER&&other.lane>h.lane)
-   lane=Math.min(lane,other.lane-2.35);
+   lane=Math.min(lane,other.lane+railFrameShift-2.35);
  }
  // On a bend, a trapped runner checks an inside gap first. If it is not
  // open, it uses the existing outside passing option. A tight corridor is
@@ -3495,10 +3499,14 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   const bend=cornerDataAt(h.distance);
   // Compare safe inside/outside choices and 0.65s predicted congestion.
   // The path-length advantage of the inside lane matters most on bends.
-  const nextWidth=fieldCenterAt(activePlan,
-   Math.min(activePlan.distance,h.distance+24)).width;
-  const insideLimit=Math.min(inner-.05,fourHorseInnerLane(nextWidth)-.05);
-  const outsideLimit=Math.max(-width/2+2.0,-nextWidth/2+2.0);
+  const insideLimit=fourHorseInnerLane(widthAtNext)-.05;
+  const outsideLimit=-widthAtNext/2+2.0;
+  // Only a specifically identified slower runner immediately ahead can
+  // justify an outward passing move away from the inner rail.
+  const blockingHorse=snapshot.filter(o=>o.idx!==h.idx&&!o.finished&&
+   o.distance>h.distance&&o.distance-h.distance<14&&
+   Math.abs(o.lane-h.lane)<2.45&&targetSpeed>o.speed+.18)
+   .sort((a,b)=>a.distance-b.distance)[0];
   const congestionAt=destination=>snapshot.reduce((total,o)=>{
    if(o.idx===h.idx||o.finished)return total;
    const gap=o.distance+o.speed*.65-(h.distance+Math.max(h.speed,13)*.65);
@@ -3507,8 +3515,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
    return total+Math.max(0,1-gap/35)*
     (o.speed<h.speed+.3?1.25:.52);
   },0);
-  const currentCongestion=congestionAt(h.lane);
-  const choices=[h.lane+2.85,h.lane-2.75].map(destination=>{
+  const currentCongestion=congestionAt(railHoldingLane);
+  const choices=[railHoldingLane+2.85,railHoldingLane-2.75].map(destination=>{
    if(destination>insideLimit||destination<outsideLimit)return null;
    const unsafe=snapshot.some(o=>{
     if(o.idx===h.idx||o.finished)return false;
@@ -3522,7 +3530,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
    // not solely by a corner bonus or an arbitrary lateral preference.
    const benefit=currentCongestion-congestion;
    if(benefit<.30)return null;
-   const isInside=destination>h.lane;
+   const isInside=destination>railHoldingLane;
+   if(!isInside&&!blockingHorse)return null;
    const bendPreference=THREE.MathUtils.clamp(bend.kappa*105,0,1);
    const score=benefit+
     (isInside?.24:0)+(isInside?.70:-.12)*bendPreference-
@@ -3539,21 +3548,17 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
     h.passOpponentIdx=null;h.outsideHoldUntil=0;h.outsideHoldMax=0;
    }else{
     h.outsidePassAttempts++;
-    const front=snapshot.filter(o=>o.idx!==h.idx&&!o.finished&&
-     o.distance>h.distance&&o.distance-h.distance<20&&
-     Math.abs(o.lane-h.lane)<3.1).sort((a,b)=>
-      a.distance-b.distance)[0];
-    h.passOpponentIdx=front?.idx??null;
+    h.passOpponentIdx=blockingHorse?.idx??null;
     h.outsideHoldUntil=h.distance+65;
     h.outsideHoldMax=h.distance+155;
    }
   }
  }
  const passing=h.passGoal!==null&&h.passUntil>h.distance&&
-  Math.abs(h.passGoal-h.lane)>.08;
+  Math.abs(h.passGoal-railHoldingLane)>.08;
  if(passing){
-  const low=Math.min(h.lane,h.passGoal),
-   high=Math.max(h.lane,h.passGoal);
+  const low=Math.min(railHoldingLane,h.passGoal),
+   high=Math.max(railHoldingLane,h.passGoal);
   const clear=snapshot.every(o=>{
    if(o.idx===h.idx||o.finished)return true;
    const longitudinal=o.distance+o.speed*dt-distance;
@@ -3561,24 +3566,26 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
     o.lane<low-1.6||o.lane>high+1.6;
   });
   if(clear){
-   const sign=Math.sign(h.passGoal-h.lane);
+   const sign=Math.sign(h.passGoal-railHoldingLane);
    const step=Math.min(lateralRate*dt,inwardBudget,
-    Math.abs(h.passGoal-h.lane));
-   lane=h.lane+sign*step;
-  }else lane=h.lane;
+    Math.abs(h.passGoal-railHoldingLane));
+   lane=railHoldingLane+sign*step;
+  }else lane=railHoldingLane;
  }else{
   h.passGoal=null;
   // Keep the approved continuous lateral movement in normal formation.
-  lane=Math.max(h.lane,lane);
+  lane=Math.max(railHoldingLane,lane);
  }
- lane=THREE.MathUtils.clamp(lane,-width/2+1.48,inner-.05);
+ lane=THREE.MathUtils.clamp(lane,-widthAtNext/2+1.48,stableInner);
  // Recheck the final predicted two-dimensional spacing, including another
  // horse's own intended sideways move. Never teleport sideways out of danger.
  for(const other of snapshot){
   if(other.idx===h.idx||other.finished)continue;
   const predictedOtherDistance=other.distance+Math.max(0,other.speed)*dt;
   if(Math.abs(distance-predictedOtherDistance)>3)continue;
-  let otherLane=other.lane;
+  const otherWidth=fieldCenterAt(activePlan,other.distance).width;
+  const otherNextWidth=fieldCenterAt(activePlan,predictedOtherDistance).width;
+  let otherLane=other.lane+(otherNextWidth-otherWidth)*.5;
   if(other.passGoal!==null&&other.passGoal!==undefined&&
     other.passUntil>other.distance){
    const sign=Math.sign(other.passGoal-other.lane);
@@ -3589,9 +3596,9 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   let side=lane-otherLane;
   const clearance=1.10; // 18 narrow gates start 1.12–1.15m apart
   if(Math.hypot(longitudinal,side)>=clearance)continue;
-  const originalSide=h.lane-otherLane;
+  const originalSide=railHoldingLane-otherLane;
   if(Math.abs(originalSide)>Math.abs(side)+.001){
-   lane=h.lane;
+   lane=railHoldingLane;
    if(h.passGoal!==null)h.passGoal=null;
    side=lane-otherLane;
   }
@@ -3717,10 +3724,14 @@ function stepOfficialPair(tick){
     fourHorseSafeStep(h,previous,tick,targetSpeed);
    if(isOfficialEighteenTest){
     const travelled=Math.max(0,result.distance-h.distance);
+    const oldWidth=fieldCenterAt(activePlan,h.distance).width;
+    const newWidth=fieldCenterAt(activePlan,result.distance).width;
+    const railFrameShift=(newWidth-oldWidth)*.5;
+    const steeringDelta=result.lane-h.lane-railFrameShift;
     const midDistance=(h.distance+result.distance)/2,
      midLane=(h.lane+result.lane)/2;
     const forward=travelled*cornerPathFactor(midDistance,midLane);
-    const physicalStep=Math.hypot(forward,result.lane-h.lane);
+    const physicalStep=Math.hypot(forward,steeringDelta);
     h.pathDistance=(h.pathDistance||0)+physicalStep;
     h.pathExtraMeters=h.pathDistance-result.distance;
     if(Math.abs(cornerDataAt(midDistance).kappa)>.0015)
@@ -3734,7 +3745,10 @@ function stepOfficialPair(tick){
     h.energy=THREE.MathUtils.clamp((h.energy??1)-cost,.07,1);
    }
    h.distance=result.distance;h.speed=result.speed;
-   const lateralVelocity=(result.lane-h.lane)/tick;
+   const lateralVelocity=(result.lane-h.lane-
+    (isOfficialEighteenTest?
+     (fieldCenterAt(activePlan,result.distance).width-
+      fieldCenterAt(activePlan,h.distance).width)*.5:0))/tick;
    if(isOfficialEighteenTest){
     // Dampen one-frame steering reversals in the 3D horse orientation;
     // actual race position and collision geometry remain unchanged.
