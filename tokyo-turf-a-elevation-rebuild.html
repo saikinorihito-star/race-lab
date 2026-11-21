@@ -5200,6 +5200,8 @@ function syncStageStartButton(){
 }
 stageStartBtn.addEventListener('click',()=>{
  if(!isOfficialPairTest)return;
+ // iOS Safari requires AudioContext.resume() directly inside the user tap.
+ if(isOfficialEighteenTest&&!playing)unlockHoofAudio();
  demoBtn.click();
  syncStageStartButton();
 });
