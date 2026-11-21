@@ -204,7 +204,7 @@ a{color:#95e8df}
 #watchEditToggle{min-height:29px;font-size:11px;padding:3px 7px;border:1px solid #52646a;background:#1d2930;white-space:nowrap}
 #watchMapLegend{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:3px;font-size:10px;color:#cce1d1;min-height:13px}
 #watchMapLegend span{white-space:nowrap}
-#watchOverviewFrame{position:relative;width:100%;height:78px;margin:3px 0 5px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
+#watchOverviewFrame{position:relative;width:100%;height:156px;margin:3px 0 5px;border-radius:7px;border:1px solid #516258;background:#1a2922;overflow:hidden}
 #watchOverviewCanvas{width:100%;height:100%;display:block}
 #watchPackGap{font-size:10px;font-weight:750;color:#fff;pointer-events:none}
 #watchDockSlot{min-height:0}
@@ -223,10 +223,10 @@ a{color:#95e8df}
 #watchSlopeCaption{font-size:9px;color:#e5fae5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.official18.race-watch-portrait{height:100dvh;overflow:hidden;background:#030608}
 body.official18.race-watch-portrait > header{display:none}
-body.official18.race-watch-portrait main{width:100%;max-width:none;height:100dvh;margin:0;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) calc(clamp(196px,26dvh,246px) + env(safe-area-inset-bottom))}
-body.official18.race-watch-portrait:not(.race-watch-editing) main > :not(#raceWatchHeader):not(#stage):not(#raceWatchRoster){display:none!important}
+body.official18.race-watch-portrait main{width:100%;max-width:none;height:100dvh;margin:0;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr)}
+body.official18.race-watch-portrait:not(.race-watch-editing) main > :not(#raceWatchHeader):not(#stage){display:none!important}
 body.official18.race-watch-portrait #raceWatchHeader{display:block}
-body.official18.race-watch-portrait #raceWatchRoster{display:block}
+body.official18.race-watch-portrait #raceWatchRoster{display:none!important}
 body.official18.race-watch-portrait #stage{height:100%!important;min-height:0!important;min-width:0;overflow:hidden}
 body.official18.race-watch-portrait:not(.race-watch-editing) #telemetry{display:none!important}
 body.official18.race-watch-portrait #stageDock{position:relative;left:auto;right:auto;top:auto;bottom:auto;z-index:10;width:100%;display:flex;align-items:center;justify-content:space-between;gap:4px;pointer-events:auto}
@@ -245,9 +245,9 @@ body.official18.race-watch-portrait.race-watch-editing #stage{height:min(48dvh,4
 body.official18.race-watch-portrait.race-watch-editing #raceWatchRoster{display:none}
 body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:none}
 @media(max-height:740px){
- body.official18.race-watch-portrait main{grid-template-rows:auto minmax(0,1fr) calc(184px + env(safe-area-inset-bottom))}
+ body.official18.race-watch-portrait main{grid-template-rows:auto minmax(0,1fr)}
  body.official18.race-watch-portrait #raceWatchHeader{padding-top:calc(env(safe-area-inset-top) + 2px);padding-bottom:4px}
- body.official18.race-watch-portrait #watchOverviewFrame{height:62px;margin:3px 0 4px}
+ body.official18.race-watch-portrait #watchOverviewFrame{height:124px;margin:3px 0 4px}
  body.official18.race-watch-portrait #raceSpeedButtons button,
  body.official18.race-watch-portrait #stageStartBtn,
  body.official18.race-watch-portrait #cameraAdjustToggle{min-height:31px}
@@ -5251,8 +5251,10 @@ function paintWatchOverview(horses){
  const out=watchCanvasContext(watchOverviewCanvas);
  if(!out||!horses.length)return;
  const {ctx,w,h}=out;
- const small=h<72;
- const divider=small?25:31;
+ const small=h<140;
+ // Give most of the doubled map to actual horse locations.
+ // Reserve a smaller lower strip for stable numbered reference markers.
+ const divider=Math.round(h*.68);
  const trackTop=3,trackHeight=divider-5;
  ctx.fillStyle='#243c32';ctx.fillRect(0,0,w,h);
  ctx.fillStyle='#6c805d';ctx.fillRect(4,trackTop,w-8,trackHeight);
@@ -5401,7 +5403,7 @@ function setWatchPortraitLayout(){
  if(!isOfficialEighteenTest)return;
  const active=watchPortraitMedia.matches;
  document.body.classList.toggle('race-watch-portrait',active);
- watchHeader.hidden=!active;watchRoster.hidden=!active;watchSlope.hidden=!active;
+ watchHeader.hidden=!active;watchRoster.hidden=true;watchSlope.hidden=!active;
  if(active){
   if(stageDock.parentElement!==watchDockSlot)watchDockSlot.append(stageDock);
  }else{
