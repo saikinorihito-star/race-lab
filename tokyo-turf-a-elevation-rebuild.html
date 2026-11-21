@@ -5310,7 +5310,7 @@ function paintWatchOverview(horses){
 function watchModelAltitudeAt(distance){
  if(!activePlan)return null;
  const pocket=activePlan.pocket?.length||0;
- if(distance<pocket)return null;
+ if(pocket&&distance<pocket)return null;
  return relativeAltitude(remainingAtStation(
   activePlan.startStation+distance-pocket));
 }
