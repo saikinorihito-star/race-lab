@@ -121,22 +121,38 @@ a{color:#95e8df}
 .official18 #telemetry{position:static;max-width:100%;width:auto;line-height:1.4;
  padding:6px 8px;font-size:11px;background:#172c36;border:1px solid #355966}
 .official18 #stageDock{bottom:12px}
+/* Compact broadcast identifiers: names stay in the screen corner, not over
+   the race. Only small numbered frame-colour chips follow visible horses. */
 #runnerLabelLayer{position:absolute;inset:0;z-index:4;overflow:hidden;pointer-events:none}
-#runnerLabelLayer[hidden],.runner-name-label[hidden]{display:none!important}
-#runnerLabelConnectors{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;pointer-events:none}
-.runner-name-label{position:absolute;display:flex;align-items:center;gap:5px;
- transform:translate(-50%,-100%);max-width:185px;white-space:nowrap;
- padding:4px 7px;border-radius:8px;border:2px solid var(--runner-frame,#d7e8dc);
- background:rgba(8,18,23,.95);color:#fff;font-size:12px;font-weight:780;
- line-height:1.35;text-shadow:0 1px 2px #000;box-shadow:0 2px 8px #0008;
- z-index:1}
-.runner-name-label .runner-label-place{font-size:10px;color:#d7e7ee;flex-shrink:0}
+#runnerLabelLayer[hidden],.runner-name-label[hidden],.runner-horse-badge[hidden]{display:none!important}
+#runnerLabelLegend{position:absolute;right:7px;top:9px;display:flex;flex-direction:column;
+ gap:4px;width:min(172px,45%);pointer-events:none}
+.runner-name-label{position:relative;display:flex;align-items:center;gap:5px;
+ height:27px;min-width:0;padding:3px 6px;
+ border-radius:6px;border:1px solid var(--runner-frame,#ddd);
+ background:rgba(8,17,23,.88);color:#f5fbfc;
+ font-size:10px;font-weight:750;line-height:1.2;text-shadow:0 1px 2px #000;
+ box-shadow:0 1px 4px #0006}
+.runner-name-label .runner-label-place{font-size:9px;color:#d7e7ee;flex:0 0 21px}
 .runner-name-label .runner-label-number{display:inline-flex;justify-content:center;align-items:center;
- width:21px;height:21px;min-width:21px;border-radius:5px;background:var(--runner-frame,#fff);
- color:var(--runner-ink,#17222a);text-shadow:none;font-size:12px;font-weight:900}
-.runner-name-label .runner-label-name{display:inline-block;min-width:0;max-width:130px;
- overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.runner-name-label[data-rank="1"]{border-color:#e5d393;box-shadow:0 2px 10px #000b,0 0 0 1px #f0d99166}
+ width:19px;height:19px;flex:0 0 19px;border-radius:4px;
+ background:var(--runner-frame,#fff);color:var(--runner-ink,#17222a);
+ text-shadow:none;font-size:11px;font-weight:900}
+.runner-name-label .runner-label-name{display:block;flex:1;min-width:0;overflow:hidden;
+ text-overflow:ellipsis;white-space:nowrap}
+.runner-name-label[data-rank="1"]{border-color:#e5d393}
+.runner-horse-badge{position:absolute;transform:translate(-50%,-50%);
+ width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+ background:var(--runner-frame,#fff);color:var(--runner-ink,#17222a);
+ border:2px solid #e8f1f4;border-radius:50%;
+ text-shadow:none;box-shadow:0 1px 4px #000c;
+ font-weight:900;font-size:13px;font-variant-numeric:tabular-nums;
+ z-index:1}
+.runner-horse-badge[data-rank="1"]{outline:2px solid #efcf53;outline-offset:1px}
+@media(max-width:380px){#runnerLabelLegend{width:min(152px,44%);right:5px;top:6px}
+ .runner-name-label{font-size:9px;padding:2px 4px;height:25px}
+ .runner-name-label .runner-label-place{flex-basis:19px;font-size:8px}
+ .runner-horse-badge{width:22px;height:22px;font-size:12px}}
 #raceNameEditor{margin:8px 12px;padding:9px 11px;border:1px solid #41636d;
  border-radius:11px;background:#162a34;font-size:12px}
 #raceNameEditor summary{cursor:pointer;font-weight:700;color:#e1f5f2}
@@ -325,7 +341,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  </div>
  <div id="telemetry">3Dコースを準備中…</div>
  <div id="broadcastCameraLabel" hidden>📺 中継：ゲート・発走</div>
- <div id="runnerLabelLayer" hidden aria-hidden="true"><svg id="runnerLabelConnectors" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg></div>
+ <div id="runnerLabelLayer" hidden aria-hidden="true"><div id="runnerLabelLegend"></div></div>
  <div id="help">1本指ドラッグ：回転　2本指：拡大縮小・移動　Mac：ドラッグ／ホイール</div>
  <div id="stageDock" hidden>
   <div id="cameraAdjustTools">
@@ -829,13 +845,8 @@ function initRunnerGateSwap(){
  });
 }
 const runnerLabelLayer=document.querySelector('#runnerLabelLayer');
-const runnerNameLabels=[],runnerNameConnectors=[];
-const RUNNER_LABEL_SVG_NS='http://www.w3.org/2000/svg';
-const runnerLabelConnectors=document.querySelector('#runnerLabelConnectors');
-function makeRunnerSvg(tag,parent){
- const element=document.createElementNS(RUNNER_LABEL_SVG_NS,tag);
- parent.appendChild(element);return element;
-}
+const runnerLabelLegend=document.querySelector('#runnerLabelLegend');
+const runnerNameLabels=[],runnerHorseBadges=[];
 if(isOfficialEighteenTest){
  runnerLabelLayer.hidden=false;
  const editor=document.querySelector('#raceNameEditor');
@@ -863,29 +874,16 @@ if(isOfficialEighteenTest){
   label.append(title,input);fields.append(label);
  }
  for(let i=0;i<3;i++){
-  const el=document.createElement('div');
-  el.className='runner-name-label';el.hidden=true;
-  el.dataset.rank=String(i+1);
+  const label=document.createElement('div');
+  label.className='runner-name-label';label.hidden=true;
   const place=document.createElement('span');place.className='runner-label-place';
   const number=document.createElement('span');number.className='runner-label-number';
   const name=document.createElement('span');name.className='runner-label-name';
-  el.append(place,number,name);
-  el.runnerParts={place,number,name};
-  runnerLabelLayer.append(el);runnerNameLabels.push(el);
-  const group=makeRunnerSvg('g',runnerLabelConnectors);
-  const outline=makeRunnerSvg('line',group);
-  const line=makeRunnerSvg('line',group);
-  const halo=makeRunnerSvg('circle',group);
-  const target=makeRunnerSvg('circle',group);
-  outline.setAttribute('stroke','#09121b');outline.setAttribute('stroke-width','5');
-  line.setAttribute('stroke-width','2.5');
-  for(const item of [outline,line])item.setAttribute('stroke-linecap','round');
-  halo.setAttribute('r','8');halo.setAttribute('fill','#0a151d88');
-  halo.setAttribute('stroke-width','2.8');
-  target.setAttribute('r','3.2');target.setAttribute('stroke','#081216');
-  target.setAttribute('stroke-width','1');
-  group.style.display='none';
-  runnerNameConnectors.push({group,outline,line,halo,target});
+  label.append(place,number,name);label.runnerParts={place,number,name};
+  runnerLabelLegend.appendChild(label);runnerNameLabels.push(label);
+  const badge=document.createElement('span');
+  badge.className='runner-horse-badge';badge.hidden=true;
+  runnerLabelLayer.appendChild(badge);runnerHorseBadges.push(badge);
  }
  document.querySelector('#officialPairTools').appendChild(info);
 }
@@ -5061,41 +5059,17 @@ function rankedOfficialRunners(){
 }
 function clearRunnerNameLabels(){
  for(const label of runnerNameLabels)label.hidden=true;
- for(const connector of runnerNameConnectors)connector.group.style.display='none';
-}
-function runnerLabelScreenLayout(x,y,width,height,boxWidth,occupied,rank){
- const bottomSafe=document.body.classList.contains('race-watch-portrait')?
-  height-16:height-77;
- const topSafe=48,boxHeight=34;
- // Prefer a clear diagonal pointer, rather than text directly covering the
- // jockey; try either side and then below when the horses are near the top.
- const choices=rank%2===0?
-  [-82,82,-116,116,0,-164,164,-212,212,-238,238]:
-  [82,-82,116,-116,0,164,-164,212,-212,238,-238];
- for(const above of [true,false]){
-  for(const dx of choices){
-   const preferredY=y+(above?-54:77);
-   const centerX=x+dx;
-   const labelBottomY=preferredY;
-   const rect={l:centerX-boxWidth/2,r:centerX+boxWidth/2,
-    t:labelBottomY-boxHeight,b:labelBottomY};
-   if(rect.l<6||rect.r>width-6||rect.t<topSafe||rect.b>bottomSafe)continue;
-   if(occupied.some(prev=>rect.l<prev.r+7&&rect.r>prev.l-7&&
-    rect.t<prev.b+7&&rect.b>prev.t-7))continue;
-   return {x:centerX,y:labelBottomY,rect,
-    fromY:above?labelBottomY:labelBottomY-boxHeight};
-  }
- }
- return null;
+ for(const badge of runnerHorseBadges)badge.hidden=true;
 }
 function updateRunnerNameLabels(time){
  if(!isOfficialEighteenTest||!installedDesign01||view!=='broadcast'||
     !activePlan||officialPair.length!==18){
   clearRunnerNameLabels();return;
  }
- // Limit DOM and SVG label updates to 25 fps. Pointer endpoints use the
- // horse's interpolated actual render pose, not approximated track position.
- if(time-lastRunnerLabelPaint<40)return;
+ // The original diagonal leader lines were attached to the wrong vertical
+ // position and obscured the track. Project the horse's torso instead.
+ // All text stays in a fixed corner; the chip moves with the actual horse.
+ if(time-lastRunnerLabelPaint<50)return;
  lastRunnerLabelPaint=time;
  const shot=lastBroadcastShotId||'';
  const wide=shot.endsWith('-wide')||shot.endsWith('-gate');
@@ -5105,56 +5079,41 @@ function updateRunnerNameLabels(time){
  const width=stage.clientWidth,height=stage.clientHeight;
  const occupied=[];
  camera.updateMatrixWorld();
- runnerLabelConnectors.setAttribute('viewBox','0 0 '+width+' '+height);
  for(let rank=0;rank<runnerNameLabels.length;rank++){
-  const el=runnerNameLabels[rank],connector=runnerNameConnectors[rank],
-   item=ranked[rankStart+rank];
-  el.hidden=true;connector.group.style.display='none';
+  const label=runnerNameLabels[rank],badge=runnerHorseBadges[rank];
+  const item=ranked[rankStart+rank];
+  label.hidden=true;badge.hidden=true;
   if(rank>=limit||!item)continue;
   const runner=officialPair[item.index];
   if(!runner?.group?.visible)continue;
   runner.group.updateWorldMatrix(true,false);
-  // Mark the jockey's torso above the horse body. Its actual 3D
-  // projection is the end of the colored line for this particular horse.
-  const anchor=runner.group.localToWorld(new THREE.Vector3(0,2.26,.42));
-  const projected=anchor.project(camera);
-  if(!Number.isFinite(projected.x+projected.y+projected.z)||
-    projected.z<=-1||projected.z>=1)continue;
-  const x=(projected.x*.5+.5)*width;
-  const y=(.5-projected.y*.5)*height;
-  if(x<8||x>width-8||y<36||y>height-45)continue;
-  const nameWidth=Math.min(184,Math.max(95,[...item.name].length*12+68));
-  const location=runnerLabelScreenLayout(
-   x,y,width,height,nameWidth,occupied,rank);
-  if(!location)continue;
+  // The normalized Design01 model is 2.45m tall; 1.05m is the horse's
+  // visible torso, not the high unsupported 2.26m jockey pointer.
+  const at=runner.group.localToWorld(new THREE.Vector3(0,1.05,0));
+  const screen=at.project(camera);
+  if(!Number.isFinite(screen.x+screen.y+screen.z)||
+      screen.z<=-1||screen.z>=1)continue;
+  const x=(screen.x*.5+.5)*width,y=(.5-screen.y*.5)*height;
+  if(x<17||x>width-17||y<Math.max(65,height*.20)||y>height-25)continue;
+  // When two identifiers would overlap, suppress one instead of shifting
+  // it onto another runner and suggesting the wrong identity.
+  if(occupied.some(p=>Math.hypot(p.x-x,p.y-y)<25))continue;
+  occupied.push({x,y});
   const frame=RACE_FRAME_COLORS[officialFrameIndex(item.number)];
-  const hex=frame.hex;
-  const parts=el.runnerParts;
-  const placement=rankStart+rank+1;
-  parts.place.textContent=placement+'位';
-  el.dataset.rank=String(placement);
-  parts.number.textContent=String(item.number);
-  parts.name.textContent=item.name;
-  el.title=placement+'位 '+item.number+'番 '+item.name+'（'+frame.name+'枠）';
-  el.style.setProperty('--runner-frame',hex);
-  el.style.setProperty('--runner-ink',frame.ink);
-  el.style.left=location.x+'px';
-  el.style.top=location.y+'px';
-  el.hidden=false;
-  const fromX=location.x,fromY=location.fromY;
-  for(const segment of [connector.outline,connector.line]){
-   segment.setAttribute('x1',fromX);segment.setAttribute('y1',fromY);
-   segment.setAttribute('x2',x);segment.setAttribute('y2',y);
+  const place=rankStart+rank+1;
+  label.runnerParts.place.textContent=place+'位';
+  label.runnerParts.number.textContent=String(item.number);
+  label.runnerParts.name.textContent=item.name;
+  label.title=place+'位 '+item.number+'番 '+item.name;
+  label.dataset.rank=String(place);
+  badge.dataset.rank=String(place);
+  for(const el of [label,badge]){
+   el.style.setProperty('--runner-frame',frame.hex);
+   el.style.setProperty('--runner-ink',frame.ink);
   }
-  connector.line.setAttribute('stroke',hex);
-  // A black-frame horse needs a light contour against the dark turf.
-  connector.outline.setAttribute('stroke',frame.name==='黒'?'#f6fffc':'#07121b');
-  connector.halo.setAttribute('cx',x);connector.halo.setAttribute('cy',y);
-  connector.halo.setAttribute('stroke',frame.name==='黒'?'#f6fffc':hex);
-  connector.target.setAttribute('cx',x);connector.target.setAttribute('cy',y);
-  connector.target.setAttribute('fill',hex);
-  connector.group.style.display='';
-  occupied.push(location.rect);
+  badge.textContent=String(item.number);
+  badge.style.left=x+'px';badge.style.top=y+'px';
+  label.hidden=false;badge.hidden=false;
  }
 }
 function officialEighteenCameraShot(which,context){
