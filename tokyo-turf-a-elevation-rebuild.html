@@ -5130,6 +5130,7 @@ function updateRunnerNameLabels(time){
   const parts=el.runnerParts;
   const placement=rankStart+rank+1;
   parts.place.textContent=placement+'位';
+  el.dataset.rank=String(placement);
   parts.number.textContent=String(item.number);
   parts.name.textContent=item.name;
   el.title=placement+'位 '+item.number+'番 '+item.name+'（'+frame.name+'枠）';
@@ -5144,8 +5145,10 @@ function updateRunnerNameLabels(time){
    segment.setAttribute('x2',x);segment.setAttribute('y2',y);
   }
   connector.line.setAttribute('stroke',hex);
+  // A black-frame horse needs a light contour against the dark turf.
+  connector.outline.setAttribute('stroke',frame.name==='黒'?'#f6fffc':'#07121b');
   connector.halo.setAttribute('cx',x);connector.halo.setAttribute('cy',y);
-  connector.halo.setAttribute('stroke',hex);
+  connector.halo.setAttribute('stroke',frame.name==='黒'?'#f6fffc':hex);
   connector.target.setAttribute('cx',x);connector.target.setAttribute('cy',y);
   connector.target.setAttribute('fill',hex);
   connector.group.style.display='';
