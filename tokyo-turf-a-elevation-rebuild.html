@@ -5069,7 +5069,9 @@ function runnerLabelScreenLayout(x,y,width,height,boxWidth,occupied,rank){
  const topSafe=48,boxHeight=34;
  // Prefer a clear diagonal pointer, rather than text directly covering the
  // jockey; try either side and then below when the horses are near the top.
- const choices=rank%2===0?[-82,82,-116,116,0]:[82,-82,116,-116,0];
+ const choices=rank%2===0?
+  [-82,82,-116,116,0,-164,164,-212,212,-238,238]:
+  [82,-82,116,-116,0,164,-164,212,-212,238,-238];
  for(const above of [true,false]){
   for(const dx of choices){
    const preferredY=y+(above?-54:77);
