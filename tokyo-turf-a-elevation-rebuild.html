@@ -4428,7 +4428,23 @@ function prepareOriginalFrameZones(source){
  });
  return count;
 }
-function tintOriginalHelmetAndCloth(model,horseNumber){
+// New numbers are drawn on the APPROVED model's animated surface, not detached planes.
+function makeOfficialSaddleNumberTexture(horseNumber){
+ const frame=RACE_FRAME_COLORS[officialFrameIndex(horseNumber)];
+ const canvas=document.createElement('canvas');
+ canvas.width=256;canvas.height=168;
+ const ctx=canvas.getContext('2d');
+ ctx.fillStyle=frame.hex;ctx.fillRect(0,0,256,168);
+ ctx.strokeStyle=frame.name==='黒'?'#f0f0f0':'#10202a';
+ ctx.lineWidth=7;ctx.strokeRect(4,4,248,160);
+ ctx.fillStyle=frame.ink;ctx.textAlign='center';ctx.textBaseline='middle';
+ ctx.font='900 134px Arial,sans-serif';
+ ctx.fillText(String(horseNumber),128,85,218);
+ const texture=new THREE.CanvasTexture(canvas);
+ texture.colorSpace=THREE.SRGBColorSpace;
+ return texture;
+}
+function tintOriginalHelmetAndCloth(model,horseNumber,numberTexture){
  const tint=new THREE.Color(RACE_FRAME_COLORS[officialFrameIndex(horseNumber)].hex);
  model.traverse(node=>{
   if(!node.isSkinnedMesh||!node.geometry?.getAttribute('raceTintZone'))return;
@@ -4439,14 +4455,15 @@ function tintOriginalHelmetAndCloth(model,horseNumber){
   const mat=old.clone();
   mat.onBeforeCompile=(shader)=>{
    shader.uniforms.raceFrameTint={value:tint};
+   shader.uniforms.raceNumberMap={value:numberTexture};
    shader.vertexShader=shader.vertexShader.replace(
     '#include <common>',
-    '#include <common>\nattribute float raceTintZone;\nvarying float vRaceTintZone;')
+    '#include <common>\nattribute float raceTintZone;\nvarying float vRaceTintZone;\nvarying vec3 vRaceBindPos;')
     .replace('#include <begin_vertex>',
-    '#include <begin_vertex>\nvRaceTintZone=raceTintZone;');
+    '#include <begin_vertex>\nvRaceTintZone=raceTintZone;\nvRaceBindPos=position;');
    shader.fragmentShader=shader.fragmentShader.replace(
     '#include <common>',
-    '#include <common>\nuniform vec3 raceFrameTint;\nvarying float vRaceTintZone;')
+    '#include <common>\nuniform vec3 raceFrameTint;\nuniform sampler2D raceNumberMap;\nvarying float vRaceTintZone;\nvarying vec3 vRaceBindPos;')
     .replace('#include <color_fragment>',`#include <color_fragment>
     if(vRaceTintZone>.30){
      // Recolour the complete cap area of the approved GLB's shared atlas.
@@ -4462,75 +4479,24 @@ function tintOriginalHelmetAndCloth(model,horseNumber){
      float lightness=dot(diffuseColor.rgb,vec3(.2126,.7152,.0722));
      vec3 shaded=raceFrameTint*(.65+min(.43,lightness*.78));
      diffuseColor.rgb=mix(diffuseColor.rgb,shaded,mask);
+    }
+    // The original #4 is baked into the single skinned mesh's diffuse atlas.
+    // Apply a new number in the same bind-space saddle region on both sides.
+    float onSide=step(.145,abs(vRaceBindPos.x));
+    float inHeight=step(-.145,vRaceBindPos.y)*step(vRaceBindPos.y,.13);
+    float inLength=step(-.275,vRaceBindPos.z)*step(vRaceBindPos.z,.135);
+    if(onSide*inHeight*inLength>.5){
+     float u=(vRaceBindPos.z+.275)/.410;
+     if(vRaceBindPos.x>0.0)u=1.0-u;
+     float v=(vRaceBindPos.y+.145)/.275;
+     vec3 numColor=texture2D(raceNumberMap,clamp(vec2(u,v),0.0,1.0)).rgb;
+     diffuseColor.rgb=numColor;
     }`);
   };
-  mat.customProgramCacheKey=()=> 'race-frame-tint-v2';
+  mat.customProgramCacheKey=()=> 'race-skinned-number-v3';
   mat.needsUpdate=true;
   node.material=mat;
  });
-}
-function addOfficialFrameCloth(group,horseNumber,bounds){
- const frame=RACE_FRAME_COLORS[officialFrameIndex(horseNumber)];
- const size=bounds.getSize(new THREE.Vector3());
- if(!Number.isFinite(size.x*size.y*size.z)||
-    size.x<.08||size.y<.08||size.z<.08)return null;
- // Approved GLB range: X +/-.311, Y +/-.663, Z +/-.950.
- // Wider panels obscure the entire old #4 on both sides of the horse.
- const panelLength=THREE.MathUtils.clamp(size.z*.38,.68,.76);
- const panelHeight=THREE.MathUtils.clamp(size.y*.38,.46,.54);
- const y=bounds.min.y+size.y*.50;
- const z=bounds.min.z+size.z*.39;
- const sideX=Math.max(.335,size.x*.54);
- const canvas=document.createElement('canvas');
- canvas.width=256;canvas.height=192;
- const ctx=canvas.getContext('2d');
- ctx.fillStyle=frame.hex;ctx.fillRect(0,0,256,192);
- ctx.lineWidth=8;ctx.strokeStyle='#d0d6da';
- ctx.strokeRect(4,4,248,184);
- ctx.fillStyle=frame.ink;
- ctx.font='900 132px Arial,sans-serif';
- ctx.textAlign='center';ctx.textBaseline='middle';
- ctx.fillText(String(horseNumber),128,99,226);
- const texture=new THREE.CanvasTexture(canvas);
- texture.colorSpace=THREE.SRGBColorSpace;
- const material=new THREE.MeshBasicMaterial({
-  map:texture,side:THREE.DoubleSide,transparent:false,
-  depthTest:true,depthWrite:true,polygonOffset:true,
-  polygonOffsetFactor:-1,polygonOffsetUnits:-1
- });
- const geometry=new THREE.PlaneGeometry(panelLength,panelHeight);
- const outsidePanels=new THREE.Group();
- outsidePanels.name='raceFrameCloth_'+horseNumber+'_'+frame.name;
- outsidePanels.userData.horseNumber=horseNumber;
- for(const side of [-1,1]){
-  const numberPanel=new THREE.Mesh(geometry,material);
-  numberPanel.name='frame_'+(officialFrameIndex(horseNumber)+1)+'_number_'+horseNumber;
-  numberPanel.rotation.y=side*Math.PI/2;
-  numberPanel.position.set(side*sideX,y,z);
-  outsidePanels.add(numberPanel);
- }
- const top=new THREE.Mesh(
-  new THREE.BoxGeometry(size.x*.83,.035,panelLength*.95),
-  new THREE.MeshBasicMaterial({color:frame.hex,depthTest:true})
- );
- top.position.set(0,y+panelHeight*.42,z);
- top.name='frame_colour_back_strip';
- outsidePanels.add(top);
- // Attach the number panel to the animated body bone so that the original
- // blue #4 does not reappear as the skinned torso moves during gallop.
- // The approved source mesh, textures, skeleton and clips stay unchanged.
- const model=group.children[0];
- const spine=model?.getObjectByName('spine_02');
- group.add(outsidePanels);
- if(spine){
-  group.updateMatrixWorld(true);
-  spine.attach(outsidePanels);
-  outsidePanels.userData.attachedBone='spine_02';
- }else{
-  outsidePanels.userData.attachedBone='group-fallback';
-  console.warn('spine_02 missing; number cloth remains group-mounted');
- }
- return outsidePanels;
 }
 async function initializeOfficialPair(source,clip){
  for(const h of officialPair){h.mixer.stopAllAction();pairRoot.remove(h.group)}
@@ -4538,15 +4504,13 @@ async function initializeOfficialPair(source,clip){
  // Bounds of the approved GLB are identical across all cloned horse rigs.
  // Compute this only once; never recalculate 484k-vertex geometry 18 times.
  if(isOfficialEighteenTest)prepareOriginalFrameZones(source);
- const originalFrameBounds=isOfficialEighteenTest?
-  new THREE.Box3().setFromObject(source):null;
  for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
   // ジオメトリやテクスチャは共有し、スキンとボーンだけ独立させる。
   const model=cloneSkeleton(source);
   const group=new THREE.Group();group.add(model);
   if(isOfficialEighteenTest){
-   tintOriginalHelmetAndCloth(model,i+1);
-   addOfficialFrameCloth(group,i+1,originalFrameBounds);
+   const numberTexture=makeOfficialSaddleNumberTexture(i+1);
+   tintOriginalHelmetAndCloth(model,i+1,numberTexture);
   }
   pairRoot.add(group);
   const mixer=new THREE.AnimationMixer(model);
