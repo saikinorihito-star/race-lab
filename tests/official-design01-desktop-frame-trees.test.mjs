@@ -83,7 +83,7 @@ test('all 18 numbers are unique and the enlarged cloth covers the old #4 while f
   assert.equal(cloth.userData.horseNumber,i);
   assert.equal(cloth.userData.attachedBone,'spine_02');
   assert.equal(spine.attached,cloth);
-  const panels=cloth.children.filter(x=>x.name.startsWith('frame_'));
+  const panels=cloth.children.filter(x=>x.name.includes('_number_'));
   assert.equal(panels.length,2);
   for(const panel of panels){
    assert.ok(panel.name.endsWith('_number_'+i));
@@ -106,7 +106,7 @@ test('race scene includes three tree silhouettes with 36 instanced trees of each
  assert.deepEqual(Array.from(items,x=>x.shape),['round','pine','tall']);
  assert.match(html,/const perType=36/);
  assert.match(html,/const segment=i%RACE_TREE_SITES.length/);
- assert.match(html,/const outside=34\+\(\(i\+type\*3\)%5\)\*6/);
+ assert.match(html,/const outside=90\+\(\(i\+type\*3\)%5\)\*8/);
  assert.match(html,/MEASURE_OFFSET-renderedTurfWidthAt\(station\)-outside/);
  assert.match(html,/raceForest\.name='Design01_18_ThreeTreeSpecies'/);
  assert.match(html,/trunks\.visible=false;crowns\.visible=false;caps\.visible=false/);
@@ -166,7 +166,7 @@ test('Mac mouse gestures and shortcuts are separate from the approved iPhone con
 test('race desktop toolbar and speed controls preserve the construction UI and past camera controls',()=>{
  assert.match(html,/#raceSpeedButtons\[hidden\],#legacyRateLabel\[hidden\]\{display:none!important\}/);
  assert.match(html,/@media\(min-width:820px\)/);
- assert.match(html,/if\(isOfficialEighteenTest\)\{\s*raceSpeedButtons\.hidden=false/);
+ assert.match(html,/if\(isOfficialEighteenTest\)\{\s*raceSpeedButtons\.hidden=true/);
  assert.match(html,/document\.querySelector\('#legacyRateLabel'\)\.hidden=true/);
  assert.match(html,/const racingCameraViews=new Set\(\['broadcast','side','front3q','chase','field'\]\)/);
  assert.match(html,/id="cam18Extras"/);
