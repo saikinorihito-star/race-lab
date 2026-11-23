@@ -61,6 +61,24 @@ test('all nine Tokyo racing distances have start, corner, straight and finish sh
    assert.ok(phases.has(expected),distance+'m missing '+expected);
  }
 });
+test('start uses a wider full-field camera until lateral formation settles',()=>{
+ const forming=runInNewContext('('+fn('officialOpeningFormationWide')+')',{});
+ const horses=span=>Array.from({length:18},(_,i)=>({lane:i%2?span:0}));
+ assert.equal(forming(0,horses(20)),true);
+ assert.equal(forming(175,horses(7)),true,'Hold wide shot through initial acceleration');
+ assert.equal(forming(220,horses(15)),true,'Stay wide if runners remain spread out');
+ assert.equal(forming(220,horses(7)),false,'Allow closer shots once merged');
+ assert.equal(forming(340,horses(19)),false,'Avoid remaining in distant view for entire race');
+ const camera=makeShot(1400);
+ const pack=Array.from({length:18},(_,i)=>({
+  number:i+1,distance:50-i*1.2,lane:i*1.2,postDistance:0
+ }));
+ const opening=camera({horses:pack,lead:pack[0],leadDistance:50,
+  tailDistance:28,meanLane:10,gap:22});
+ assert.equal(opening.broadcastShotId,'opening-wide');
+ assert.equal(opening.fov,51);
+ assert.match(opening.broadcastLabel,/隊列形成/);
+});
 test('virtual cameras have finite nonidentical positions and target the running pack',()=>{
  for(const distance of [1400,2400,3400]){
   const shot=makeShot(distance),ids=new Set();
@@ -70,7 +88,7 @@ test('virtual cameras have finite nonidentical positions and target the running 
    const c=shot(context(distance,progress));
    assert.ok([c.eye.x,c.eye.y,c.eye.z,c.target.x,c.target.y,c.target.z,c.fov]
     .every(Number.isFinite));
-   assert.ok(c.fov>=25&&c.fov<=47);
+   assert.ok(c.fov>=25&&c.fov<=53);
    assert.ok(Math.hypot(c.eye.x-c.target.x,c.eye.y-c.target.y,c.eye.z-c.target.z)>10);
    ids.add(c.broadcastShotId);
   }
@@ -175,18 +193,18 @@ test('TV editor alternates first-three close-up, third-place pack and wider fiel
    meanLane:7,gap:51});
  };
  const first=at(90),third=at(300),wide=at(740);
- assert.match(first.broadcastShotId,/-lead$/);
+ assert.match(first.broadcastShotId,/opening-wide$/);
  assert.match(third.broadcastShotId,/-third$/);
  assert.match(wide.broadcastShotId,/-wide$/);
- assert.match(first.broadcastLabel,/先頭集団・低い斜め前/);
+ assert.match(first.broadcastLabel,/隊列形成・全馬追尾/);
  assert.match(third.broadcastLabel,/3番手付近・斜め前/);
  assert.match(wide.broadcastLabel,/馬群全景/);
  for(const shot of [first,third,wide]){
   assert.match(shot.broadcastLabel,/先頭 1番 ／ 3番手 3番/);
-  assert.ok(shot.fov>=25&&shot.fov<=47);
+  assert.ok(shot.fov>=25&&shot.fov<=53);
  }
  const dist=shot=>Math.hypot(shot.eye.x-shot.target.x,shot.eye.y-shot.target.y,shot.eye.z-shot.target.z);
- assert.ok(dist(first)<dist(wide)*.75,'Leading pack should be much closer than overview');
+ assert.ok(dist(first)>dist(third),'Opening camera should be farther out than third-place close-up');
  assert.ok(dist(third)<dist(wide)*.75,'Third-place pack should be much closer than overview');
 });
 test('18-runner sharpness improvements preserve non-race modes and fixed framebuffer',()=>{
