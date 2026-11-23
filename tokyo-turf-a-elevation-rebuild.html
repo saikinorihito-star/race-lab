@@ -4574,11 +4574,12 @@ function updateOfficialPair(dt){
   // In 4-horse formation, animation phase follows actual travel distance;
   // stationary/accelerating horses must not gallop at full speed in place.
   // The approved 2-horse animation timeline stays unchanged.
-  // 18-horse mode: slightly quicker leg turnover (+15%) without changing
-  // actual distance, horse speed, collisions, ranks, or camera timing.
-  // Distance-based phase also stays deterministic through +/-10s seeking.
+  // 18-horse mode: faster-looking legs (+23% relative to base, about 7%
+  // quicker than the previous +15%), without changing actual race speed,
+  // collision resolution, horse positions, ranks or camera timing.
+  // Distance-based phase stays deterministic through +/-10s seeking.
   const gaitDistance=(state.distance+(state.postDistance||0))*
-   (isOfficialEighteenTest?1.15:1);
+   (isOfficialEighteenTest?1.23:1);
   const gaitTime=isOfficialMultiTest?
    gaitDistance/16.0+
     (isOfficialEighteenTest?Math.min(1,Math.max(0,(state.distance-12)/24)):1)*i*.07:
@@ -5060,8 +5061,10 @@ function officialBroadcastCameraShot(context){
  const at=fieldCenterAt(activePlan,Math.max(0,focusDistance));
  const along=at.t.clone().normalize();
  const side=new THREE.Vector3(at.t.z,0,-at.t.x).normalize();
+ // Aim slightly below the former sightline, reducing empty sky and giving
+ // horses, hooves and the turf more vertical space in the race broadcast.
  const target=at.p.clone().addScaledVector(side,focusLane)
-  .add(new THREE.Vector3(0,forming?3.8:focusType==='wide'?3.3:2.45,0));
+  .add(new THREE.Vector3(0,forming?2.35:focusType==='wide'?2.15:1.55,0));
  let outside,height,ahead,fov;
  if(forming){
   // Closer starting overview with a slightly wider lens. All 18 runners,
