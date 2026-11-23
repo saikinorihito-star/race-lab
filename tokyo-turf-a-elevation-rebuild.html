@@ -4472,13 +4472,15 @@ function tintOriginalHelmetAndCloth(model,horseNumber){
 function addOfficialFrameCloth(group,horseNumber,bounds){
  const frame=RACE_FRAME_COLORS[officialFrameIndex(horseNumber)];
  const size=bounds.getSize(new THREE.Vector3());
- const center=bounds.getCenter(new THREE.Vector3());
  if(!Number.isFinite(size.x*size.y*size.z)||
-  size.x<.08||size.y<.08||size.z<.08)return null;
- // The approved GLB has length ~1.9 and height ~1.33 in bind-space.
- // Short, high-contrast numbers cover the original printed #4 on each side.
- const panelLength=THREE.MathUtils.clamp(size.z*.25,.37,.57);
- const panelHeight=THREE.MathUtils.clamp(size.y*.24,.26,.36);
+    size.x<.08||size.y<.08||size.z<.08)return null;
+ // Approved GLB range: X +/-.311, Y +/-.663, Z +/-.950.
+ // Wider panels obscure the entire old #4 on both sides of the horse.
+ const panelLength=THREE.MathUtils.clamp(size.z*.38,.68,.76);
+ const panelHeight=THREE.MathUtils.clamp(size.y*.38,.46,.54);
+ const y=bounds.min.y+size.y*.50;
+ const z=bounds.min.z+size.z*.39;
+ const sideX=Math.max(.335,size.x*.54);
  const canvas=document.createElement('canvas');
  canvas.width=256;canvas.height=192;
  const ctx=canvas.getContext('2d');
@@ -4492,31 +4494,42 @@ function addOfficialFrameCloth(group,horseNumber,bounds){
  const texture=new THREE.CanvasTexture(canvas);
  texture.colorSpace=THREE.SRGBColorSpace;
  const material=new THREE.MeshBasicMaterial({
-  map:texture,side:THREE.DoubleSide,transparent:false,depthTest:true
+  map:texture,side:THREE.DoubleSide,transparent:false,
+  depthTest:true,depthWrite:true,polygonOffset:true,
+  polygonOffsetFactor:-1,polygonOffsetUnits:-1
  });
  const geometry=new THREE.PlaneGeometry(panelLength,panelHeight);
- const y=bounds.min.y+size.y*.50;
- const z=center.z-size.z*.105;
- const sideX=Math.max(.22,size.x*.515);
  const outsidePanels=new THREE.Group();
  outsidePanels.name='raceFrameCloth_'+horseNumber+'_'+frame.name;
+ outsidePanels.userData.horseNumber=horseNumber;
  for(const side of [-1,1]){
   const numberPanel=new THREE.Mesh(geometry,material);
   numberPanel.name='frame_'+(officialFrameIndex(horseNumber)+1)+'_number_'+horseNumber;
   numberPanel.rotation.y=side*Math.PI/2;
-  numberPanel.position.set(center.x+side*sideX,y,z);
+  numberPanel.position.set(side*sideX,y,z);
   outsidePanels.add(numberPanel);
  }
- // Small coloured upper strip helps distinguish horses from the overhead
- // race camera without recolouring the original jockey/horse materials.
  const top=new THREE.Mesh(
-  new THREE.BoxGeometry(size.x*.60,.035,panelLength*.9),
+  new THREE.BoxGeometry(size.x*.83,.035,panelLength*.95),
   new THREE.MeshBasicMaterial({color:frame.hex,depthTest:true})
  );
- top.position.set(center.x,bounds.min.y+size.y*.535,z);
+ top.position.set(0,y+panelHeight*.42,z);
  top.name='frame_colour_back_strip';
  outsidePanels.add(top);
+ // Attach the number panel to the animated body bone so that the original
+ // blue #4 does not reappear as the skinned torso moves during gallop.
+ // The approved source mesh, textures, skeleton and clips stay unchanged.
+ const model=group.children[0];
+ const spine=model?.getObjectByName('spine_02');
  group.add(outsidePanels);
+ if(spine){
+  group.updateMatrixWorld(true);
+  spine.attach(outsidePanels);
+  outsidePanels.userData.attachedBone='spine_02';
+ }else{
+  outsidePanels.userData.attachedBone='group-fallback';
+  console.warn('spine_02 missing; number cloth remains group-mounted');
+ }
  return outsidePanels;
 }
 async function initializeOfficialPair(source,clip){
@@ -5069,7 +5082,7 @@ function officialBroadcastCameraShot(context){
   broadcastLabel:caption+'｜先頭 '+leader.number+'番 ／ 3番手 '+third.number+'番'};
 }
 let broadcastLabelCutAt=0,lastRunnerLabelPaint=-1;
-const RUNNER_BUBBLE_INTERVAL_MS=1100;
+const RUNNER_BUBBLE_INTERVAL_MS=3000;
 let runnerBubbleStep=0,runnerBubbleTime=0,runnerBubbleLastTime=-1,runnerBubbleShot='';
 function rankedOfficialRunners(){
  return officialPair.map((entry,index)=>{
@@ -5123,8 +5136,10 @@ function updateRunnerNameLabels(time){
   const runner=officialPair[item.index];
   if(!runner?.group?.visible)continue;
   runner.group.updateWorldMatrix(true,false);
-  const torso=runner.group.localToWorld(new THREE.Vector3(0,1.05,0));
-  const projected=torso.project(camera);
+  // The approved source mesh's highest vertex is y=0.663m.
+  // Anchor labels above the head, not over the visible torso.
+  const labelAnchor=runner.group.localToWorld(new THREE.Vector3(0,.85,.02));
+  const projected=labelAnchor.project(camera);
   if(!Number.isFinite(projected.x+projected.y+projected.z)||
       projected.z<=-1||projected.z>=1)continue;
   const x=(projected.x*.5+.5)*width,y=(.5-projected.y*.5)*height;
@@ -5162,8 +5177,8 @@ function updateRunnerNameLabels(time){
   const labelWidth=Math.max(54,label.offsetWidth||Math.min(164,item.name.length*11+20));
   const leftEdge=labelWidth/2+7,rightEdge=width-labelWidth/2-7;
   let position=null;
-  // A short triangular bubble tail begins immediately under the name.
-  for(const rise of [30,64,94]){
+  // More clearance above the model; no name box on the animated horse.
+  for(const rise of [40,57,76]){
    const bottom=y-rise;
    if(bottom<38)continue;
    for(const offset of [0,-25,25,-45,45]){
@@ -5182,7 +5197,9 @@ function updateRunnerNameLabels(time){
   occupiedTorso.push({x,y});
   label.style.left=position.left+'px';
   label.style.top=position.bottom+'px';
-  drawRunnerGuidePath(guide,position.left,position.bottom+1,x,y,
+  // Keep the filled pointer short and outside the horse silhouette.
+  const tipY=Math.min(y-7,position.bottom+22);
+  drawRunnerGuidePath(guide,position.left,position.bottom+1,x,tipY,
    frame.name==='黒'?'#f5f5f5':frame.hex);
   slot++;
  }
