@@ -1,5 +1,7 @@
 # Race Lab — 競馬レース展開シミュレーター（試作 v0.1）
 
+> **現在の3D競馬シミュレーション開発状況（2026-11-23）**：最新の引き継ぎ事項・進行中の修正・検証課題は **[3D版引き継ぎ資料](docs/RACE_LAB_HANDOVER_2026-11-23.md)** を参照してください。3D本体は [東京芝A Race Lab](tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&group=18) です。以下のv0.1説明は旧2D PWAに関する情報で、3D版の実装状況を表すものではありません。
+
 > **正式採用モデルの厳守事項（2026-11-19）**：BabylonJSでユーザーが承認した茶色の馬・青ゼッケン4・青白菱形勝負服は、**元Meshyモデル `Meshy_AI_Blue_Ribbon_Racer_1117140038_texture.glb`** が唯一の正解。球体から制作した似た別モデル・旧UV破損GLBは採用不可。元の外観を保持して1頭のギャロップ確認を先に完成させ、ユーザー承認後に18頭へ。検証事項・SHA-256は **[docs/APPROVED-DESIGN01-READFIRST.md](docs/APPROVED-DESIGN01-READFIRST.md)** を必ず先に読むこと。
 
 
