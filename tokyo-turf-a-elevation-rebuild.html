@@ -152,6 +152,8 @@ a{color:#95e8df}
  font-weight:900;font-size:13px;font-variant-numeric:tabular-nums;
  z-index:1}
 .runner-horse-badge[data-rank="1"]{outline:2px solid #efcf53;outline-offset:1px}
+.runner-name-label[data-selected="true"]{border-color:#ffe07c;box-shadow:0 0 0 1px #ffe07c,0 2px 7px #0009}
+.runner-horse-badge[data-selected="true"]{outline:3px solid #ffe07c;outline-offset:1px}
 @media(max-width:380px){#runnerLabelLegend{width:min(152px,44%);right:5px;top:6px}
  .runner-name-label{font-size:9px;padding:2px 4px;height:25px}
  .runner-name-label .runner-label-place{flex-basis:19px;font-size:8px}
@@ -249,6 +251,8 @@ body.official18.race-watch-portrait #watchDockSlot #stageDock{background:transpa
 .watchHorseRow{display:flex;align-items:center;gap:3px;min-width:0;border-bottom:1px solid #263037;white-space:nowrap;font-size:11px;line-height:1.05}
 .watchHorseRow.leading{background:#2d3925}
 .watchHorseRow.selected{outline:1px solid #ffe07c;outline-offset:-1px}
+.watchHorseRow{cursor:pointer}
+.watchHorseRow:focus-visible{outline:2px solid #fce48a;outline-offset:-2px}
 .watchHorseFrame{flex:0 0 23px;min-width:23px;max-width:23px;height:17px;border-radius:3px;display:grid;place-items:center;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums}
 .watchHorseName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:720}
 .watchHorseRank{flex:0 0 25px;text-align:right;color:#c4d0cb;font-size:10px;font-variant-numeric:tabular-nums}
@@ -5120,6 +5124,15 @@ function updateRunnerNameLabels(time){
  const limit=wide?2:3;
  const rankStart=shot.endsWith('-third')?2:0;
  const ranked=rankedOfficialRunners();
+ // iPhoneの18頭一覧で選んだ馬を優先。選択解除で従来の順位表示へ戻す。
+ // 自動中継の画角は変更せず、映像外の馬に誤った線を出さない。
+ const focusedIndex=watchSelectedHorseIndex;
+ const displayed=ranked.slice(rankStart,rankStart+limit);
+ if(Number.isInteger(focusedIndex)){
+  const selected=ranked.find(h=>h.index===focusedIndex);
+  if(selected&&!displayed.some(h=>h.index===focusedIndex)&&displayed.length)
+   displayed[displayed.length-1]=selected;
+ }
  const width=stage.clientWidth,height=stage.clientHeight;
  const stageRect=stage.getBoundingClientRect();
  runnerGuideLines.setAttribute('viewBox','0 0 '+width+' '+height);
@@ -5128,7 +5141,7 @@ function updateRunnerNameLabels(time){
  for(let rank=0;rank<runnerNameLabels.length;rank++){
   const label=runnerNameLabels[rank],badge=runnerHorseBadges[rank],
    guide=runnerGuidePaths[rank];
-  const item=ranked[rankStart+rank];
+  const item=displayed[rank];
   label.hidden=true;badge.hidden=true;clearRunnerGuidePath(guide);
   if(rank>=limit||!item)continue;
   const runner=officialPair[item.index];
@@ -5147,13 +5160,14 @@ function updateRunnerNameLabels(time){
   if(occupied.some(p=>Math.hypot(p.x-x,p.y-y)<25))continue;
   occupied.push({x,y});
   const frame=RACE_FRAME_COLORS[officialFrameIndex(item.number)];
-  const place=rankStart+rank+1;
+  const place=ranked.findIndex(h=>h.index===item.index)+1;
   label.runnerParts.place.textContent=place+'位';
   label.runnerParts.number.textContent=String(item.number);
   label.runnerParts.name.textContent=item.name;
   label.title=place+'位 '+item.number+'番 '+item.name;
   label.dataset.rank=String(place);
   badge.dataset.rank=String(place);
+  label.dataset.selected=badge.dataset.selected=String(item.index===focusedIndex);
   for(const el of [label,badge]){
    el.style.setProperty('--runner-frame',frame.hex);
    el.style.setProperty('--runner-ink',frame.ink);
@@ -5735,7 +5749,9 @@ function renderRaceWatchUI(time,force=false){
  document.querySelector('#watchRemain').textContent=
   raceFinished.length===18?'全頭ゴール':remaining===0?'先頭ゴール':'残り '+remaining+'m';
  document.querySelector('#watchRosterStatus').textContent=
-  raceFinished.length===18?'着順確定':'馬番・枠色・現在順位';
+  watchSelectedHorseIndex===null?
+   (raceFinished.length===18?'着順確定｜馬番を選択可':'馬番をタップして強調'):
+   (watchSelectedHorseIndex+1)+'番を強調｜画面内のみ';
  paintWatchOverview(horses);
  paintWatchSlope(leader);
 }
@@ -5763,6 +5779,8 @@ function setupRaceWatchUI(){
  for(let i=0;i<18;i++){
   const item=document.createElement('div');item.className='watchHorseRow';
   item.setAttribute('role','listitem');
+  item.tabIndex=0;
+  item.title='この馬を中継映像内で強調（再タップで解除）';
   const frame=document.createElement('span');frame.className='watchHorseFrame';
   const colors=RACE_FRAME_COLORS[officialFrameIndex(i+1)];
   frame.style.background=colors.hex;frame.style.color=colors.ink;
@@ -5774,6 +5792,11 @@ function setupRaceWatchUI(){
   item.addEventListener('click',()=>{
    watchSelectedHorseIndex=watchSelectedHorseIndex===i?null:i;
    renderRaceWatchUI(performance.now(),true);
+  });
+  item.addEventListener('keydown',event=>{
+   if(event.key==='Enter'||event.key===' '){
+    event.preventDefault();item.click();
+   }
   });
   watchRows.push({item,frame,name,rank});
  }
