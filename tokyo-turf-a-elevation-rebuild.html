@@ -4517,7 +4517,7 @@ async function initializeOfficialPair(source,clip){
   const action=mixer.clipAction(clip);
   action.setLoop(THREE.LoopRepeat,Infinity);action.play();
   action.time=i*.07;
-  officialPair.push({group,mixer});
+  officialPair.push({group,mixer,headBone:model.getObjectByName('head')});
   if(isOfficialEighteenTest&&(i+1)%3===0&&i+1<OFFICIAL_TEST_COUNT){
    document.querySelector('#officialPairStatus').textContent=
     '正式Design 01を準備中：'+(i+1)+' / '+OFFICIAL_TEST_COUNT+'頭';
@@ -5115,7 +5115,11 @@ function updateRunnerNameLabels(time){
   runner.group.updateWorldMatrix(true,false);
   // The approved source mesh's highest vertex is y=0.663m.
   // Anchor labels above the head, not over the visible torso.
-  const labelAnchor=runner.group.localToWorld(new THREE.Vector3(0,.85,.02));
+  // The approved GLB has a separate animated head bone, so the name
+  // follows the exact horse's head rather than hovering above the lane.
+  const labelAnchor=runner.headBone?
+   runner.headBone.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,.45,0)):
+   runner.group.localToWorld(new THREE.Vector3(0,.73,.55));
   const projected=labelAnchor.project(camera);
   if(!Number.isFinite(projected.x+projected.y+projected.z)||
       projected.z<=-1||projected.z>=1)continue;
