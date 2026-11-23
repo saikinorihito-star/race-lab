@@ -4989,11 +4989,12 @@ function fitBroadcastToRunners(eye,target,runners,fov){
  return eye;
 }
 function officialOpeningFormationWide(progress,horses){
- // Initial full-field coverage until the outside runners have merged.
- if(progress<180)return true;
- if(progress>=320||!horses||horses.length<4)return false;
+ // Starting gate -> brief full-field view. Do NOT keep the entire race
+ // in the distant shot while the field is still finding the rail.
+ if(progress<70)return true;
+ if(progress>=145||!horses||horses.length<4)return false;
  const lanes=horses.map(h=>h.lane).filter(Number.isFinite);
- return lanes.length>=4&&Math.max(...lanes)-Math.min(...lanes)>9;
+ return lanes.length>=4&&Math.max(...lanes)-Math.min(...lanes)>11;
 }
 function officialBroadcastCameraShot(context){
  // Low three-quarter front, 3rd-place focus, lateral tracking and full-field.
@@ -5006,7 +5007,9 @@ function officialBroadcastCameraShot(context){
   .sort((a,b)=>(b.distance+(b.postDistance||0))-(a.distance+(a.postDistance||0))||a.number-b.number);
  const leader=ranked[0]||lead;
  const third=ranked[Math.min(2,ranked.length-1)]||leader;
- const cycle=Math.floor(Math.max(0,leadDistance-36)/175)%5;
+ // Alternate recognizable TV shots on a readable cadence after launch.
+ // The explicit opening-wide phase is separate and never re-enters past 145m.
+ const cycle=Math.floor(Math.max(0,leadDistance-85)/130)%5;
  const forming=officialOpeningFormationWide(leadDistance,ranked);
  const focusType=forming?'opening':stageShot.id==='gate'?'gate':
   remaining<=55?'lead':['lead','third','horseEye','side','wide'][cycle];
@@ -5038,10 +5041,15 @@ function officialBroadcastCameraShot(context){
  else{outside=19;height=4.8;ahead=21;fov=38}
  const eye=at.p.clone().addScaledVector(side,-outside)
   .addScaledVector(along,ahead).add(new THREE.Vector3(0,height,0));
- fitBroadcastToRunners(eye,target,selected,fov);
- // Cap TV crane distance: horses, not scenery, remain the subject.
- const maxDistance=forming?130:focusType==='wide'?82:focusType==='gate'?75:
-  focusType==='side'?57:focusType==='horseEye'?53:60;
+ // Fitting all 18 horses is appropriate ONLY for the temporary opening
+ // overview and the occasional wide cut. It pushes the camera too far
+ // away when the shot is intended to feature 2–4 recognizable horses.
+ if(forming||focusType==='wide'||focusType==='gate')
+  fitBroadcastToRunners(eye,target,selected,fov);
+ // A closer upper bound for editorial closeups prevents "always distant".
+ const maxDistance=forming?120:focusType==='wide'?80:focusType==='gate'?72:
+  focusType==='side'?40:focusType==='horseEye'?34:
+  focusType==='third'?43:39;
  const vector=eye.clone().sub(target),radius=vector.length();
  if(radius>maxDistance)eye.copy(target).addScaledVector(vector,maxDistance/radius);
  eye.y=Math.max(at.p.y+(focusType==='horseEye'?2.5:3.1),
