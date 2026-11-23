@@ -255,7 +255,7 @@ body.official18.race-watch-portrait #watchDockSlot #stageDock{background:transpa
 .watchHorseRow:focus-visible{outline:2px solid #fce48a;outline-offset:-2px}
 .watchHorseFrame{flex:0 0 23px;min-width:23px;max-width:23px;height:17px;border-radius:3px;display:grid;place-items:center;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums}
 .watchHorseName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:720}
-.watchHorseRank{flex:0 0 25px;text-align:right;color:#c4d0cb;font-size:10px;font-variant-numeric:tabular-nums}
+.watchHorseRank{flex:0 0 28px;text-align:center;color:#ffe8a0;font-size:10px;font-weight:800;font-variant-numeric:tabular-nums}
 #raceWatchSlope{position:absolute;left:8px;top:8px;bottom:auto;z-index:12;width:min(200px,calc((100vw - 20px) * .666667));pointer-events:none;padding:3px 6px 2px;margin:0;border:1px solid #a9c6a2;border-radius:5px;background:#123b29ed;color:#fff;box-shadow:0 2px 5px #0008}
 #watchSlopeTitle{font-size:10px;font-weight:850;line-height:1.15;white-space:nowrap}
 #watchSlopeCanvas{display:block;width:100%;height:24px}
@@ -435,7 +435,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  </div>
 </div>
 <section id="raceWatchRoster" hidden aria-label="出走馬18頭の一覧">
- <div class="watchRosterTitle"><span>出走馬 18頭</span><span id="watchRosterStatus">馬番・枠色・現在順位</span></div>
+ <div class="watchRosterTitle"><span>現在順位｜出走馬18頭</span><span id="watchRosterStatus">1位から順に表示</span></div>
  <div id="watchRosterGrid" role="list"></div>
 </section>
 <div class="tools" id="views">
@@ -5725,17 +5725,21 @@ function renderRaceWatchUI(time,force=false){
   if(a.finished&&b.finished)return (a.finishTime??Infinity)-(b.finishTime??Infinity);
   if(a.finished)return -1;
   if(b.finished)return 1;
-  return b.distance-a.distance||a.number-b.number;
+  const aProgress=a.distance+(a.postDistance||0);
+  const bProgress=b.distance+(b.postDistance||0);
+  return bProgress-aProgress||a.number-b.number;
  });
- const places=new Map(ordered.map((h,i)=>[h.idx,i+1]));
+ const places=new Map(ordered.map((h,i)=>[h.idx??h.number-1,i+1]));
  for(let i=0;i<18;i++){
   const r=watchRows[i],h=horses[i];
   if(!r)continue;
   const name=officialRunnerNames[i]||'試験馬'+(i+1);
   if(r.name.textContent!==name){r.name.textContent=name;r.item.title=(i+1)+'番 '+name}
-  const rank=places.get(h.idx)||i+1;
-  const text=rank+'位';
-  if(r.rank.textContent!==text)r.rank.textContent=text;
+  const rank=places.get(h.idx??i)??i+1;
+  const rankText=rank+'位';
+  if(r.rank.textContent!==rankText)r.rank.textContent=rankText;
+  // Visually reorder by current rank without changing each horse's fixed identity.
+  if(r.item.style.order!==String(rank))r.item.style.order=String(rank);
   r.item.classList.toggle('leading',rank===1);
   r.item.classList.toggle('selected',i===watchSelectedHorseIndex);
 
@@ -5784,7 +5788,7 @@ function setupRaceWatchUI(){
   frame.textContent=String(i+1);
   const name=document.createElement('span');name.className='watchHorseName';
   const rank=document.createElement('span');rank.className='watchHorseRank';
-  item.append(frame,name,rank);grid.append(item);
+  item.append(rank,frame,name);grid.append(item);
   // Tapping a name highlights that runner in the upper location map.
   item.addEventListener('click',()=>{
    watchSelectedHorseIndex=watchSelectedHorseIndex===i?null:i;
