@@ -288,7 +288,7 @@ test('opening sees all 18 and rear group cuts track actual last-place horses',()
   return shot({horses,lead:horses[0],leadDistance:progress,
    tailDistance:progress-68,gap:68,meanLane:8});
  };
- const opening=at(35),mid=at(280),rear=at(380),leader=at(90);
+ const opening=at(35),mid=at(280),rear=at(380),leader=at(145);
  assert.match(opening.broadcastShotId,/opening-wide$/);
  assert.match(mid.broadcastShotId,/-midPack$/);
  assert.match(rear.broadcastShotId,/-tailPack$/);
