@@ -5114,9 +5114,6 @@ function updateRunnerNameLabels(time){
     !activePlan||officialPair.length!==18){
   clearRunnerNameLabels();return;
  }
- // The original diagonal leader lines were attached to the wrong vertical
- // position and obscured the track. Project the horse's torso instead.
- // All text stays in a fixed corner; the chip moves with the actual horse.
  if(time-lastRunnerLabelPaint<50)return;
  lastRunnerLabelPaint=time;
  const shot=lastBroadcastShotId||'';
@@ -5124,41 +5121,41 @@ function updateRunnerNameLabels(time){
  const limit=wide?2:3;
  const rankStart=shot.endsWith('-third')?2:0;
  const ranked=rankedOfficialRunners();
- // iPhoneの18頭一覧で選んだ馬を優先。選択解除で従来の順位表示へ戻す。
- // 自動中継の画角は変更せず、映像外の馬に誤った線を出さない。
+ // 優先順位は「タップして選択した馬」→「その画角の上位馬」。
+ // 重なりの判定はこの順番で実行し、選択馬を他馬のバッジで隠さない。
+ // 選択馬が画面外なら他の実際に映っている馬を繰り上げて表示する。
  const focusedIndex=watchSelectedHorseIndex;
- const displayed=ranked.slice(rankStart,rankStart+limit);
- if(Number.isInteger(focusedIndex)){
-  const selected=ranked.find(h=>h.index===focusedIndex);
-  if(selected&&!displayed.some(h=>h.index===focusedIndex)&&displayed.length)
-   displayed[displayed.length-1]=selected;
- }
+ const selected=Number.isInteger(focusedIndex)?
+  ranked.find(h=>h.index===focusedIndex):null;
+ const baseCandidates=ranked.slice(rankStart,rankStart+limit+3);
+ const candidates=selected?
+  [selected,...baseCandidates.filter(h=>h.index!==selected.index)]:baseCandidates;
  const width=stage.clientWidth,height=stage.clientHeight;
+ clearRunnerNameLabels();
+ if(width<1||height<1)return;
  const stageRect=stage.getBoundingClientRect();
  runnerGuideLines.setAttribute('viewBox','0 0 '+width+' '+height);
  const occupied=[];
  camera.updateMatrixWorld();
- for(let rank=0;rank<runnerNameLabels.length;rank++){
-  const label=runnerNameLabels[rank],badge=runnerHorseBadges[rank],
-   guide=runnerGuidePaths[rank];
-  const item=displayed[rank];
-  label.hidden=true;badge.hidden=true;clearRunnerGuidePath(guide);
-  if(rank>=limit||!item)continue;
+ let slot=0;
+ for(const item of candidates){
+  if(slot>=limit)break;
   const runner=officialPair[item.index];
   if(!runner?.group?.visible)continue;
   runner.group.updateWorldMatrix(true,false);
-  // The normalized Design01 model is 2.45m tall; 1.05m is the horse's
-  // visible torso, not the high unsupported 2.26m jockey pointer.
+  // Design 01 の胴体（脚や騎手頭部ではない）に馬番を追従させる。
   const at=runner.group.localToWorld(new THREE.Vector3(0,1.05,0));
   const screen=at.project(camera);
   if(!Number.isFinite(screen.x+screen.y+screen.z)||
       screen.z<=-1||screen.z>=1)continue;
   const x=(screen.x*.5+.5)*width,y=(.5-screen.y*.5)*height;
   if(x<17||x>width-17||y<Math.max(65,height*.20)||y>height-25)continue;
-  // When two identifiers would overlap, suppress one instead of shifting
-  // it onto another runner and suggesting the wrong identity.
+  // 他馬の近くへ番号をずらして誤認させず、密集時は後順位の番号を省略。
   if(occupied.some(p=>Math.hypot(p.x-x,p.y-y)<25))continue;
   occupied.push({x,y});
+  const label=runnerNameLabels[slot],badge=runnerHorseBadges[slot],
+   guide=runnerGuidePaths[slot];
+  slot++;
   const frame=RACE_FRAME_COLORS[officialFrameIndex(item.number)];
   const place=ranked.findIndex(h=>h.index===item.index)+1;
   label.runnerParts.place.textContent=place+'位';
@@ -5175,7 +5172,7 @@ function updateRunnerNameLabels(time){
   badge.textContent=String(item.number);
   badge.style.left=x+'px';badge.style.top=y+'px';
   label.hidden=false;badge.hidden=false;
-  // Read the displayed number chip; do not approximate its position.
+  // 馬番チップの実測位置から、その馬体の位置へ線を接続する。
   const pillRect=label.runnerParts.number.getBoundingClientRect();
   const sx=pillRect.left+pillRect.width/2-stageRect.left;
   const sy=pillRect.top+pillRect.height/2-stageRect.top;
