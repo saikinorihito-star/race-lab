@@ -121,12 +121,11 @@ a{color:#95e8df}
 .official18 #telemetry{position:static;max-width:100%;width:auto;line-height:1.4;
  padding:6px 8px;font-size:11px;background:#172c36;border:1px solid #355966}
 .official18 #stageDock{bottom:12px}
-/* Horse-name labels follow the actual horses in 3D, not floating numbers.
-   Each fine SVG line ends on that horse's projected torso. */
+/* Rank-cycling speech bubbles with broad tapered tails anchored to each horse. */
 #runnerLabelLayer{position:absolute;inset:0;z-index:4;overflow:hidden;pointer-events:none}
 #runnerLabelLayer[hidden]{display:none!important}
 #runnerGuideLines{position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:hidden;pointer-events:none}
-#runnerGuideLines path{fill:none;stroke-linecap:round;stroke-linejoin:round}
+#runnerGuideLines path{stroke-linecap:round;stroke-linejoin:round}
 #runnerLabelLegend{position:absolute;inset:0;z-index:2;pointer-events:none}
 .runner-name-label[hidden]{display:none!important}
 .runner-name-label{position:absolute;display:block;transform:translate(-50%,-100%);
@@ -134,8 +133,8 @@ a{color:#95e8df}
  height:27px;padding:5px 9px;overflow:hidden;text-overflow:ellipsis;
  white-space:nowrap;text-align:center;border-radius:7px;
  border:1px solid var(--runner-frame,#f6fbff);
- border-left:4px solid var(--runner-frame,#f6fbff);
- background:rgba(5,16,23,.91);color:#fff;
+ border-left:1px solid var(--runner-frame,#f6fbff);
+ background:rgba(5,16,23,.95);color:#fff;
  font-size:11px;font-weight:800;line-height:15px;
  text-shadow:0 1px 2px #000;box-shadow:0 2px 5px #0009}
 .runner-name-label[data-rank="1"]{box-shadow:0 0 0 1px #f0d269,0 2px 6px #000a}
@@ -853,18 +852,18 @@ function drawRunnerGuidePath(guide,startX,startY,endX,endY,color){
  if(![startX,startY,endX,endY].every(Number.isFinite)){
   clearRunnerGuidePath(guide);return;
  }
- // The name label's lower edge to this horse's torso; never another horse.
- const bend=Math.min(25,Math.max(8,(endY-startY)*.35));
- const d='M '+startX.toFixed(1)+' '+startY.toFixed(1)+
-  ' C '+startX.toFixed(1)+' '+(startY+bend).toFixed(1)+
-  ' '+endX.toFixed(1)+' '+(endY-bend).toFixed(1)+
-  ' '+endX.toFixed(1)+' '+endY.toFixed(1);
+ // Filled, curved speech-tail triangle rather than a thin connecting line.
+ const d='M '+(startX-7).toFixed(1)+' '+(startY-1).toFixed(1)+
+  ' Q '+(startX-5).toFixed(1)+' '+(startY+13).toFixed(1)+
+  ' '+endX.toFixed(1)+' '+endY.toFixed(1)+
+  ' Q '+(startX+5).toFixed(1)+' '+(startY+13).toFixed(1)+
+  ' '+(startX+7).toFixed(1)+' '+(startY-1).toFixed(1)+' Z';
  guide.outline.setAttribute('d',d);
  guide.line.setAttribute('d',d);
+ guide.outline.setAttribute('fill','#07141b');
+ guide.line.setAttribute('fill','#07141b');
  guide.line.setAttribute('stroke',color);
- guide.dot.setAttribute('cx',endX.toFixed(1));
- guide.dot.setAttribute('cy',endY.toFixed(1));
- guide.dot.setAttribute('fill',color);
+ guide.dot.setAttribute('r','0');
  guide.group.style.display='';
 }
 if(isOfficialEighteenTest){
@@ -5070,6 +5069,8 @@ function officialBroadcastCameraShot(context){
   broadcastLabel:caption+'｜先頭 '+leader.number+'番 ／ 3番手 '+third.number+'番'};
 }
 let broadcastLabelCutAt=0,lastRunnerLabelPaint=-1;
+const RUNNER_BUBBLE_INTERVAL_MS=1100;
+let runnerBubbleStep=0,runnerBubbleTime=0,runnerBubbleLastTime=-1,runnerBubbleShot='';
 function rankedOfficialRunners(){
  return officialPair.map((entry,index)=>{
   const position=officialPairVisualState(index),record=raceHorses[index];
@@ -5091,41 +5092,60 @@ function clearRunnerNameLabels(){
 function updateRunnerNameLabels(time){
  if(!isOfficialEighteenTest||!installedDesign01||view!=='broadcast'||
     !activePlan||officialPair.length!==18){
-  clearRunnerNameLabels();return;
+  clearRunnerNameLabels();
+  runnerBubbleShot='';runnerBubbleLastTime=-1;runnerBubbleStep=0;runnerBubbleTime=0;
+  return;
  }
  if(time-lastRunnerLabelPaint<50)return;
  lastRunnerLabelPaint=time;
  const shot=lastBroadcastShotId||'';
+ if(runnerBubbleShot!==shot||runnerBubbleLastTime<0||
+    time<runnerBubbleLastTime||time-runnerBubbleLastTime>5000){
+  runnerBubbleShot=shot;runnerBubbleStep=0;runnerBubbleTime=0;
+ }else if(playing){
+  runnerBubbleTime+=Math.min(300,time-runnerBubbleLastTime);
+  if(runnerBubbleTime>=RUNNER_BUBBLE_INTERVAL_MS){
+   runnerBubbleStep+=Math.floor(runnerBubbleTime/RUNNER_BUBBLE_INTERVAL_MS);
+   runnerBubbleTime%=RUNNER_BUBBLE_INTERVAL_MS;
+  }
+ }
+ runnerBubbleLastTime=time;
  const wide=shot.endsWith('-wide')||shot.endsWith('-gate');
- const limit=wide?2:3;
- const rankStart=shot.endsWith('-third')?2:0;
  const ranked=rankedOfficialRunners();
- // Select the user-tapped horse first; otherwise label visible rank leaders.
- const selected=Number.isInteger(watchSelectedHorseIndex)?
-  ranked.find(h=>h.index===watchSelectedHorseIndex):null;
- const baseCandidates=ranked.slice(rankStart,rankStart+limit+4);
- const candidates=selected?
-  [selected,...baseCandidates.filter(h=>h.index!==selected.index)]:baseCandidates;
  const width=stage.clientWidth,height=stage.clientHeight;
  clearRunnerNameLabels();
  if(width<1||height<1)return;
  runnerGuideLines.setAttribute('viewBox','0 0 '+width+' '+height);
  camera.updateMatrixWorld();
- const occupied=[],occupiedTorso=[];let slot=0;
- for(const item of candidates){
-  if(slot>=limit)break;
+ // Keep every horse visible inside the current TV shot in actual rank order.
+ const visible=[];
+ for(const item of ranked){
   const runner=officialPair[item.index];
   if(!runner?.group?.visible)continue;
   runner.group.updateWorldMatrix(true,false);
-  // Projection comes from the actual Design01 torso, not the number circle.
   const torso=runner.group.localToWorld(new THREE.Vector3(0,1.05,0));
   const projected=torso.project(camera);
   if(!Number.isFinite(projected.x+projected.y+projected.z)||
       projected.z<=-1||projected.z>=1)continue;
   const x=(projected.x*.5+.5)*width,y=(.5-projected.y*.5)*height;
   if(x<8||x>width-8||y<70||y>height-14)continue;
-  // If two horses project onto the same pixels, suppress the second label;
-  // two different names must never point to the same silhouette.
+  visible.push({...item,x,y});
+ }
+ if(!visible.length)return;
+ const selected=Number.isInteger(watchSelectedHorseIndex)?
+  visible.find(h=>h.index===watchSelectedHorseIndex):null;
+ const others=selected?visible.filter(h=>h.index!==selected.index):visible;
+ // One name normally; two in a wide shot or when a user selects a horse.
+ const limit=selected?2:wide?2:1;
+ const stride=selected?1:wide?2:1;
+ const first=others.length?(runnerBubbleStep*stride)%others.length:0;
+ const candidates=selected?[selected]:[];
+ for(let i=0;i<others.length&&candidates.length<limit;i++)
+  candidates.push(others[(first+i)%others.length]);
+ const occupied=[],occupiedTorso=[];
+ let slot=0;
+ for(const item of candidates){
+  const {x,y}=item;
   if(occupiedTorso.some(p=>Math.hypot(p.x-x,p.y-y)<26))continue;
   const label=runnerNameLabels[slot],guide=runnerGuidePaths[slot];
   const frame=RACE_FRAME_COLORS[officialFrameIndex(item.number)];
@@ -5136,15 +5156,14 @@ function updateRunnerNameLabels(time){
   label.dataset.selected=String(item.index===watchSelectedHorseIndex);
   label.style.setProperty('--runner-frame',frame.hex);
   label.hidden=false;
-  // Place each name ABOVE its horse, shifting only to prevent text overlap.
-  // The line always terminates at the original projected 3D position.
   const labelWidth=Math.max(54,label.offsetWidth||Math.min(164,item.name.length*11+20));
   const leftEdge=labelWidth/2+7,rightEdge=width-labelWidth/2-7;
   let position=null;
-  for(const rise of [38,64,90]){
+  // A short triangular bubble tail begins immediately under the name.
+  for(const rise of [30,43,58]){
    const bottom=y-rise;
-   if(bottom<30)continue;
-   for(const offset of [0,-34,34,-68,68]){
+   if(bottom<38)continue;
+   for(const offset of [0,-25,25,-45,45]){
     const left=Math.max(leftEdge,Math.min(rightEdge,x+offset));
     const rect={left:left-labelWidth/2,top:bottom-29,
      right:left+labelWidth/2,bottom};
@@ -5161,7 +5180,7 @@ function updateRunnerNameLabels(time){
   label.style.left=position.left+'px';
   label.style.top=position.bottom+'px';
   drawRunnerGuidePath(guide,position.left,position.bottom+1,x,y,
-   frame.name==='黒'?'#fafafa':frame.hex);
+   frame.name==='黒'?'#f5f5f5':frame.hex);
   slot++;
  }
 }
