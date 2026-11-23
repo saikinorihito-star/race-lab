@@ -312,8 +312,8 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 <div class="pillrow"><span class="pill">芝A｜1周2,083.1m／幅31～41m</span><span class="pill">芝直線525.9m／高低差2.7m</span><span class="pill">ダート｜1周1,899m／幅25m</span><span class="pill">ダート直線501.6m／高低差2.5m</span><span class="pill">左回り</span></div>
 <section id="raceWatchHeader" hidden aria-label="レース全体像と操作">
  <div class="watchHeadLine">
-  <strong id="watchCourse">東京 芝A 1400m</strong>
-  <span id="watchRemain">残り1400m</span>
+  <strong id="watchCourse">東京 芝A 2400m</strong>
+  <span id="watchRemain">残り2400m</span>
   <button type="button" id="watchEditToggle" aria-expanded="false">⚙ 設定・編集</button>
  </div>
  <div id="watchDockSlot"></div>
@@ -440,12 +440,12 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 <div class="tools" id="raceStarts">
 <label>レースの距離（S）
 <select id="raceDistance">
-<option value="1400" selected>芝1400m</option>
+<option value="1400">芝1400m</option>
 <option value="1600">芝1600m</option>
 <option value="1800">芝1800m（専用ポケット）</option>
 <option value="2000">芝2000m（専用ポケット）</option>
 <option value="2300">芝2300m</option>
-<option value="2400">芝2400m</option>
+<option value="2400" selected>芝2400m</option>
 <option value="2500">芝2500m</option>
 <option value="2600">芝2600m（仮配置）</option>
 <option value="3400">芝3400m</option>
@@ -2180,7 +2180,7 @@ const startCanvas=makeCanvasTexture(['S'],'#122530','#ffffff',256,256);
 const startPin=new THREE.Sprite(new THREE.SpriteMaterial({map:startCanvas,transparent:true,depthTest:true,depthWrite:false}));
 startPin.scale.set(13,13,1);startPin.userData.kind='start';scene.add(startPin);textLabels.push(startPin);
 const startName=label3D('S地点',0,10,0,8,'#1c5d65','start');
-let activePlan=null,activeDistance=1400;
+let activePlan=null,activeDistance=2400;
 function clearRoute(){
  routeVisual.traverse(obj=>{
   if(obj.geometry)obj.geometry.dispose();
@@ -4574,12 +4574,12 @@ function updateOfficialPair(dt){
   // In 4-horse formation, animation phase follows actual travel distance;
   // stationary/accelerating horses must not gallop at full speed in place.
   // The approved 2-horse animation timeline stays unchanged.
-  // 18-horse mode: visual leg turnover 5% faster than the previous
-  // 1.23 multiplier (1.23 * 1.05 = 1.2915), without changing actual
-  // horse speed, collisions, positions, stamina, ranks or camera timing.
+  // 18-horse mode: visual leg turnover 10% quicker than the previous
+  // 1.2915 multiplier (1.2915 * 1.10 = 1.42065). This changes only
+  // animation phase, not speed, distance, collisions, stamina or ranks.
   // Distance-based animation remains deterministic through seeking.
   const gaitDistance=(state.distance+(state.postDistance||0))*
-   (isOfficialEighteenTest?1.2915:1);
+   (isOfficialEighteenTest?1.42065:1);
   const gaitTime=isOfficialMultiTest?
    gaitDistance/16.0+
     (isOfficialEighteenTest?Math.min(1,Math.max(0,(state.distance-12)/24)):1)*i*.07:
@@ -6472,7 +6472,7 @@ function animate(time){
  if(time-lastTime>1200){
   fps=fpsCount*1000/(time-lastTime||1);fpsCount=0;lastTime=time;
    autoTune18HorseResolution(fps);
-  const rest=Math.max(0,Math.round((activePlan?.distance||1400)-travel));
+  const rest=Math.max(0,Math.round((activePlan?.distance||2400)-travel));
   drawElevationProfile();
   const modeName=isOfficialPairTest?'正式Design 01・'+OFFICIAL_TEST_COUNT+'頭テスト':fieldMode.value==='race18'?'18頭レース':
    fieldMode.value==='field18'?'18頭等速':'1頭デモ';
