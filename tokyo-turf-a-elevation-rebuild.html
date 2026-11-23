@@ -5014,10 +5014,13 @@ function fitBroadcastToRunners(eye,target,runners,fov){
  return eye;
 }
 function officialOpeningFormationWide(progress,horses){
- // Starting gate -> brief full-field view. Do NOT keep the entire race
- // in the distant shot while the field is still finding the rail.
- if(progress<70)return true;
- if(progress>=145||!horses||horses.length<4)return false;
+ // Start closeups approximately one second earlier: current leader speed
+ // converted to metres, clamped for realistic opening acceleration.
+ const speed=horses?.[0]?.speed;
+ const oneSecondDistance=Number.isFinite(speed)&&speed>10?
+  Math.max(12,Math.min(20,speed)):16;
+ if(progress<70-oneSecondDistance)return true;
+ if(progress>=145-oneSecondDistance||!horses||horses.length<4)return false;
  const lanes=horses.map(h=>h.lane).filter(Number.isFinite);
  return lanes.length>=4&&Math.max(...lanes)-Math.min(...lanes)>11;
 }
@@ -5032,15 +5035,17 @@ function officialBroadcastCameraShot(context){
   .sort((a,b)=>(b.distance+(b.postDistance||0))-(a.distance+(a.postDistance||0))||a.number-b.number);
  const leader=ranked[0]||lead;
  const third=ranked[Math.min(2,ranked.length-1)]||leader;
- // Alternate recognizable TV shots on a readable cadence after launch.
- // The explicit opening-wide phase is separate and never re-enters past 145m.
- const cycle=Math.floor(Math.max(0,leadDistance-85)/130)%5;
+ // Advance the first close shot by ~1 second and rotate 7 distinct angles.
+ const cycle=Math.floor(Math.max(0,leadDistance-69)/130)%7;
  const forming=officialOpeningFormationWide(leadDistance,ranked);
  const focusType=forming?'opening':stageShot.id==='gate'?'gate':
-  remaining<=55?'lead':['lead','third','horseEye','side','wide'][cycle];
+  remaining<=55?'lead':
+  ['lead','third','frontPack','side','sidePack','horseEye','wide'][cycle];
  const selected=forming?ranked:
   (focusType==='lead'||focusType==='horseEye')?ranked.slice(0,Math.min(3,ranked.length)):
+  focusType==='frontPack'?ranked.slice(0,Math.min(5,ranked.length)):
   focusType==='third'?ranked.slice(Math.min(1,ranked.length-1),Math.min(5,ranked.length)):
+  focusType==='sidePack'?ranked.slice(0,Math.min(7,ranked.length)):
   focusType==='side'?ranked.slice(0,Math.min(4,ranked.length)):
   focusType==='gate'?ranked.slice(0,Math.min(8,ranked.length)):
   gap<45?ranked:ranked.slice(0,Math.min(9,ranked.length));
@@ -5057,6 +5062,15 @@ function officialBroadcastCameraShot(context){
  if(forming){outside=55;height=14.5;ahead=26;fov=51}
  else if(focusType==='gate'){outside=28;height=7.8;ahead=22;fov=43}
  else if(focusType==='wide'){outside=42;height=11.8;ahead=18;fov=42}
+ else if(focusType==='frontPack'){
+  // Reference 1: low front oblique view, leading horses in foreground,
+  // following pack receding toward the stand in the same composition.
+  outside=14.2;height=3.45;ahead=22;fov=39;
+ }
+ else if(focusType==='sidePack'){
+  // Reference 2: low lateral tracking with several runners across frame.
+  outside=23.5;height=4.2;ahead=0;fov=43;
+ }
  else if(focusType==='side'){outside=14.5;height=4.1;ahead=1;fov=36}
  else if(focusType==='horseEye'){
   // Low tracking shot: no camera is allowed under the turf.
@@ -5073,6 +5087,7 @@ function officialBroadcastCameraShot(context){
   fitBroadcastToRunners(eye,target,selected,fov);
  // A closer upper bound for editorial closeups prevents "always distant".
  const maxDistance=forming?120:focusType==='wide'?80:focusType==='gate'?72:
+  focusType==='sidePack'?47:focusType==='frontPack'?38:
   focusType==='side'?31:focusType==='horseEye'?27:
   focusType==='third'?32:30;
  const vector=eye.clone().sub(target),radius=vector.length();
@@ -5084,6 +5099,8 @@ function officialBroadcastCameraShot(context){
   focusType==='lead'?'先頭集団・低い斜め前':
   focusType==='third'?'3番手付近・斜め前':
   focusType==='side'?'先頭集団・低い横位置':
+  focusType==='frontPack'?'先頭集団・斜め前から隊列を映す':
+  focusType==='sidePack'?'馬群・低い真横の追走映像':
   focusType==='horseEye'?'馬の目線・馬群へ接近':'馬群全景';
  return {eye,target,gap,focusedOnLead:focusType==='lead',
   fov,broadcastShotId:forming?'opening-wide':stageShot.id+'-'+focusType,
@@ -5144,7 +5161,7 @@ function updateRunnerNameLabels(time){
   }
  }
  runnerBubbleLastTime=time;
- const wide=shot.endsWith('-wide')||shot.endsWith('-gate');
+ const wide=shot.endsWith('-wide')||shot.endsWith('-gate')||shot.endsWith('-sidePack');
  const ranked=rankedOfficialRunners();
  const width=stage.clientWidth,height=stage.clientHeight;
  clearRunnerNameLabels();
