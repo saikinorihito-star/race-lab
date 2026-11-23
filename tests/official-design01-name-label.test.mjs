@@ -124,7 +124,7 @@ test('一覧で選んだ馬を優先して同じ馬体に接続し、重なっ�
  assert.equal(h.labels[0].runnerParts.place.textContent,'18位');
  assert.equal(h.labels[0].dataset.selected,'true');
  assert.equal(h.badges[0].textContent,'18');
- assert.equal(h.guides[0].coords.ex,60);
+ assert.ok(Math.abs(h.guides[0].coords.ex-60)<1e-8);
 });
 test('選択馬が画面外なら実際に映る上位馬へフォールバック',()=>{
  const h=guideHarness();
