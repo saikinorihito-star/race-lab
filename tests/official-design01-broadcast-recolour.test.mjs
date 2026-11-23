@@ -117,9 +117,10 @@ test('shader tints actual original helmet and cloth texels but never replaces bo
   THREE:{Color:class{constructor(c){this.value=c}}},
   RACE_FRAME_COLORS:palette,officialFrameIndex:n=>Math.floor((n-1)/2)
  });
- apply({traverse:cb=>cb(node)},5);
+ const numberTexture={name:'horse5-unique-number'};
+ apply({traverse:cb=>cb(node)},5,numberTexture);
  const material=node.material;
- assert.equal(material.customProgramCacheKey(),'race-frame-tint-v2');
+ assert.equal(material.customProgramCacheKey(),'race-skinned-number-v3');
  const shader={
   uniforms:{},
   vertexShader:'#include <common>\n#include <begin_vertex>',
@@ -127,8 +128,12 @@ test('shader tints actual original helmet and cloth texels but never replaces bo
  };
  material.onBeforeCompile(shader);
  assert.equal(shader.uniforms.raceFrameTint.value.value,'#d63338');
+ assert.equal(shader.uniforms.raceNumberMap.value,numberTexture);
  assert.match(shader.vertexShader,/attribute float raceTintZone;\nvarying float vRaceTintZone/);
- assert.match(shader.fragmentShader,/uniform vec3 raceFrameTint;\nvarying float vRaceTintZone/);
+ assert.match(shader.fragmentShader,/uniform vec3 raceFrameTint;\nuniform sampler2D raceNumberMap;\nvarying float vRaceTintZone/);
+ assert.match(shader.vertexShader,/varying vec3 vRaceBindPos/);
+ assert.match(shader.vertexShader,/vRaceBindPos=position/);
+ assert.match(shader.fragmentShader,/if\(onSide\*inHeight\*inLength>\.5\)/)
  assert.match(shader.fragmentShader,/diffuseColor\.rgb=mix\(diffuseColor\.rgb,shaded,mask\)/);
  assert.match(shader.fragmentShader,/originalBlue=diffuseColor\.b-max\(diffuseColor\.r,diffuseColor\.g\)/);
  assert.ok(!shader.vertexShader.includes('\\\\nattribute'),'GLSL should contain real newlines');
