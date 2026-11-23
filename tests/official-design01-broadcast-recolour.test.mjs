@@ -10,6 +10,7 @@ function fn(name){
  return html.slice(start,end+2);
 }
 const stages=runInNewContext('('+fn('officialBroadcastStage')+')',{});
+const forming=runInNewContext('('+fn('officialOpeningFormationWide')+')',{});
 class V{
  constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}
  clone(){return new V(this.x,this.y,this.z)}
@@ -24,7 +25,7 @@ const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const THREE={Vector3:V,MathUtils:{lerp:(a,b,t)=>a+(b-a)*t,clamp}};
 const makeShot=distance=>runInNewContext('('+fn('officialBroadcastCameraShot')+')',{
  THREE,activePlan:{distance},FINISH_DISTANCE:525.9,
- officialBroadcastStage:stages,
+ officialBroadcastStage:stages,officialOpeningFormationWide:forming,
  fieldCenterAt:(_p,d)=>({p:new V(d*.31,2,d*.1),t:new V(1,0,0)}),
  positionAt:s=>({p:new V(s*.31,2,s*.1),t:new V(1,0,0),inward:new V(0,0,-1)}),
  fitBroadcastToRunners:()=>{}
