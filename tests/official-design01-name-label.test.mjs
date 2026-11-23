@@ -15,11 +15,11 @@ test('中継は馬名の黒い吹き出しと三角形のしっぽで馬体を�
  assert.ok(html.includes('#runnerLabelLegend{position:absolute;inset:0'));
  assert.ok(html.includes('.runner-name-label{position:absolute'));
  assert.ok(html.includes('label.textContent=item.name'));
- assert.ok(html.includes('drawRunnerGuidePath(guide,position.left,position.bottom+1,x,y'));
+ assert.ok(html.includes('drawRunnerGuidePath(guide,position.left,position.bottom+1,x,tipY'));
  assert.ok(html.includes("guide.line.setAttribute('fill','#07141b')"));
  assert.ok(html.includes("guide.dot.setAttribute('r','0')"));
- assert.ok(html.includes('RUNNER_BUBBLE_INTERVAL_MS=1100'));
- assert.ok(html.includes('runner.group.localToWorld(new THREE.Vector3(0,1.05,0))'));
+ assert.ok(html.includes('RUNNER_BUBBLE_INTERVAL_MS=3000'));
+ assert.ok(html.includes('runner.group.localToWorld(new THREE.Vector3(0,.85,.02))'));
  assert.ok(!html.includes('runnerHorseBadges'));
  assert.ok(!html.includes('.runner-horse-badge'));
  assert.ok(html.includes('const model=cloneSkeleton(source)'));
@@ -72,7 +72,7 @@ function guideHarness(){
   activePlan:{distance:1400},watchSelectedHorseIndex:null,
   lastBroadcastShotId:'back-lead',lastRunnerLabelPaint:-1,
   runnerBubbleShot:'',runnerBubbleLastTime:-1,runnerBubbleStep:0,
-  runnerBubbleTime:0,RUNNER_BUBBLE_INTERVAL_MS:1100,playing:true,
+  runnerBubbleTime:0,RUNNER_BUBBLE_INTERVAL_MS:3000,playing:true,
   stage:{clientWidth:400,clientHeight:500},
   camera:{updateMatrixWorld(){}},
   THREE:{Vector3:class {
@@ -91,6 +91,7 @@ function guideHarness(){
   RACE_FRAME_COLORS:[{name:'白',hex:'#fff',ink:'#111'}],
   officialFrameIndex:()=>0
  };
+ ctx.runnerProjectedBodyRect=runInNewContext('('+extract('runnerProjectedBodyRect')+')',ctx);
  ctx.clearRunnerGuidePath=runInNewContext('('+extract('clearRunnerGuidePath')+')',ctx);
  ctx.clearRunnerNameLabels=runInNewContext('('+extract('clearRunnerNameLabels')+')',ctx);
  ctx.drawRunnerGuidePath=runInNewContext('('+extract('drawRunnerGuidePath')+')',ctx);
@@ -103,16 +104,16 @@ test('中継では1頭ずつ順位順に切り替え、広角では2頭ずつ切
  const h=guideHarness();
  h.update(1000);
  assert.deepEqual(h.active(),['試験馬1']);
- for(let t=1100;t<=2200;t+=100)h.update(t);
+ for(let t=1100;t<=4100;t+=100)h.update(t);
  assert.deepEqual(h.active(),['試験馬2']);
- for(let t=2300;t<=3400;t+=100)h.update(t);
+ for(let t=4200;t<=7200;t+=100)h.update(t);
  assert.deepEqual(h.active(),['試験馬3']);
  h.ctx.lastBroadcastShotId='back-wide';
- h.update(3500);
+ h.update(7300);
  assert.deepEqual(h.active(),['試験馬1','試験馬2']);
- for(let t=3600;t<=4700;t+=100)h.update(t);
+ for(let t=7400;t<=10700;t+=100)h.update(t);
  assert.deepEqual(h.active(),['試験馬3','試験馬4']);
- h.ctx.view='side';h.update(4800);
+ h.ctx.view='side';h.update(10800);
  assert.equal(h.active().length,0);
  assert.ok(h.guides.every(g=>g.group.style.display==='none'));
 });
@@ -120,14 +121,14 @@ test('選択した馬を常時優先し、他の馬名だけ順位順に切り�
  const h=guideHarness();
  h.ctx.watchSelectedHorseIndex=17;h.update(1000);
  assert.deepEqual(h.active(),['試験馬18','試験馬1']);
- for(let t=1100;t<=2200;t+=100)h.update(t);
+ for(let t=1100;t<=4100;t+=100)h.update(t);
  assert.deepEqual(h.active(),['試験馬18','試験馬2']);
  // The user may pause to inspect a named horse; do not rotate while paused.
  h.ctx.playing=false;
- for(let t=2300;t<=5000;t+=100)h.update(t);
+ for(let t=4200;t<=7000;t+=100)h.update(t);
  assert.deepEqual(h.active(),['試験馬18','試験馬2']);
  h.ctx.playing=true;
- for(let t=5100;t<=6200;t+=100)h.update(t);
+ for(let t=7100;t<=10100;t+=100)h.update(t);
  assert.deepEqual(h.active(),['試験馬18','試験馬3']);
 });
 test('選択した18番を優先、密集時は違う馬と取り違えず、実順位も保つ',()=>{
@@ -140,7 +141,7 @@ test('選択した18番を優先、密集時は違う馬と取り違えず、実
  assert.equal(h.labels[0].dataset.rank,'18');
  assert.equal(h.labels[0].dataset.selected,'true');
  assert.ok(Number(h.labels[0].style.top.replace('px',''))<250,'Horse name is above its torso');
- assert.ok(h.guides[0].line.values.d.includes('60.0 250.0'));
+ assert.ok(h.guides[0].line.values.d.includes('60.0 232.0'));
  assert.equal(h.guides[0].dot.values.r,'0');
  assert.equal(h.guides[0].group.style.display,'');
 });
