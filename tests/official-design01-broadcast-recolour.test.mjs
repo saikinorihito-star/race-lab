@@ -317,6 +317,54 @@ test('opening sees all 18 and rear group cuts track actual last-place horses',()
  assert.deepEqual(seen[0],Array.from({length:18},(_,i)=>i+1),
   'Opening fit must include the true last-place runner');
 });
+test('all TV shot types frame lower to reduce empty sky without losing horses',()=>{
+ const shot=makeShot(1400);
+ const opening=shot(context(1400,35));
+ const leader=shot(context(1400,145));
+ const overview=shot(context(1400,1170));
+ assert.match(opening.broadcastShotId,/opening-wide$/);
+ assert.match(leader.broadcastShotId,/-lead$/);
+ assert.match(overview.broadcastShotId,/-wide$/);
+ // Synthetic track surface is at y=2. The three targets are ground-relative.
+ assert.ok(Math.abs(opening.target.y-(2+2.35))<1e-8);
+ assert.ok(Math.abs(leader.target.y-(2+1.55))<1e-8);
+ assert.ok(Math.abs(overview.target.y-(2+2.15))<1e-8);
+ for(const cameraShot of [opening,leader,overview]){
+  assert.ok(cameraShot.eye.y>cameraShot.target.y,'The camera still looks down toward the turf');
+  assert.ok([cameraShot.eye.x,cameraShot.eye.y,cameraShot.eye.z,
+   cameraShot.target.x,cameraShot.target.y,cameraShot.target.z].every(Number.isFinite));
+ }
+ assert.match(fn('officialBroadcastCameraShot'),
+  /forming\?2\.35:focusType==='wide'\?2\.15:1\.55/);
+});
+test('18-horse approved GLB legs animate a little quicker without racing faster',()=>{
+ // For distance 100m, index 0 advances 100/16*1.23 in animation-time.
+ // This comparison is independent of simulation physics or FPS.
+ const local={THREE:{Vector3:V,MathUtils:{clamp}},
+  isOfficialPairTest:true,installedDesign01:true,
+  activePlan:{distance:1400},OFFICIAL_TEST_COUNT:18,isOfficialMultiTest:true,
+  isOfficialEighteenTest:true,playing:true,raceElapsed:9,RACE_TICK:1/60,
+  officialPair:Array.from({length:18},()=>({
+   group:{position:{copy(){}},rotation:{}},
+   mixer:{time:null,setTime(v){this.time=v}}
+  })),
+  officialPairVisualState:()=>({distance:100,postDistance:0,speed:16,sideSpeed:0,alpha:1}),
+  raceHorsePosition:()=>({p:new V(0,0,0),t:new V(0,0,1)}),
+  fourHorseInwardSlope:()=>0,rate:{value:'1'}};
+ const apply=runInNewContext('('+fn('updateOfficialPair')+')',local);
+ apply(1/60);
+ const boosted=local.officialPair[0].mixer.time;
+ assert.ok(Math.abs(boosted-100*1.23/16)<1e-8);
+ assert.ok(boosted>100*1.15/16,'Slightly quicker than former 15% turnover');
+ assert.ok(local.officialPair[1].mixer.time>boosted,'Separate phase offset remains');
+ local.isOfficialEighteenTest=false;local.OFFICIAL_TEST_COUNT=2;
+ apply(1/60);
+ assert.ok(Math.abs(local.officialPair[0].mixer.time-100/16)<1e-8,
+  'Other approved horse modes retain original visual gait cadence');
+ const source=fn('updateOfficialPair');
+ assert.doesNotMatch(source,/stepRace\(|raceHorses\[[^\]]+\]\.distance\s*=/,
+  'Only mixer animation phase is updated, not the physics');
+});
 test('approved horse materials keep 2K maps shared with anisotropic filtering',()=>{
  const configure=runInNewContext('('+fn('improveApprovedHorseTextureSampling')+')',{
   renderer:{capabilities:{getMaxAnisotropy:()=>16}}
