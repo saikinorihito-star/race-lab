@@ -23,7 +23,8 @@ const makeShot=distance=>runInNewContext('('+fn('officialBroadcastCameraShot')+'
  THREE,activePlan:{distance},FINISH_DISTANCE:525.9,
  officialBroadcastStage:stages,
  fieldCenterAt:(_p,d)=>({p:new V(d*.31,2,d*.1),t:new V(1,0,0)}),
- positionAt:s=>({p:new V(s*.31,2,s*.1),t:new V(1,0,0),inward:new V(0,0,-1)})
+ positionAt:s=>({p:new V(s*.31,2,s*.1),t:new V(1,0,0),inward:new V(0,0,-1)}),
+ fitBroadcastToRunners:()=>{}
 });
 const context=(distance,progress)=>({
  leadDistance:progress,tailDistance:Math.max(0,progress-32),
@@ -75,7 +76,7 @@ test('virtual cameras have finite nonidentical positions and target the running 
 });
 test('camera uses hard cuts between stations and gentle pan inside each shot',()=>{
  assert.match(html,/const cut=onBroadcast&&shot\.broadcastShotId!==lastBroadcastShotId/);
- assert.match(html,/if\(cut\)\{\s*camera\.position\.copy\(shot\.eye\)/);
+ assert.match(html,/if\(cut\|\|camera18CutPending\)\{\s*camera\.position\.copy\(shot\.eye\)/);
  assert.match(html,/camera\.position\.lerp\(shot\.eye,alpha\)/);
  assert.match(html,/broadcastCameraLabel\.textContent='📺 中継：'\+shot\.broadcastLabel/);
  assert.match(html,/camera\.fov=shot\.fov/);
@@ -186,9 +187,9 @@ test('TV editor alternates first-three close-up, third-place pack and wider fiel
  assert.ok(dist(third)<dist(wide)*.75,'Third-place pack should be much closer than overview');
 });
 test('18-runner sharpness improvements preserve non-race modes and fixed framebuffer',()=>{
- assert.match(html,/isOfficialEighteenTest\?\{sharp:1\.80,standard:1\.35,light:1\.05\}/);
- assert.match(html,/renderQuality\.value==='auto'\?1\.65/);
- assert.match(html,/let auto18Dpr=1\.65,auto18ObservedFps=0/);
+ assert.match(html,/isOfficialEighteenTest\?\{sharp:2\.0,standard:1\.65,light:1\.15\}/);
+ assert.match(html,/renderQuality\.value==='auto'\?2\.0/);
+ assert.match(html,/let auto18Dpr=2\.0,auto18ObservedFps=0/);
  assert.match(html,/isOfficialEighteenTest\?512:256/g);
  assert.match(html,/isOfficialEighteenTest\?8:4/);
  const auto=fn('autoTune18HorseResolution');
