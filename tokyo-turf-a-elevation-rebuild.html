@@ -1209,8 +1209,8 @@ const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-per
 // Higher internal raster resolution cures 4-horse background blur without
 // modifying the approved 3D horse or textures. A visible quality switch lets
 // iPhone users choose a faster render if the frame interval grows.
-const renderDprLevels=isOfficialEighteenTest?{sharp:2.0,standard:1.65,light:1.15}:{sharp:1.35,standard:1.05,light:.90};
-const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?2.0:
+const renderDprLevels=isOfficialEighteenTest?{sharp:2.6,standard:1.85,light:1.15}:{sharp:1.35,standard:1.05,light:.90};
+const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?2.25:
  renderDprLevels[renderQuality.value]||1.05):1.4;
 renderer.setPixelRatio(Math.min(initialDpr,window.devicePixelRatio||1));
 renderer.setSize(stage.clientWidth,stage.clientHeight);
@@ -1253,7 +1253,7 @@ function applyRenderQuality(){
   renderDprLevels[renderQuality.value]||1.05,window.devicePixelRatio||1));
  renderer.setSize(stage.clientWidth,stage.clientHeight,false);
 }
-let auto18Dpr=2.0,auto18ObservedFps=0;
+let auto18Dpr=2.25,auto18ObservedFps=0;
 renderQuality.addEventListener('change',()=>{
  // A user action is the ONLY time drawing-buffer resolution is reallocated.
  applyRenderQuality();
@@ -4498,6 +4498,30 @@ function tintOriginalHelmetAndCloth(model,horseNumber,numberTexture){
   node.material=mat;
  });
 }
+function improveApprovedHorseTextureSampling(source){
+ // The approved GLB's three 2048x2048 maps stay byte-for-byte unchanged.
+ // Anisotropic filtering preserves detail at glancing camera angles.
+ const textures=new Set();
+ source.traverse(node=>{
+  if(!node.isMesh||!node.material)return;
+  const materials=Array.isArray(node.material)?node.material:[node.material];
+  for(const material of materials){
+   for(const key of ['map','normalMap','metalnessMap','roughnessMap']){
+    const texture=material?.[key];
+    if(texture?.isTexture)textures.add(texture);
+   }
+  }
+ });
+ const maxAnisotropy=Math.max(1,renderer.capabilities.getMaxAnisotropy());
+ for(const texture of textures){
+  const desired=Math.min(8,maxAnisotropy);
+  if(texture.anisotropy<desired){
+   texture.anisotropy=desired;
+   texture.needsUpdate=true;
+  }
+ }
+ return textures.size;
+}
 async function initializeOfficialPair(source,clip){
  for(const h of officialPair){h.mixer.stopAllAction();pairRoot.remove(h.group)}
  officialPair.length=0;
@@ -4604,6 +4628,7 @@ async function loadApprovedHorse(buffer){
   if(!exactSourceGeometry)throw Error('旧版または別デザインのGLBです。正式版 OriginalLook_GallopV2.glbを選択してください');
  }
  const horse=gltf.scene;
+ if(isOfficialPairTest)improveApprovedHorseTextureSampling(horse);
  const bounds=new THREE.Box3().setFromObject(horse),size=new THREE.Vector3();
  bounds.getSize(size);
  if(size.y<.2||size.y>10)throw Error('馬体の縮尺を確認できません');
@@ -5032,13 +5057,13 @@ function officialBroadcastCameraShot(context){
  if(forming){outside=55;height=14.5;ahead=26;fov=51}
  else if(focusType==='gate'){outside=28;height=7.8;ahead=22;fov=43}
  else if(focusType==='wide'){outside=42;height=11.8;ahead=18;fov=42}
- else if(focusType==='side'){outside=19;height=4.8;ahead=2;fov=38}
+ else if(focusType==='side'){outside=14.5;height=4.1;ahead=1;fov=36}
  else if(focusType==='horseEye'){
   // Low tracking shot: no camera is allowed under the turf.
-  outside=13.8;height=2.8;ahead=13;fov=41;
+  outside=10.6;height=2.8;ahead=10;fov=37;
  }
- else if(focusType==='lead'){outside=17.5;height=4.5;ahead=17;fov=37}
- else{outside=19;height=4.8;ahead=21;fov=38}
+ else if(focusType==='lead'){outside=12.8;height=3.9;ahead=12;fov=35}
+ else{outside=14;height=4.3;ahead=14;fov=35}
  const eye=at.p.clone().addScaledVector(side,-outside)
   .addScaledVector(along,ahead).add(new THREE.Vector3(0,height,0));
  // Fitting all 18 horses is appropriate ONLY for the temporary opening
@@ -5048,8 +5073,8 @@ function officialBroadcastCameraShot(context){
   fitBroadcastToRunners(eye,target,selected,fov);
  // A closer upper bound for editorial closeups prevents "always distant".
  const maxDistance=forming?120:focusType==='wide'?80:focusType==='gate'?72:
-  focusType==='side'?40:focusType==='horseEye'?34:
-  focusType==='third'?43:39;
+  focusType==='side'?31:focusType==='horseEye'?27:
+  focusType==='third'?32:30;
  const vector=eye.clone().sub(target),radius=vector.length();
  if(radius>maxDistance)eye.copy(target).addScaledVector(vector,maxDistance/radius);
  eye.y=Math.max(at.p.y+(focusType==='horseEye'?2.5:3.1),
