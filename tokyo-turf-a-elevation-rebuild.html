@@ -5111,7 +5111,7 @@ function updateRunnerNameLabels(time){
  if(width<1||height<1)return;
  runnerGuideLines.setAttribute('viewBox','0 0 '+width+' '+height);
  camera.updateMatrixWorld();
- const occupied=[];let slot=0;
+ const occupied=[],occupiedTorso=[];let slot=0;
  for(const item of candidates){
   if(slot>=limit)break;
   const runner=officialPair[item.index];
@@ -5124,6 +5124,9 @@ function updateRunnerNameLabels(time){
       projected.z<=-1||projected.z>=1)continue;
   const x=(projected.x*.5+.5)*width,y=(.5-projected.y*.5)*height;
   if(x<8||x>width-8||y<70||y>height-14)continue;
+  // If two horses project onto the same pixels, suppress the second label;
+  // two different names must never point to the same silhouette.
+  if(occupiedTorso.some(p=>Math.hypot(p.x-x,p.y-y)<26))continue;
   const label=runnerNameLabels[slot],guide=runnerGuidePaths[slot];
   const frame=RACE_FRAME_COLORS[officialFrameIndex(item.number)];
   const place=ranked.findIndex(h=>h.index===item.index)+1;
@@ -5154,6 +5157,7 @@ function updateRunnerNameLabels(time){
   }
   if(!position){label.hidden=true;continue}
   occupied.push(position.rect);
+  occupiedTorso.push({x,y});
   label.style.left=position.left+'px';
   label.style.top=position.bottom+'px';
   drawRunnerGuidePath(guide,position.left,position.bottom+1,x,y,
