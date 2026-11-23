@@ -124,9 +124,12 @@ a{color:#95e8df}
 /* Compact broadcast identifiers: names stay in the screen corner, not over
    the race. Only small numbered frame-colour chips follow visible horses. */
 #runnerLabelLayer{position:absolute;inset:0;z-index:4;overflow:hidden;pointer-events:none}
-#runnerLabelLayer[hidden],.runner-name-label[hidden],.runner-horse-badge[hidden]{display:none!important}
+#runnerLabelLayer[hidden],.runner-horse-badge[hidden]{display:none!important}
+.runner-name-label[hidden]{visibility:hidden!important;display:flex!important}
+#runnerGuideLines{position:absolute;inset:0;width:100%;height:100%;z-index:0;overflow:hidden;pointer-events:none}
+#runnerGuideLines path{fill:none;stroke-linecap:round;stroke-linejoin:round}
 #runnerLabelLegend{position:absolute;right:7px;top:9px;display:flex;flex-direction:column;
- gap:4px;width:min(172px,45%);pointer-events:none}
+ gap:4px;width:min(172px,45%);pointer-events:none;z-index:2}
 .runner-name-label{position:relative;display:flex;align-items:center;gap:5px;
  height:27px;min-width:0;padding:3px 6px;
  border-radius:6px;border:1px solid var(--runner-frame,#ddd);
@@ -341,7 +344,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  </div>
  <div id="telemetry">3Dコースを準備中…</div>
  <div id="broadcastCameraLabel" hidden>📺 中継：ゲート・発走</div>
- <div id="runnerLabelLayer" hidden aria-hidden="true"><div id="runnerLabelLegend"></div></div>
+ <div id="runnerLabelLayer" hidden aria-hidden="true"><svg id="runnerGuideLines" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg><div id="runnerLabelLegend"></div></div>
  <div id="help">1本指ドラッグ：回転　2本指：拡大縮小・移動　Mac：ドラッグ／ホイール</div>
  <div id="stageDock" hidden>
   <div id="cameraAdjustTools">
@@ -846,7 +849,37 @@ function initRunnerGateSwap(){
 }
 const runnerLabelLayer=document.querySelector('#runnerLabelLayer');
 const runnerLabelLegend=document.querySelector('#runnerLabelLegend');
-const runnerNameLabels=[],runnerHorseBadges=[];
+const runnerGuideLines=document.querySelector('#runnerGuideLines');
+const runnerNameLabels=[],runnerHorseBadges=[],runnerGuidePaths=[];
+const RUNNER_SVG_NS='http://www.w3.org/2000/svg';
+function runnerGuideNode(type,parent){
+ const node=document.createElementNS(RUNNER_SVG_NS,type);
+ parent.appendChild(node);return node;
+}
+function clearRunnerGuidePath(guide){
+ guide.group.style.display='none';
+ guide.outline.setAttribute('d','');
+ guide.line.setAttribute('d','');
+}
+function drawRunnerGuidePath(guide,startX,startY,endX,endY,color){
+ if(![startX,startY,endX,endY].every(Number.isFinite)){
+  clearRunnerGuidePath(guide);return;
+ }
+ const sign=endX<startX?-1:1;
+ const span=Math.hypot(endX-startX,endY-startY);
+ const exitX=startX+sign*Math.min(15,span*.15);
+ const c1=startX+(endX-startX)*.25;
+ const c2=startX+(endX-startX)*.72;
+ const d='M '+startX.toFixed(1)+' '+startY.toFixed(1)+
+  ' L '+exitX.toFixed(1)+' '+startY.toFixed(1)+
+  ' C '+c1.toFixed(1)+' '+startY.toFixed(1)+
+  ' '+c2.toFixed(1)+' '+endY.toFixed(1)+
+  ' '+endX.toFixed(1)+' '+endY.toFixed(1);
+ guide.outline.setAttribute('d',d);
+ guide.line.setAttribute('d',d);
+ guide.line.setAttribute('stroke',color);
+ guide.group.style.display='';
+}
 if(isOfficialEighteenTest){
  runnerLabelLayer.hidden=false;
  const editor=document.querySelector('#raceNameEditor');
@@ -884,6 +917,16 @@ if(isOfficialEighteenTest){
   const badge=document.createElement('span');
   badge.className='runner-horse-badge';badge.hidden=true;
   runnerLabelLayer.appendChild(badge);runnerHorseBadges.push(badge);
+  const group=runnerGuideNode('g',runnerGuideLines);
+  const outline=runnerGuideNode('path',group);
+  const line=runnerGuideNode('path',group);
+  outline.setAttribute('stroke','#08131c');
+  outline.setAttribute('stroke-width','3.4');
+  outline.setAttribute('stroke-opacity','.50');
+  line.setAttribute('stroke-width','1.5');
+  line.setAttribute('stroke-opacity','.72');
+  const guide={group,outline,line};clearRunnerGuidePath(guide);
+  runnerGuidePaths.push(guide);
  }
  document.querySelector('#officialPairTools').appendChild(info);
 }
@@ -5060,6 +5103,7 @@ function rankedOfficialRunners(){
 function clearRunnerNameLabels(){
  for(const label of runnerNameLabels)label.hidden=true;
  for(const badge of runnerHorseBadges)badge.hidden=true;
+ for(const guide of runnerGuidePaths)clearRunnerGuidePath(guide);
 }
 function updateRunnerNameLabels(time){
  if(!isOfficialEighteenTest||!installedDesign01||view!=='broadcast'||
@@ -5077,12 +5121,15 @@ function updateRunnerNameLabels(time){
  const rankStart=shot.endsWith('-third')?2:0;
  const ranked=rankedOfficialRunners();
  const width=stage.clientWidth,height=stage.clientHeight;
+ const stageRect=stage.getBoundingClientRect();
+ runnerGuideLines.setAttribute('viewBox','0 0 '+width+' '+height);
  const occupied=[];
  camera.updateMatrixWorld();
  for(let rank=0;rank<runnerNameLabels.length;rank++){
-  const label=runnerNameLabels[rank],badge=runnerHorseBadges[rank];
+  const label=runnerNameLabels[rank],badge=runnerHorseBadges[rank],
+   guide=runnerGuidePaths[rank];
   const item=ranked[rankStart+rank];
-  label.hidden=true;badge.hidden=true;
+  label.hidden=true;badge.hidden=true;clearRunnerGuidePath(guide);
   if(rank>=limit||!item)continue;
   const runner=officialPair[item.index];
   if(!runner?.group?.visible)continue;
@@ -5114,6 +5161,12 @@ function updateRunnerNameLabels(time){
   badge.textContent=String(item.number);
   badge.style.left=x+'px';badge.style.top=y+'px';
   label.hidden=false;badge.hidden=false;
+  // Read the displayed number chip; do not approximate its position.
+  const pillRect=label.runnerParts.number.getBoundingClientRect();
+  const sx=pillRect.left+pillRect.width/2-stageRect.left;
+  const sy=pillRect.top+pillRect.height/2-stageRect.top;
+  if(sx>=0&&sx<=width&&sy>=0&&sy<=height)
+   drawRunnerGuidePath(guide,sx,sy,x,y,frame.name==='黒'?'#f7f7f7':frame.hex);
  }
 }
 function officialEighteenCameraShot(which,context){
