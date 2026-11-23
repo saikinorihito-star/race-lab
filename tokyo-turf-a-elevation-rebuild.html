@@ -4988,6 +4988,13 @@ function fitBroadcastToRunners(eye,target,runners,fov){
  }
  return eye;
 }
+function officialOpeningFormationWide(progress,horses){
+ // Initial full-field coverage until the outside runners have merged.
+ if(progress<180)return true;
+ if(progress>=320||!horses||horses.length<4)return false;
+ const lanes=horses.map(h=>h.lane).filter(Number.isFinite);
+ return lanes.length>=4&&Math.max(...lanes)-Math.min(...lanes)>9;
+}
 function officialBroadcastCameraShot(context){
  // Low three-quarter front, 3rd-place focus, lateral tracking and full-field.
  // All camera work is isolated from the approved Design 01 rigs and race AI.
@@ -5000,9 +5007,11 @@ function officialBroadcastCameraShot(context){
  const leader=ranked[0]||lead;
  const third=ranked[Math.min(2,ranked.length-1)]||leader;
  const cycle=Math.floor(Math.max(0,leadDistance-36)/175)%5;
- const focusType=stageShot.id==='gate'?'gate':
+ const forming=officialOpeningFormationWide(leadDistance,ranked);
+ const focusType=forming?'opening':stageShot.id==='gate'?'gate':
   remaining<=55?'lead':['lead','third','horseEye','side','wide'][cycle];
- const selected=(focusType==='lead'||focusType==='horseEye')?ranked.slice(0,Math.min(3,ranked.length)):
+ const selected=forming?ranked:
+  (focusType==='lead'||focusType==='horseEye')?ranked.slice(0,Math.min(3,ranked.length)):
   focusType==='third'?ranked.slice(Math.min(1,ranked.length-1),Math.min(5,ranked.length)):
   focusType==='side'?ranked.slice(0,Math.min(4,ranked.length)):
   focusType==='gate'?ranked.slice(0,Math.min(8,ranked.length)):
@@ -5015,9 +5024,10 @@ function officialBroadcastCameraShot(context){
  const along=at.t.clone().normalize();
  const side=new THREE.Vector3(at.t.z,0,-at.t.x).normalize();
  const target=at.p.clone().addScaledVector(side,focusLane)
-  .add(new THREE.Vector3(0,focusType==='wide'?3.3:2.45,0));
+  .add(new THREE.Vector3(0,forming?3.8:focusType==='wide'?3.3:2.45,0));
  let outside,height,ahead,fov;
- if(focusType==='gate'){outside=28;height=7.8;ahead=22;fov=43}
+ if(forming){outside=55;height=14.5;ahead=26;fov=51}
+ else if(focusType==='gate'){outside=28;height=7.8;ahead=22;fov=43}
  else if(focusType==='wide'){outside=42;height=11.8;ahead=18;fov=42}
  else if(focusType==='side'){outside=19;height=4.8;ahead=2;fov=38}
  else if(focusType==='horseEye'){
@@ -5030,19 +5040,20 @@ function officialBroadcastCameraShot(context){
   .addScaledVector(along,ahead).add(new THREE.Vector3(0,height,0));
  fitBroadcastToRunners(eye,target,selected,fov);
  // Cap TV crane distance: horses, not scenery, remain the subject.
- const maxDistance=focusType==='wide'?82:focusType==='gate'?75:
+ const maxDistance=forming?130:focusType==='wide'?82:focusType==='gate'?75:
   focusType==='side'?57:focusType==='horseEye'?53:60;
  const vector=eye.clone().sub(target),radius=vector.length();
  if(radius>maxDistance)eye.copy(target).addScaledVector(vector,maxDistance/radius);
  eye.y=Math.max(at.p.y+(focusType==='horseEye'?2.5:3.1),
-  Math.min(eye.y,at.p.y+(focusType==='wide'?13:focusType==='horseEye'?3.5:7.5)));
- const caption=focusType==='gate'?'ゲート・発走':
+  Math.min(eye.y,at.p.y+(forming?18:focusType==='wide'?13:focusType==='horseEye'?3.5:7.5)));
+ const caption=forming?'スタート〜隊列形成・全馬追尾':
+  focusType==='gate'?'ゲート・発走':
   focusType==='lead'?'先頭集団・低い斜め前':
   focusType==='third'?'3番手付近・斜め前':
   focusType==='side'?'先頭集団・低い横位置':
   focusType==='horseEye'?'馬の目線・馬群へ接近':'馬群全景';
  return {eye,target,gap,focusedOnLead:focusType==='lead',
-  fov,broadcastShotId:stageShot.id+'-'+focusType,
+  fov,broadcastShotId:forming?'opening-wide':stageShot.id+'-'+focusType,
   broadcastLabel:caption+'｜先頭 '+leader.number+'番 ／ 3番手 '+third.number+'番'};
 }
 let broadcastLabelCutAt=0,lastRunnerLabelPaint=-1;
@@ -5118,8 +5129,8 @@ function updateRunnerNameLabels(time){
   // The approved GLB has a separate animated head bone, so the name
   // follows the exact horse's head rather than hovering above the lane.
   const labelAnchor=runner.headBone?
-   runner.headBone.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,.45,0)):
-   runner.group.localToWorld(new THREE.Vector3(0,.73,.55));
+   runner.headBone.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,.17,0)):
+   runner.group.localToWorld(new THREE.Vector3(0,.47,.55));
   const projected=labelAnchor.project(camera);
   if(!Number.isFinite(projected.x+projected.y+projected.z)||
       projected.z<=-1||projected.z>=1)continue;
@@ -5160,10 +5171,10 @@ function updateRunnerNameLabels(time){
   const leftEdge=labelWidth/2+7,rightEdge=width-labelWidth/2-7;
   let position=null;
   // More clearance above the model; no name box on the animated horse.
-  for(const rise of [18,25,32]){
+  for(const rise of [7,11,15]){
    const bottom=y-rise;
    if(bottom<35)continue;
-   for(const offset of [0,-9,9]){
+   for(const offset of [0,-7,7]){
     const left=Math.max(leftEdge,Math.min(rightEdge,x+offset));
     const rect={left:left-labelWidth/2,top:bottom-29,
      right:left+labelWidth/2,bottom};
@@ -5171,7 +5182,7 @@ function updateRunnerNameLabels(time){
        rect.right>other.left-5&&rect.top<other.bottom+5&&
        rect.bottom>other.top-5))continue;
     // Reject a name box if it would hide ANY projected horse in this shot.
-    if(visible.some(h=>h.bodyRect&&
+    if(visible.some(h=>h.index!==item.index&&h.bodyRect&&
        rect.left<h.bodyRect.right&&rect.right>h.bodyRect.left&&
        rect.top<h.bodyRect.bottom&&rect.bottom>h.bodyRect.top))continue;
     position={left,bottom,rect};break;
@@ -5184,8 +5195,8 @@ function updateRunnerNameLabels(time){
   label.style.left=position.left+'px';
   label.style.top=position.bottom+'px';
   // Keep the filled pointer short and outside the horse silhouette.
-  const tipY=Math.min(y-7,position.bottom+14);
-  if(Math.hypot(position.left-x,tipY-position.bottom)>26){
+  const tipY=Math.min(y-2,position.bottom+7);
+  if(Math.hypot(position.left-x,tipY-position.bottom)>12){
    label.hidden=true;continue;
   }
   drawRunnerGuidePath(guide,position.left,position.bottom+1,x,tipY,
