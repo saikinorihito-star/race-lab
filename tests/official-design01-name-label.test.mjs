@@ -11,11 +11,14 @@ function extract(name){
  return html.slice(start,end+2);
 }
 
-test('中継では馬番の丸印ではなく馬名を馬体上方に出し、線を結ぶ',()=>{
+test('中継は馬名の黒い吹き出しと三角形のしっぽで馬体を示す',()=>{
  assert.ok(html.includes('#runnerLabelLegend{position:absolute;inset:0'));
  assert.ok(html.includes('.runner-name-label{position:absolute'));
  assert.ok(html.includes('label.textContent=item.name'));
  assert.ok(html.includes('drawRunnerGuidePath(guide,position.left,position.bottom+1,x,y'));
+ assert.ok(html.includes("guide.line.setAttribute('fill','#07141b')"));
+ assert.ok(html.includes("guide.dot.setAttribute('r','0')"));
+ assert.ok(html.includes('RUNNER_BUBBLE_INTERVAL_MS=1100'));
  assert.ok(html.includes('runner.group.localToWorld(new THREE.Vector3(0,1.05,0))'));
  assert.ok(!html.includes('runnerHorseBadges'));
  assert.ok(!html.includes('.runner-horse-badge'));
@@ -68,6 +71,8 @@ function guideHarness(){
   isOfficialEighteenTest:true,installedDesign01:true,view:'broadcast',
   activePlan:{distance:1400},watchSelectedHorseIndex:null,
   lastBroadcastShotId:'back-lead',lastRunnerLabelPaint:-1,
+  runnerBubbleShot:'',runnerBubbleLastTime:-1,runnerBubbleStep:0,
+  runnerBubbleTime:0,RUNNER_BUBBLE_INTERVAL_MS:1100,playing:true,
   stage:{clientWidth:400,clientHeight:500},
   camera:{updateMatrixWorld(){}},
   THREE:{Vector3:class {
@@ -94,19 +99,37 @@ function guideHarness(){
  return {ctx,labels,guides,projected,update,active};
 }
 
-test('自動中継の先頭・3番手・全景で表示候補を変更し、手動カメラで消す',()=>{
+test('中継では1頭ずつ順位順に切り替え、広角では2頭ずつ切り替える',()=>{
  const h=guideHarness();
  h.update(1000);
- assert.deepEqual(h.active(),['試験馬1','試験馬2','試験馬3']);
- h.ctx.lastBroadcastShotId='back-third';h.update(1100);
- assert.deepEqual(h.active(),['試験馬3','試験馬4','試験馬5']);
- h.ctx.lastBroadcastShotId='back-wide';h.update(1200);
- assert.equal(h.active().length,2);
- h.ctx.view='side';h.update(1300);
+ assert.deepEqual(h.active(),['試験馬1']);
+ for(let t=1100;t<=2200;t+=100)h.update(t);
+ assert.deepEqual(h.active(),['試験馬2']);
+ for(let t=2300;t<=3400;t+=100)h.update(t);
+ assert.deepEqual(h.active(),['試験馬3']);
+ h.ctx.lastBroadcastShotId='back-wide';
+ h.update(3500);
+ assert.deepEqual(h.active(),['試験馬1','試験馬2']);
+ for(let t=3600;t<=4700;t+=100)h.update(t);
+ assert.deepEqual(h.active(),['試験馬3','試験馬4']);
+ h.ctx.view='side';h.update(4800);
  assert.equal(h.active().length,0);
  assert.ok(h.guides.every(g=>g.group.style.display==='none'));
 });
-
+test('選択した馬を常時優先し、他の馬名だけ順位順に切り替える',()=>{
+ const h=guideHarness();
+ h.ctx.watchSelectedHorseIndex=17;h.update(1000);
+ assert.deepEqual(h.active(),['試験馬18','試験馬1']);
+ for(let t=1100;t<=2200;t+=100)h.update(t);
+ assert.deepEqual(h.active(),['試験馬18','試験馬2']);
+ // The user may pause to inspect a named horse; do not rotate while paused.
+ h.ctx.playing=false;
+ for(let t=2300;t<=5000;t+=100)h.update(t);
+ assert.deepEqual(h.active(),['試験馬18','試験馬2']);
+ h.ctx.playing=true;
+ for(let t=5100;t<=6200;t+=100)h.update(t);
+ assert.deepEqual(h.active(),['試験馬18','試験馬3']);
+});
 test('選択した18番を優先、密集時は違う馬と取り違えず、実順位も保つ',()=>{
  const h=guideHarness();
  h.ctx.watchSelectedHorseIndex=17;
@@ -117,17 +140,18 @@ test('選択した18番を優先、密集時は違う馬と取り違えず、実
  assert.equal(h.labels[0].dataset.rank,'18');
  assert.equal(h.labels[0].dataset.selected,'true');
  assert.ok(Number(h.labels[0].style.top.replace('px',''))<250,'Horse name is above its torso');
- assert.ok(Math.abs(Number(h.guides[0].dot.values.cx)-60)<.01);
+ assert.ok(h.guides[0].line.values.d.includes('60.0 250.0'));
+ assert.equal(h.guides[0].dot.values.r,'0');
  assert.equal(h.guides[0].group.style.display,'');
 });
 
-test('画面外の選択馬を示す偽の線を出さず、画面内の上位馬に戻す',()=>{
+test('画面外の選択馬を示す偽の吹き出しを出さず、画面内の馬に戻す',()=>{
  const h=guideHarness();
  h.ctx.watchSelectedHorseIndex=17;
  h.projected[17]=3;
  h.update(1000);
- assert.deepEqual(h.active(),['試験馬1','試験馬2','試験馬3']);
- assert.equal(h.guides.filter(g=>g.group.style.display!=='none').length,3);
+ assert.deepEqual(h.active(),['試験馬1']);
+ assert.equal(h.guides.filter(g=>g.group.style.display!=='none').length,1);
 });
 
 function rosterHarness(){
