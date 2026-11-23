@@ -13,6 +13,9 @@ const stages=runInNewContext('('+fn('officialBroadcastStage')+')',{});
 class V{
  constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}
  clone(){return new V(this.x,this.y,this.z)}
+ copy(v){this.x=v.x;this.y=v.y;this.z=v.z;return this}
+ sub(v){this.x-=v.x;this.y-=v.y;this.z-=v.z;return this}
+ length(){return Math.hypot(this.x,this.y,this.z)}
  add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this}
  addScaledVector(v,n){this.x+=v.x*n;this.y+=v.y*n;this.z+=v.z*n;return this}
  normalize(){const n=Math.hypot(this.x,this.y,this.z)||1;this.x/=n;this.y/=n;this.z/=n;return this}
@@ -191,7 +194,7 @@ test('18-runner sharpness improvements preserve non-race modes and fixed framebu
  assert.match(html,/renderQuality\.value==='auto'\?2\.0/);
  assert.match(html,/let auto18Dpr=2\.0,auto18ObservedFps=0/);
  assert.match(html,/isOfficialEighteenTest\?512:256/g);
- assert.match(html,/isOfficialEighteenTest\?8:4/);
+ assert.match(html,/isOfficialEighteenTest\?16:4/);
  const auto=fn('autoTune18HorseResolution');
  assert.ok(!auto.includes('renderer.setPixelRatio('));
  assert.ok(!auto.includes('renderer.setSize('));
