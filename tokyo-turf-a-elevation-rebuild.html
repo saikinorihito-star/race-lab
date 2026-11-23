@@ -5102,6 +5102,19 @@ function clearRunnerNameLabels(){
  for(const label of runnerNameLabels)label.hidden=true;
  for(const guide of runnerGuidePaths)clearRunnerGuidePath(guide);
 }
+function runnerProjectedBodyRect(group,camera,width,height){
+ // Original approved 3D mesh bounds; include a small safety margin so that
+ // speech boxes do not paint over any horse (including other packed runners).
+ let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;
+ for(const x of [-.35,.35])for(const y of [-.72,.73])for(const z of [-.99,.99]){
+  const p=group.localToWorld(new THREE.Vector3(x,y,z)).project(camera);
+  if(!Number.isFinite(p.x+p.y+p.z)||p.z<=-1||p.z>=1)continue;
+  const sx=(p.x*.5+.5)*width,sy=(.5-p.y*.5)*height;
+  left=Math.min(left,sx);right=Math.max(right,sx);
+  top=Math.min(top,sy);bottom=Math.max(bottom,sy);
+ }
+ return left===Infinity?null:{left:left-4,right:right+4,top:top-4,bottom:bottom+4};
+}
 function updateRunnerNameLabels(time){
  if(!isOfficialEighteenTest||!installedDesign01||view!=='broadcast'||
     !activePlan||officialPair.length!==18){
@@ -5144,7 +5157,8 @@ function updateRunnerNameLabels(time){
       projected.z<=-1||projected.z>=1)continue;
   const x=(projected.x*.5+.5)*width,y=(.5-projected.y*.5)*height;
   if(x<8||x>width-8||y<70||y>height-14)continue;
-  visible.push({...item,x,y});
+  const bodyRect=runnerProjectedBodyRect(runner.group,camera,width,height);
+  visible.push({...item,x,y,bodyRect});
  }
  if(!visible.length)return;
  const selected=Number.isInteger(watchSelectedHorseIndex)?
@@ -5188,6 +5202,10 @@ function updateRunnerNameLabels(time){
     if(occupied.some(other=>rect.left<other.right+5&&
        rect.right>other.left-5&&rect.top<other.bottom+5&&
        rect.bottom>other.top-5))continue;
+    // Reject a name box if it would hide ANY projected horse in this shot.
+    if(visible.some(h=>h.bodyRect&&
+       rect.left<h.bodyRect.right&&rect.right>h.bodyRect.left&&
+       rect.top<h.bodyRect.bottom&&rect.bottom>h.bodyRect.top))continue;
     position={left,bottom,rect};break;
    }
    if(position)break;
