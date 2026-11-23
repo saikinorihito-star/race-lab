@@ -337,8 +337,20 @@ test('all TV shot types frame lower to reduce empty sky without losing horses',(
  assert.match(fn('officialBroadcastCameraShot'),
   /forming\?2\.35:focusType==='wide'\?2\.15:1\.55/);
 });
+test('startup uses 2400m while other selectable course distances remain intact',()=>{
+ assert.match(html,/<option value="2400" selected>芝2400m<\/option>/);
+ assert.match(html,/<option value="1400">芝1400m<\/option>/);
+ assert.doesNotMatch(html,/<option value="1400" selected>/);
+ assert.match(html,/let activePlan=null,activeDistance=2400;/);
+ assert.match(html,/<strong id="watchCourse">東京 芝A 2400m<\/strong>/);
+ assert.match(html,/<span id="watchRemain">残り2400m<\/span>/);
+ assert.match(html,/activeDistance=Number\(raceSelector\.value\)/);
+ assert.match(html,/const rest=Math\.max\(0,Math\.round\(\(activePlan\?\.distance\|\|2400\)-travel\)\)/);
+ for(const distance of [1400,1600,1800,2000,2300,2400,2500,2600,3400])
+  assert.ok(html.includes('<option value="'+distance+'"'),'Distance retained '+distance);
+});
 test('18-horse approved GLB legs animate a little quicker without racing faster',()=>{
- // For distance 100m, index 0 advances 100/16*1.2915 in animation-time.
+ // For distance 100m, index 0 advances 100/16*1.42065 in animation-time.
  // This comparison is independent of simulation physics or FPS.
  const local={THREE:{Vector3:V,MathUtils:{clamp}},
   isOfficialPairTest:true,installedDesign01:true,
@@ -354,9 +366,9 @@ test('18-horse approved GLB legs animate a little quicker without racing faster'
  const apply=runInNewContext('('+fn('updateOfficialPair')+')',local);
  apply(1/60);
  const boosted=local.officialPair[0].mixer.time;
- assert.ok(Math.abs(boosted-100*1.2915/16)<1e-8);
- assert.ok(Math.abs(boosted/(100*1.23/16)-1.05)<1e-10,
-  'Leg turnover must be exactly 5% faster than the previous 1.23 rate');
+ assert.ok(Math.abs(boosted-100*1.42065/16)<1e-8);
+ assert.ok(Math.abs(boosted/(100*1.2915/16)-1.10)<1e-10,
+  'Leg turnover must be 10% faster than the previous 1.2915 rate');
  assert.ok(boosted>100*1.15/16,'Slightly quicker than former 15% turnover');
  assert.ok(local.officialPair[1].mixer.time>boosted,'Separate phase offset remains');
  local.isOfficialEighteenTest=false;local.OFFICIAL_TEST_COUNT=2;
