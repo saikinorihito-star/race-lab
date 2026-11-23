@@ -125,6 +125,11 @@
 - **保護と回帰**：`backup/before-ground-framing-faster-gallop-20261124`を修正前のmainから作成。メイン修正`81c99507911143b5e2860f91bd22835051acffd4`。対応する`tests/official-design01-broadcast-recolour.test.mjs`追加`d385614b983fd2385992f4b7a2b967120a80f6c9`。カメラ・ゼッケン・馬名・モデル・腿/脚アニメーション等の抽出回帰テスト計43項目PASS、JavaScript構文PASS。バックアップと現行コードの実ソース比較で`stepRace`、`raceHorsePosition`、`officialPairVisualState`、`officialOpeningFormationWide`、`initializeOfficialPair`、`tintOriginalHelmetAndCloth`、`updateRunnerNameLabels`は文字列単位で変更なし。
 - **未確認**：iPhone/Mac Safariで実際の空・芝・馬体の画面占有率と滑らかさを確認する必要がある。端末画質設定やGPU負荷が原因でぼやける場合の対処は別工程。
 
+## 2026-11-24追補：18頭の脚回転をさらに5％上げる
+- **ユーザー指示**：「足の動く速さを5％あげて」。直前の正式18頭ギャロップの係数`1.23`を基準とし、今回**正確に1.05倍**の`1.2915`（1.23×1.05）へ変更。これはベースのアニメーションに対して+29.15%であり、直前版からの変化率は+5%。
+- `tokyo-turf-a-elevation-rebuild.html`の`updateOfficialPair`内の**見た目の骨格アニメーション位相**だけを変更。コース、実速度、距離、騎手/馬具形状、能力、衝突判定、順位、カメラ、馬名表示は変更しない。18頭以外のモードは従来の係数1.0を維持。元GLBとアニメーションクリップは無改変。
+- 本体コミット`bab082b12d8e6fe238e62724f08c387b1c030994`、回帰テスト更新`de1c31c9bafd6073a1d668d470c68eea713a5c8c`。修正前バックアップ`backup/before-gallop-five-percent-20261124`。関数抽出テスト43件PASS、JavaScript構文検査PASS。Safari実機の視覚・FPS・歩様の自然さは未確認。
+
 ## 次回以降の自動作業ルール
 - 既存のユーザー指示を尊重し、同じ質問・細かい承認依頼を繰り返さない。問題が生じた場合にだけ具体的な情報を求める。
 - 原則：リポジトリ最新取得 → 直近のコードとテストを確認 → 変更範囲最小化 → 構文/回帰テスト → mainへ反映 → コミットIDと実機未確認事項を報告。
