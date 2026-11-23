@@ -81,8 +81,11 @@ test('start uses a wider full-field camera until lateral formation settles',()=>
  const opening=camera({horses:pack,lead:pack[0],leadDistance:50,
   tailDistance:28,meanLane:10,gap:22});
  assert.equal(opening.broadcastShotId,'opening-wide');
- assert.equal(opening.fov,51);
- assert.match(opening.broadcastLabel,/隊列形成/);
+ assert.equal(opening.fov,55);
+ assert.match(opening.broadcastLabel,/全18頭/);
+ assert.ok(Math.hypot(opening.eye.x-opening.target.x,
+  opening.eye.y-opening.target.y,opening.eye.z-opening.target.z)<=88.001,
+  'Opening view must have a closer maximum camera distance');
 });
 test('broadcast stops using the opening-wide shot after 145m and keeps returning to closeups',()=>{
  const camera=makeShot(1400);
@@ -90,7 +93,7 @@ test('broadcast stops using the opening-wide shot after 145m and keeps returning
   number:i+1,distance:220-i*2,lane:i*1.25,postDistance:0
  }));
  const shots=[];
- for(const progress of [10,50,85,130,145,180,220,310,390,480,620,680,790,940,1120]){
+ for(const progress of [10,50,85,130,145,180,220,310,390,480,620,680,790,940,1040,1120,1170]){
   const current=horses.map(h=>({...h,distance:h.distance+(progress-220)}));
   shots.push({progress,shot:camera({horses:current,lead:current[0],
    leadDistance:progress,tailDistance:progress-36,meanLane:9,gap:36})});
@@ -98,7 +101,7 @@ test('broadcast stops using the opening-wide shot after 145m and keeps returning
  assert.ok(shots.filter(x=>x.progress<70).every(x=>x.shot.broadcastShotId==='opening-wide'));
  assert.ok(shots.filter(x=>x.progress>=145).every(x=>x.shot.broadcastShotId!=='opening-wide'));
  const names=shots.filter(x=>x.progress>=145).map(x=>x.shot.broadcastShotId.split('-').at(-1));
- for(const type of ['lead','third','frontPack','side','sidePack','horseEye','wide'])
+ for(const type of ['lead','midPack','tailPack','third','frontPack','side','sidePack','horseEye','wide'])
   assert.ok(names.includes(type),'Expected recurring '+type+' shot after startup');
  const centerDist=shot=>Math.hypot(shot.eye.x-shot.target.x,
   shot.eye.y-shot.target.y,shot.eye.z-shot.target.z);
@@ -117,7 +120,7 @@ test('virtual cameras have finite nonidentical positions and target the running 
    const c=shot(context(distance,progress));
    assert.ok([c.eye.x,c.eye.y,c.eye.z,c.target.x,c.target.y,c.target.z,c.fov]
     .every(Number.isFinite));
-   assert.ok(c.fov>=25&&c.fov<=53);
+   assert.ok(c.fov>=25&&c.fov<=55);
    assert.ok(Math.hypot(c.eye.x-c.target.x,c.eye.y-c.target.y,c.eye.z-c.target.z)>10);
    ids.add(c.broadcastShotId);
   }
@@ -221,22 +224,28 @@ test('TV editor alternates first-three close-up, third-place pack and wider fiel
   return camera({horses:current,lead:current[0],leadDistance,tailDistance,
    meanLane:7,gap:51});
  };
- const first=at(90),third=at(300),
-  frontPack=at(390),side=at(520),sidePack=at(650),wide=at(930);
+ const first=at(90),mid=at(300),tail=at(390),
+  third=at(520),frontPack=at(650),side=at(780),
+  sidePack=at(910),horseEye=at(1040),wide=at(1170);
  assert.match(first.broadcastShotId,/-lead$/);
+ assert.match(mid.broadcastShotId,/-midPack$/);
+ assert.match(tail.broadcastShotId,/-tailPack$/);
  assert.match(third.broadcastShotId,/-third$/);
  assert.match(frontPack.broadcastShotId,/-frontPack$/);
  assert.match(side.broadcastShotId,/-side$/);
  assert.match(sidePack.broadcastShotId,/-sidePack$/);
+ assert.match(horseEye.broadcastShotId,/-horseEye$/);
  assert.match(wide.broadcastShotId,/-wide$/);
  assert.match(first.broadcastLabel,/先頭集団・低い斜め前/);
+ assert.match(mid.broadcastLabel,/中団馬群・5〜9番手/);
+ assert.match(tail.broadcastLabel,/後方馬群・最後尾/);
  assert.match(third.broadcastLabel,/3番手付近・斜め前/);
  assert.match(frontPack.broadcastLabel,/斜め前から隊列/);
  assert.match(sidePack.broadcastLabel,/低い真横/);
  assert.match(wide.broadcastLabel,/馬群全景/);
- for(const shot of [first,third,frontPack,side,sidePack,wide]){
+ for(const shot of [first,mid,tail,third,frontPack,side,sidePack,horseEye,wide]){
   assert.match(shot.broadcastLabel,/先頭 1番 ／ 3番手 3番/);
-  assert.ok(shot.fov>=25&&shot.fov<=53);
+  assert.ok(shot.fov>=25&&shot.fov<=55);
  }
  const dist=shot=>Math.hypot(shot.eye.x-shot.target.x,shot.eye.y-shot.target.y,shot.eye.z-shot.target.z);
  assert.ok(dist(first)<dist(wide)*.75,'Leader closeup must be clearly closer than wide shot');
@@ -251,7 +260,7 @@ test('reference front-pack and side-pack cameras use distinct low perspectives w
   return front({horses,lead:horses[0],leadDistance:progress,
    tailDistance:progress-51,gap:51,meanLane:8});
  };
- const diagonal=shotAt(390),lateral=shotAt(650);
+ const diagonal=shotAt(650),lateral=shotAt(910);
  assert.match(diagonal.broadcastShotId,/-frontPack$/);
  assert.match(lateral.broadcastShotId,/-sidePack$/);
  assert.equal(diagonal.fov,39);
@@ -266,6 +275,47 @@ test('reference front-pack and side-pack cameras use distinct low perspectives w
  assert.match(source,/outside=14\.2;height=3\.45;ahead=22;fov=39/);
  assert.match(source,/outside=23\.5;height=4\.2;ahead=0;fov=43/);
  assert.match(html,/shot\.endsWith\('-sidePack'\)/);
+ assert.match(html,/shot\.endsWith\('-midPack'\)/);
+ assert.match(html,/shot\.endsWith\('-tailPack'\)/);
+});
+test('opening sees all 18 and rear group cuts track actual last-place horses',()=>{
+ const shot=makeShot(1400),pack=Array.from({length:18},(_,i)=>({
+  number:i+1,distance:520-i*4,lane:2+(i%6)*3,
+  postDistance:0,speed:16
+ }));
+ const at=progress=>{
+  const horses=pack.map(h=>({...h,distance:h.distance+(progress-520)}));
+  return shot({horses,lead:horses[0],leadDistance:progress,
+   tailDistance:progress-68,gap:68,meanLane:8});
+ };
+ const opening=at(35),mid=at(280),rear=at(380),leader=at(90);
+ assert.match(opening.broadcastShotId,/opening-wide$/);
+ assert.match(mid.broadcastShotId,/-midPack$/);
+ assert.match(rear.broadcastShotId,/-tailPack$/);
+ assert.match(leader.broadcastShotId,/-lead$/);
+ assert.ok(Math.hypot(opening.eye.x-opening.target.x,
+  opening.eye.y-opening.target.y,opening.eye.z-opening.target.z)<=88.001);
+ assert.equal(opening.fov,55);
+ const script=fn('officialBroadcastCameraShot');
+ assert.match(script,/const selected=forming\?ranked/);
+ assert.match(script,/focusType==='midPack'\?ranked\.slice\(Math\.min\(4,ranked\.length-1\),Math\.min\(9,ranked\.length\)\)/);
+ assert.match(script,/focusType==='tailPack'\?ranked\.slice\(Math\.max\(0,ranked\.length-6\)\)/);
+ assert.match(script,/outside=43;height=11\.5;ahead=20;fov=55/);
+ assert.match(script,/maxDistance=forming\?88/);
+ assert.match(script,/outside=18\.5;height=4\.4;ahead=-11;fov=40/);
+ const seen=[];
+ const fit=runInNewContext('('+fn('officialBroadcastCameraShot')+')',{
+  ...{
+   THREE,activePlan:{distance:1400},FINISH_DISTANCE:525.9,
+   officialBroadcastStage:stages,officialOpeningFormationWide:forming,
+   fieldCenterAt:(_p,d)=>({p:new V(d*.31,2,d*.1),t:new V(1,0,0)}),
+   fitBroadcastToRunners:(_eye,_target,runners)=>seen.push(runners.map(h=>h.number))
+  }
+ });
+ const all=pack.map(h=>({...h,distance:h.distance-485}));
+ fit({horses:all,lead:all[0],leadDistance:35,tailDistance:-33,gap:68,meanLane:8});
+ assert.deepEqual(seen[0],Array.from({length:18},(_,i)=>i+1),
+  'Opening fit must include the true last-place runner');
 });
 test('approved horse materials keep 2K maps shared with anisotropic filtering',()=>{
  const configure=runInNewContext('('+fn('improveApprovedHorseTextureSampling')+')',{
