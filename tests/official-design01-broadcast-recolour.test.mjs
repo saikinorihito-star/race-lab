@@ -66,10 +66,10 @@ test('start uses a wider full-field camera until lateral formation settles',()=>
  const forming=runInNewContext('('+fn('officialOpeningFormationWide')+')',{});
  const horses=span=>Array.from({length:18},(_,i)=>({lane:i%2?span:0}));
  assert.equal(forming(0,horses(20)),true);
- assert.equal(forming(175,horses(7)),true,'Hold wide shot through initial acceleration');
- assert.equal(forming(220,horses(15)),true,'Stay wide if runners remain spread out');
- assert.equal(forming(220,horses(7)),false,'Allow closer shots once merged');
- assert.equal(forming(340,horses(19)),false,'Avoid remaining in distant view for entire race');
+ assert.equal(forming(55,horses(7)),true,'Briefly establish the field from the gate');
+ assert.equal(forming(95,horses(15)),true,'Stay wide briefly while the field remains spread out');
+ assert.equal(forming(95,horses(7)),false,'Switch closer once runners have merged');
+ assert.equal(forming(145,horses(19)),false,'Hard limit must end the distant opening view');
  const camera=makeShot(1400);
  const pack=Array.from({length:18},(_,i)=>({
   number:i+1,distance:50-i*1.2,lane:i*1.2,postDistance:0
@@ -79,6 +79,30 @@ test('start uses a wider full-field camera until lateral formation settles',()=>
  assert.equal(opening.broadcastShotId,'opening-wide');
  assert.equal(opening.fov,51);
  assert.match(opening.broadcastLabel,/隊列形成/);
+});
+test('broadcast stops using the opening-wide shot after 145m and keeps returning to closeups',()=>{
+ const camera=makeShot(1400);
+ const horses=Array.from({length:18},(_,i)=>({
+  number:i+1,distance:220-i*2,lane:i*1.25,postDistance:0
+ }));
+ const shots=[];
+ for(const progress of [10,50,85,130,145,180,220,310,390,480,620,680,790,940,1120]){
+  const current=horses.map(h=>({...h,distance:h.distance+(progress-220)}));
+  shots.push({progress,shot:camera({horses:current,lead:current[0],
+   leadDistance:progress,tailDistance:progress-36,meanLane:9,gap:36})});
+ }
+ assert.ok(shots.filter(x=>x.progress<70).every(x=>x.shot.broadcastShotId==='opening-wide'));
+ assert.ok(shots.filter(x=>x.progress>=145).every(x=>x.shot.broadcastShotId!=='opening-wide'));
+ const names=shots.filter(x=>x.progress>=145).map(x=>x.shot.broadcastShotId.split('-').at(-1));
+ for(const type of ['lead','third','horseEye','side','wide'])
+  assert.ok(names.includes(type),'Expected recurring '+type+' shot after startup');
+ const centerDist=shot=>Math.hypot(shot.eye.x-shot.target.x,
+  shot.eye.y-shot.target.y,shot.eye.z-shot.target.z);
+ const close=shots.find(x=>x.progress===180).shot;
+ const opening=shots.find(x=>x.progress===50).shot;
+ assert.ok(centerDist(close)<centerDist(opening)*.70,'Closeup should clearly exceed wide opening in scale');
+ assert.match(fn('officialBroadcastCameraShot'),/if\(forming\|\|focusType==='wide'\|\|focusType==='gate'\)/);
+ assert.match(fn('officialBroadcastCameraShot'),/focusType==='horseEye'\?34/);
 });
 test('virtual cameras have finite nonidentical positions and target the running pack',()=>{
  for(const distance of [1400,2400,3400]){
@@ -193,11 +217,11 @@ test('TV editor alternates first-three close-up, third-place pack and wider fiel
   return camera({horses:current,lead:current[0],leadDistance,tailDistance,
    meanLane:7,gap:51});
  };
- const first=at(90),third=at(300),wide=at(740);
- assert.match(first.broadcastShotId,/opening-wide$/);
+ const first=at(90),third=at(300),wide=at(650);
+ assert.match(first.broadcastShotId,/-lead$/);
  assert.match(third.broadcastShotId,/-third$/);
  assert.match(wide.broadcastShotId,/-wide$/);
- assert.match(first.broadcastLabel,/隊列形成・全馬追尾/);
+ assert.match(first.broadcastLabel,/先頭集団・低い斜め前/);
  assert.match(third.broadcastLabel,/3番手付近・斜め前/);
  assert.match(wide.broadcastLabel,/馬群全景/);
  for(const shot of [first,third,wide]){
@@ -205,7 +229,7 @@ test('TV editor alternates first-three close-up, third-place pack and wider fiel
   assert.ok(shot.fov>=25&&shot.fov<=53);
  }
  const dist=shot=>Math.hypot(shot.eye.x-shot.target.x,shot.eye.y-shot.target.y,shot.eye.z-shot.target.z);
- assert.ok(dist(first)>dist(third),'Opening camera should be farther out than third-place close-up');
+ assert.ok(dist(first)<dist(wide)*.75,'Leader closeup must be clearly closer than wide shot');
  assert.ok(dist(third)<dist(wide)*.75,'Third-place pack should be much closer than overview');
 });
 test('18-runner sharpness improvements preserve non-race modes and fixed framebuffer',()=>{
