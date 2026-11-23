@@ -5140,11 +5140,14 @@ function updateRunnerNameLabels(time){
  const stride=selected?1:wide?2:1;
  const first=others.length?(runnerBubbleStep*stride)%others.length:0;
  const candidates=selected?[selected]:[];
- for(let i=0;i<others.length&&candidates.length<limit;i++)
+ // Include later visible runners as fallback when a pair would overlap.
+ // The rendering loop stops after the requested 1–2 bubbles have been placed.
+ for(let i=0;i<others.length;i++)
   candidates.push(others[(first+i)%others.length]);
  const occupied=[],occupiedTorso=[];
  let slot=0;
  for(const item of candidates){
+  if(slot>=limit)break;
   const {x,y}=item;
   if(occupiedTorso.some(p=>Math.hypot(p.x-x,p.y-y)<26))continue;
   const label=runnerNameLabels[slot],guide=runnerGuidePaths[slot];
