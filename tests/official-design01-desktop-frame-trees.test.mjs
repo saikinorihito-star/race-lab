@@ -20,82 +20,48 @@ test('JRA 18-runner allocation and white-black-red-blue-yellow-green-orange-pink
  assert.deepEqual(actual,[1,1,2,2,3,3,4,4,5,5,6,6,7,7,7,8,8,8]);
 });
 
-test('original detailed GLB skeleton and gait remain untouched, cloth numbers added separately',()=>{
+test('approved 36-bone GLB remains intact, unique numbers are rendered on the original skinned mesh',()=>{
  const loader=extract('initializeOfficialPair');
- const cloth=extract('addOfficialFrameCloth');
+ const shader=extract('tintOriginalHelmetAndCloth');
+ const number=extract('makeOfficialSaddleNumberTexture');
  assert.match(loader,/const model=cloneSkeleton\(source\)/);
- assert.match(loader,/if\(isOfficialEighteenTest\)\{\s*tintOriginalHelmetAndCloth\(model,i\+1\);\s*addOfficialFrameCloth\(group,i\+1,originalFrameBounds\);\s*\}/);
- assert.match(loader,/const originalFrameBounds=isOfficialEighteenTest\?/);
- assert.match(loader,/new THREE\.Box3\(\)\.setFromObject\(source\)/);
- assert.match(cloth,/group\.add\(outsidePanels\)/);
- assert.match(cloth,/new THREE\.PlaneGeometry\(panelLength,panelHeight\)/);
- assert.match(cloth,/frame_colour_back_strip/);
- assert.doesNotMatch(cloth,/model\.material\s*=/);
- assert.doesNotMatch(loader,/model\.material\s*=/);
+ assert.match(loader,/makeOfficialSaddleNumberTexture\(i\+1\)/);
+ assert.match(loader,/tintOriginalHelmetAndCloth\(model,i\+1,numberTexture\)/);
+ assert.match(loader,/headBone:model\.getObjectByName\('head'\)/);
+ assert.doesNotMatch(loader,/addOfficialFrameCloth/);
+ assert.doesNotMatch(html,/function addOfficialFrameCloth\(/);
+ assert.match(shader,/mat=old\.clone\(\)/);
+ assert.match(shader,/raceNumberMap/);
+ assert.match(shader,/vRaceBindPos=position/);
+ assert.match(shader,/texture2D\(raceNumberMap/);
+ assert.match(shader,/diffuseColor\.rgb=numColor/);
+ assert.doesNotMatch(shader,/model\.material\s*=/);
+ assert.match(number,/ctx\.fillText\(String\(horseNumber\)/);
  assert.match(html,/official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119/);
 });
-
-test('all 18 numbers are unique and the enlarged cloth covers the old #4 while following the animated spine',()=>{
- const shown=[];
- class V{
-  constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}
+test('all 18 unique saddle numbers use a small frame-coloured texture per horse',()=>{
+ const shown=[],textures=[];
+ class CanvasTexture {
+  constructor(canvas){this.canvas=canvas;textures.push(this)}
  }
- class Group{
-  constructor(){
-   this.children=[];this.userData={};this.position={set(...xyz){this.xyz=xyz}};
-   this.rotation={};
-  }
-  add(item){this.children.push(item);item.parent=this}
-  updateMatrixWorld(){}
- }
- class Mesh extends Group{
-  constructor(geometry,material){super();this.geometry=geometry;this.material=material}
- }
- class Geo{constructor(...args){this.args=args}}
- class Material{constructor(args){this.options=args}}
- const THREE={
-  Vector3:V,Group,Mesh,PlaneGeometry:Geo,BoxGeometry:Geo,
-  MeshBasicMaterial:Material,DoubleSide:2,SRGBColorSpace:'srgb',
-  CanvasTexture:class{constructor(canvas){this.canvas=canvas}},
-  MathUtils:{clamp:(v,min,max)=>Math.max(min,Math.min(max,v))}
- };
- const document={createElement:()=>{
-  const ctx={
-   fillRect(){},strokeRect(){},
-   fillText(number){shown.push(number)}
-  };
-  return {width:0,height:0,getContext:()=>ctx};
- }};
- const f=runInNewContext('('+extract('addOfficialFrameCloth')+')',{
-  THREE,document,RACE_FRAME_COLORS:palette,officialFrameIndex:frameIndex,console
+ const THREE={CanvasTexture,SRGBColorSpace:'srgb'};
+ const document={createElement:()=>({
+  width:0,height:0,
+  getContext:()=>({
+   fillRect(){},strokeRect(){},fillText(number){shown.push(number)}
+  })
+ })};
+ const make=runInNewContext('('+extract('makeOfficialSaddleNumberTexture')+')',{
+  THREE,document,RACE_FRAME_COLORS:palette,officialFrameIndex:frameIndex
  });
- const bounds={
-  min:{x:-.311066,y:-.663072,z:-.95027},
-  getSize(v){v.x=.621427;v.y=1.326283;v.z=1.900130;return v}
- };
- const models=[];
  for(let i=1;i<=18;i++){
-  const spine={attached:null,attach(obj){this.attached=obj;obj.parent=this}};
-  const model={getObjectByName:name=>name==='spine_02'?spine:null};
-  const group=new Group();group.add(model);
-  const cloth=f(group,i,bounds);
-  models.push({cloth,spine});
-  assert.equal(cloth.userData.horseNumber,i);
-  assert.equal(cloth.userData.attachedBone,'spine_02');
-  assert.equal(spine.attached,cloth);
-  const panels=cloth.children.filter(x=>x.name.includes('_number_'));
-  assert.equal(panels.length,2);
-  for(const panel of panels){
-   assert.ok(panel.name.endsWith('_number_'+i));
-   const [length,height]=panel.geometry.args;
-   const [x,y,z]=panel.position.xyz;
-   assert.ok(Math.abs(x)>.311066,'Panel must be outside source GLB surface');
-   assert.ok(y-height/2<=-.23&&y+height/2>=.18,'Original #4 vertical region covered');
-   assert.ok(z-length/2<=-.49&&z+length/2>=.065,'Original #4 horizontal region covered');
-  }
+  const texture=make(i);
+  assert.equal(texture.colorSpace,'srgb');
+  assert.equal(texture.canvas.width,256);
+  assert.equal(texture.canvas.height,168);
  }
  assert.deepEqual(shown,Array.from({length:18},(_,i)=>String(i+1)));
- assert.equal(models.length,18);
+ assert.equal(new Set(textures).size,18);
 });
 
 test('race scene includes three tree silhouettes with 36 instanced trees of each type',()=>{
