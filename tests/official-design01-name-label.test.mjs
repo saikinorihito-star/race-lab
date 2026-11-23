@@ -10,15 +10,13 @@ function extract(name){
  return html.slice(start,end+2);
 }
 
-test('18-runner broadcast removes the obtrusive bars without deleting technical FPS information',()=>{
- assert.match(html,/\.official18 #broadcastCameraLabel,\.official18 #help\{display:none!important\}/);
- assert.match(html,/\.official18 #telemetry\{position:static/);
- assert.match(html,/document\.querySelector\('#officialPairTools'\)\.appendChild\(info\)/);
- assert.match(html,/<div id="runnerLabelLayer" hidden aria-hidden="true"><\/div>/);
- assert.match(html,/<details id="raceNameEditor" hidden>/);
- assert.match(html,/\.runner-name-label::after\{/);
- assert.match(html,/new THREE\.WebGLRenderer/);
- assert.match(html,/const model=cloneSkeleton\(source\)/);
+test('18頭中継には馬名・馬番バッジ・SVG接続線がある',()=>{
+ assert.ok(html.includes('<div id="runnerLabelLayer" hidden aria-hidden="true"><svg id="runnerGuideLines"'));
+ assert.ok(html.includes('.runner-horse-badge[data-selected="true"]'));
+ assert.ok(html.includes('function drawRunnerGuidePath('));
+ assert.ok(html.includes('runner.group.localToWorld(new THREE.Vector3(0,1.05,0))'));
+ assert.ok(html.includes('const model=cloneSkeleton(source)'));
+ assert.ok(html.includes('.official18 #broadcastCameraLabel,.official18 #help{display:none!important'));
 });
 
 test('horse labels load names from the existing main app, with independent explicit overrides',()=>{
@@ -61,53 +59,89 @@ test('race order uses actual interpolated metres and finish time, not model arra
  assert.deepEqual(result.slice(0,2).map(h=>h.number),[2,7]);
 });
 
-test('horse name bubbles reveal leader then second then third and disappear between shots',()=>{
- const labels=Array.from({length:3},()=>({hidden:true,style:{},textContent:''}));
- const officialPair=Array.from({length:18},(_,i)=>({
-  group:{
-   visible:true,
-   updateWorldMatrix(){},
-   localToWorld(v){v.x=-.75+(i%3)*.65;v.y=0;v.z=0;return v}
+function guideHarness(){
+ const projected=[-.7,-.2,.3,.8,-.5,...Array(12).fill(2),.9];
+ const style=()=>({setProperty(){}});
+ const labels=Array.from({length:3},()=>({
+  hidden:true,style:style(),dataset:{},
+  runnerParts:{
+   place:{textContent:''},
+   number:{textContent:'',getBoundingClientRect:()=>({left:312,top:12,width:18,height:18})},
+   name:{textContent:''}
   }
  }));
- const ranked=Array.from({length:18},(_,i)=>({index:i,name:'試験馬'+(i+1)}));
- const context={
+ const badges=Array.from({length:3},()=>({hidden:true,style:style(),dataset:{},textContent:''}));
+ const guides=Array.from({length:3},()=>({group:{style:{}},outline:{setAttribute(){}},line:{setAttribute(){}}}));
+ const ctx={
   isOfficialEighteenTest:true,installedDesign01:true,view:'broadcast',
-  activePlan:{distance:1400},officialPair,runnerNameLabels:labels,
-  lastBroadcastShotId:'back-lead',broadcastLabelCutAt:0,lastRunnerLabelPaint:-1,
-  rankedOfficialRunners:()=>ranked,stage:{clientWidth:400,clientHeight:500},
+  activePlan:{distance:1400},watchSelectedHorseIndex:null,
+  lastBroadcastShotId:'back-lead',lastRunnerLabelPaint:-1,
+  stage:{clientWidth:400,clientHeight:500,getBoundingClientRect:()=>({left:0,top:0})},
   camera:{updateMatrixWorld(){}},
   THREE:{Vector3:class {
    constructor(x,y,z){this.x=x;this.y=y;this.z=z}
    project(){return this}
   }},
-  clearRunnerNameLabels:()=>{for(const label of labels)label.hidden=true}
+  officialPair:Array.from({length:18},(_,i)=>({group:{
+   visible:true,updateWorldMatrix(){},
+   localToWorld(v){v.x=projected[i];v.y=0;v.z=0;return v}
+  }})),
+  rankedOfficialRunners:()=>Array.from({length:18},(_,index)=>({
+   index,number:index+1,name:'試験馬'+(index+1)
+  })),
+  runnerNameLabels:labels,runnerHorseBadges:badges,runnerGuidePaths:guides,
+  runnerGuideLines:{setAttribute(){}},
+  RACE_FRAME_COLORS:[{name:'白',hex:'#fff',ink:'#111'}],
+  officialFrameIndex:()=>0,
+  clearRunnerNameLabels(){
+   for(const label of labels)label.hidden=true;
+   for(const badge of badges)badge.hidden=true;
+   for(const guide of guides)guide.group.style.display='none';
+  },
+  drawRunnerGuidePath(guide,sx,sy,ex,ey,color){
+   guide.group.style.display='';guide.coords={sx,sy,ex,ey,color}
+  }
  };
- const update=runInNewContext('('+extract('updateRunnerNameLabels')+')',context);
- update(1100);
- assert.equal(labels[0].hidden,false);
- assert.equal(labels[1].hidden,false);
- assert.equal(labels[2].hidden,true);
- update(1900);
- assert.equal(labels[2].hidden,false);
- assert.equal(labels[2].textContent,'試験馬3');
- assert.ok(labels[0].style.left.endsWith('px'));
- update(7300);
- assert.ok(labels.every(x=>x.hidden));
- context.lastBroadcastShotId='back-third';context.broadcastLabelCutAt=7600;
- update(9500);
- assert.equal(labels[0].textContent,'試験馬3','Third place shot labels start at the third runner');
- assert.equal(labels[1].textContent,'試験馬4');
- context.view='side';
- update(9800);
- assert.ok(labels.every(x=>x.hidden),'Manual mode is unobstructed');
+ const update=runInNewContext('('+extract('updateRunnerNameLabels')+')',ctx);
+ const active=()=>labels.filter(x=>!x.hidden).map(x=>x.runnerParts.number.textContent);
+ return {ctx,labels,badges,guides,projected,update,active};
+}
+test('先頭・3番手・全景で表示頭数を変更し、手動カメラでは非表示',()=>{
+ const h=guideHarness();
+ h.update(1000);assert.deepEqual(h.active(),['1','2','3']);
+ h.ctx.lastBroadcastShotId='back-third';
+ h.update(1100);assert.deepEqual(h.active(),['3','4','5']);
+ h.ctx.lastBroadcastShotId='back-wide';
+ h.update(1200);assert.equal(h.active().length,2);
+ h.ctx.view='side';h.update(1300);assert.equal(h.active().length,0);
+});
+test('一覧で選んだ馬を優先して同じ馬体に接続し、重なった別の馬番を隠す',()=>{
+ const h=guideHarness();
+ h.ctx.watchSelectedHorseIndex=17;
+ h.projected[17]=h.projected[0];h.update(1000);
+ assert.equal(h.active()[0],'18');
+ assert.ok(!h.active().includes('1'));
+ assert.equal(h.labels[0].runnerParts.place.textContent,'18位');
+ assert.equal(h.labels[0].dataset.selected,'true');
+ assert.equal(h.badges[0].textContent,'18');
+ assert.equal(h.guides[0].coords.ex,60);
+});
+test('選択馬が画面外なら実際に映る上位馬へフォールバック',()=>{
+ const h=guideHarness();
+ h.ctx.watchSelectedHorseIndex=17;
+ h.projected[17]=3;
+ h.update(1000);assert.deepEqual(h.active(),['1','2','3']);
+});
+test('馬名タップの再解除とキーボード操作が残っている',()=>{
+ assert.ok(html.includes('watchSelectedHorseIndex=watchSelectedHorseIndex===i?null:i'));
+ assert.ok(html.includes("item.addEventListener('keydown',event=>"));
+ assert.ok(html.includes('label.dataset.selected=badge.dataset.selected'));
 });
 
-test('new low-front camera framing keeps the reference-clip shot structure',()=>{
+test('中継の5画角と接続線の毎フレーム更新が保持される',()=>{
  const body=extract('officialBroadcastCameraShot');
- assert.match(body,/height=6\.3;ahead=28/);
- assert.match(body,/height=6\.9;ahead=24/);
- assert.match(body,/broadcastShotId:stageShot\.id\+'-'\+focusType/);
- assert.match(html,/broadcastLabelCutAt=time/);
- assert.match(html,/updateRunnerNameLabels\(time\)/);
+ for(const name of ['lead','third','horseEye','side','wide'])
+  assert.ok(body.includes("focusType==='"+name+"'"),name);
+ assert.ok(body.includes("broadcastShotId:stageShot.id+'-'+focusType"));
+ assert.ok(html.includes('updateRunnerNameLabels(time)'));
 });
