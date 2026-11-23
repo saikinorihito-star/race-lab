@@ -145,6 +145,14 @@ test('選択した18番を優先、密集時は違う馬と取り違えず、実
  assert.equal(h.guides[0].group.style.display,'');
 });
 
+test('同じ画面位置で2頭が重なる場合は次の見える馬の吹き出しに切り替える',()=>{
+ const h=guideHarness();
+ h.projected[1]=h.projected[0];
+ h.ctx.lastBroadcastShotId='back-wide';
+ h.update(1000);
+ assert.deepEqual(h.active(),['試験馬1','試験馬3']);
+ assert.equal(h.guides.filter(g=>g.group.style.display!=='none').length,2);
+});
 test('画面外の選択馬を示す偽の吹き出しを出さず、画面内の馬に戻す',()=>{
  const h=guideHarness();
  h.ctx.watchSelectedHorseIndex=17;
