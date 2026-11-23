@@ -5035,14 +5035,18 @@ function officialBroadcastCameraShot(context){
   .sort((a,b)=>(b.distance+(b.postDistance||0))-(a.distance+(a.postDistance||0))||a.number-b.number);
  const leader=ranked[0]||lead;
  const third=ranked[Math.min(2,ranked.length-1)]||leader;
- // Advance the first close shot by ~1 second and rotate 7 distinct angles.
- const cycle=Math.floor(Math.max(0,leadDistance-69)/130)%7;
+ // Keep established leader/third/front/side/horse-eye/wide cuts, adding
+ // deliberate mid-field and tail-pack coverage so the broadcast does not
+ // repeatedly follow only the front runners.
+ const cycle=Math.floor(Math.max(0,leadDistance-69)/130)%9;
  const forming=officialOpeningFormationWide(leadDistance,ranked);
  const focusType=forming?'opening':stageShot.id==='gate'?'gate':
   remaining<=55?'lead':
-  ['lead','third','frontPack','side','sidePack','horseEye','wide'][cycle];
+  ['lead','midPack','tailPack','third','frontPack','side','sidePack','horseEye','wide'][cycle];
  const selected=forming?ranked:
   (focusType==='lead'||focusType==='horseEye')?ranked.slice(0,Math.min(3,ranked.length)):
+  focusType==='midPack'?ranked.slice(Math.min(4,ranked.length-1),Math.min(9,ranked.length)):
+  focusType==='tailPack'?ranked.slice(Math.max(0,ranked.length-6)):
   focusType==='frontPack'?ranked.slice(0,Math.min(5,ranked.length)):
   focusType==='third'?ranked.slice(Math.min(1,ranked.length-1),Math.min(5,ranked.length)):
   focusType==='sidePack'?ranked.slice(0,Math.min(7,ranked.length)):
@@ -5059,7 +5063,11 @@ function officialBroadcastCameraShot(context){
  const target=at.p.clone().addScaledVector(side,focusLane)
   .add(new THREE.Vector3(0,forming?3.8:focusType==='wide'?3.3:2.45,0));
  let outside,height,ahead,fov;
- if(forming){outside=55;height=14.5;ahead=26;fov=51}
+ if(forming){
+  // Closer starting overview with a slightly wider lens. All 18 runners,
+  // including the last horse, remain the fitting targets.
+  outside=43;height=11.5;ahead=20;fov=55;
+ }
  else if(focusType==='gate'){outside=28;height=7.8;ahead=22;fov=43}
  else if(focusType==='wide'){outside=42;height=11.8;ahead=18;fov=42}
  else if(focusType==='frontPack'){
@@ -5070,6 +5078,14 @@ function officialBroadcastCameraShot(context){
  else if(focusType==='sidePack'){
   // Reference 2: low lateral tracking with several runners across frame.
   outside=23.5;height=4.2;ahead=0;fov=43;
+ }
+ else if(focusType==='midPack'){
+  // Rank 5–9: lower side-front view of horses behind the leaders.
+  outside=17.5;height=4.3;ahead=9;fov=39;
+ }
+ else if(focusType==='tailPack'){
+  // Last six runners: rear three-quarter tracking, not a long overhead shot.
+  outside=18.5;height=4.4;ahead=-11;fov=40;
  }
  else if(focusType==='side'){outside=14.5;height=4.1;ahead=1;fov=36}
  else if(focusType==='horseEye'){
@@ -5086,7 +5102,8 @@ function officialBroadcastCameraShot(context){
  if(forming||focusType==='wide'||focusType==='gate')
   fitBroadcastToRunners(eye,target,selected,fov);
  // A closer upper bound for editorial closeups prevents "always distant".
- const maxDistance=forming?120:focusType==='wide'?80:focusType==='gate'?72:
+ const maxDistance=forming?88:focusType==='wide'?80:focusType==='gate'?72:
+  focusType==='tailPack'?43:focusType==='midPack'?40:
   focusType==='sidePack'?47:focusType==='frontPack'?38:
   focusType==='side'?31:focusType==='horseEye'?27:
   focusType==='third'?32:30;
@@ -5094,9 +5111,11 @@ function officialBroadcastCameraShot(context){
  if(radius>maxDistance)eye.copy(target).addScaledVector(vector,maxDistance/radius);
  eye.y=Math.max(at.p.y+(focusType==='horseEye'?2.5:3.1),
   Math.min(eye.y,at.p.y+(forming?18:focusType==='wide'?13:focusType==='horseEye'?3.5:7.5)));
- const caption=forming?'スタート〜隊列形成・全馬追尾':
+ const caption=forming?'スタート〜隊列形成・全18頭':
   focusType==='gate'?'ゲート・発走':
   focusType==='lead'?'先頭集団・低い斜め前':
+  focusType==='midPack'?'中団馬群・5〜9番手を追走':
+  focusType==='tailPack'?'後方馬群・最後尾まで追走':
   focusType==='third'?'3番手付近・斜め前':
   focusType==='side'?'先頭集団・低い横位置':
   focusType==='frontPack'?'先頭集団・斜め前から隊列を映す':
@@ -5161,7 +5180,8 @@ function updateRunnerNameLabels(time){
   }
  }
  runnerBubbleLastTime=time;
- const wide=shot.endsWith('-wide')||shot.endsWith('-gate')||shot.endsWith('-sidePack');
+ const wide=shot.endsWith('-wide')||shot.endsWith('-gate')||
+  shot.endsWith('-sidePack')||shot.endsWith('-midPack')||shot.endsWith('-tailPack');
  const ranked=rankedOfficialRunners();
  const width=stage.clientWidth,height=stage.clientHeight;
  clearRunnerNameLabels();
