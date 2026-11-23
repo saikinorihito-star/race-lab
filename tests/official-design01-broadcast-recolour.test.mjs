@@ -338,7 +338,7 @@ test('all TV shot types frame lower to reduce empty sky without losing horses',(
   /forming\?2\.35:focusType==='wide'\?2\.15:1\.55/);
 });
 test('18-horse approved GLB legs animate a little quicker without racing faster',()=>{
- // For distance 100m, index 0 advances 100/16*1.23 in animation-time.
+ // For distance 100m, index 0 advances 100/16*1.2915 in animation-time.
  // This comparison is independent of simulation physics or FPS.
  const local={THREE:{Vector3:V,MathUtils:{clamp}},
   isOfficialPairTest:true,installedDesign01:true,
@@ -354,7 +354,9 @@ test('18-horse approved GLB legs animate a little quicker without racing faster'
  const apply=runInNewContext('('+fn('updateOfficialPair')+')',local);
  apply(1/60);
  const boosted=local.officialPair[0].mixer.time;
- assert.ok(Math.abs(boosted-100*1.23/16)<1e-8);
+ assert.ok(Math.abs(boosted-100*1.2915/16)<1e-8);
+ assert.ok(Math.abs(boosted/(100*1.23/16)-1.05)<1e-10,
+  'Leg turnover must be exactly 5% faster than the previous 1.23 rate');
  assert.ok(boosted>100*1.15/16,'Slightly quicker than former 15% turnover');
  assert.ok(local.officialPair[1].mixer.time>boosted,'Separate phase offset remains');
  local.isOfficialEighteenTest=false;local.OFFICIAL_TEST_COUNT=2;
