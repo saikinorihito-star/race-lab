@@ -123,9 +123,9 @@ test('近くの頭上以外に吹き出しを置かず、馬の頭の骨に追�
  h.update(1000);
  assert.ok(moved,'The horse-specific head bone should drive the label');
  assert.ok(Math.abs(Number(h.labels[0].style.left.replace('px',''))-200)<1);
- assert.match(extract('updateRunnerNameLabels'),/for\(const rise of \[18,25,32\]\)/);
- assert.match(extract('updateRunnerNameLabels'),/for\(const offset of \[0,-9,9\]\)/);
- assert.match(extract('updateRunnerNameLabels'),/Math\.hypot\(position\.left-x,tipY-position\.bottom\)>26/);
+ assert.match(extract('updateRunnerNameLabels'),/for\(const rise of \[7,11,15\]\)/);
+ assert.match(extract('updateRunnerNameLabels'),/for\(const offset of \[0,-7,7\]\)/);
+ assert.match(extract('updateRunnerNameLabels'),/Math\.hypot\(position\.left-x,tipY-position\.bottom\)>12/);
 });
 test('中継では1頭ずつ順位順に切り替え、広角では2頭ずつ切り替える',()=>{
  const h=guideHarness();
@@ -169,7 +169,7 @@ test('選択した18番を優先、密集時は違う馬と取り違えず、実
  assert.equal(h.labels[0].dataset.rank,'18');
  assert.equal(h.labels[0].dataset.selected,'true');
  assert.ok(Number(h.labels[0].style.top.replace('px',''))<250,'Horse name is above its torso');
- assert.ok(h.guides[0].line.values.d.includes('60.0 243.0'));
+ assert.ok(h.guides[0].line.values.d.includes('60.0 248.0'));
  assert.equal(h.guides[0].dot.values.r,'0');
  assert.equal(h.guides[0].group.style.display,'');
 });
@@ -207,9 +207,9 @@ test('吹き出しは頭上に離れ、三角しっぽも馬体に入らない',
  assert.deepEqual(h.active(),['試験馬1']);
  const label=h.labels[0];
  const bottom=Number(label.style.top.replace('px',''));
- assert.ok(bottom<=232,'Text must remain close to its head anchor');
+ assert.ok(bottom>=235&&bottom<=244,'Bubble bottom stays within 15 px of the horse head');
  const tail=h.guides[0].line.values.d;
- assert.ok(tail.includes('60.0 243.0'),'Short balloon tail stays directly above its horse');
+ assert.ok(tail.includes('60.0 248.0'),'Tail stops just 2 px short of its horse head');
 });
 function rosterHarness(){
  const horses=Array.from({length:18},(_,i)=>({
