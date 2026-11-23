@@ -174,12 +174,12 @@ test('TV editor alternates first-three close-up, third-place pack and wider fiel
   return camera({horses:current,lead:current[0],leadDistance,tailDistance,
    meanLane:7,gap:51});
  };
- const first=at(90),third=at(300),wide=at(520);
+ const first=at(90),third=at(300),wide=at(740);
  assert.match(first.broadcastShotId,/-lead$/);
  assert.match(third.broadcastShotId,/-third$/);
  assert.match(wide.broadcastShotId,/-wide$/);
- assert.match(first.broadcastLabel,/先頭3頭を拡大/);
- assert.match(third.broadcastLabel,/3番手付近を拡大/);
+ assert.match(first.broadcastLabel,/先頭集団・低い斜め前/);
+ assert.match(third.broadcastLabel,/3番手付近・斜め前/);
  assert.match(wide.broadcastLabel,/馬群全景/);
  for(const shot of [first,third,wide]){
   assert.match(shot.broadcastLabel,/先頭 1番 ／ 3番手 3番/);
