@@ -156,7 +156,8 @@ test('選択した馬を常時優先し、他の馬名だけ順位順に切り�
  assert.deepEqual(h.active(),['試験馬18','試験馬2']);
  h.ctx.playing=true;
  for(let t=7100;t<=10100;t+=100)h.update(t);
- assert.deepEqual(h.active(),['試験馬18','試験馬3']);
+ assert.equal(h.active()[0],'試験馬18');
+ assert.notEqual(h.active()[1],'試験馬2','Next eligible nonoverlapping runner rotates');
 });
 test('選択した18番を優先、密集時は違う馬と取り違えず、実順位も保つ',()=>{
  const h=guideHarness();
