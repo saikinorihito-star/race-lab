@@ -163,6 +163,26 @@ test('画面外の選択馬を示す偽の吹き出しを出さず、画面内�
  assert.equal(h.guides.filter(g=>g.group.style.display!=='none').length,1);
 });
 
+test('吹き出しの候補領域が馬体と重なる場合は、その馬名表示を抑制する',()=>{
+ const h=guideHarness();
+ // Simulate a tightly packed TV shot covering all bubble candidate positions.
+ h.ctx.runnerProjectedBodyRect=()=>({
+  left:0,right:400,top:100,bottom:240
+ });
+ h.update(1000);
+ assert.deepEqual(h.active(),[],'No label should obscure a real horse');
+ assert.ok(h.guides.every(g=>g.group.style.display==='none'));
+});
+test('吹き出しは頭上に離れ、三角しっぽも馬体に入らない',()=>{
+ const h=guideHarness();
+ h.update(1000);
+ assert.deepEqual(h.active(),['試験馬1']);
+ const label=h.labels[0];
+ const bottom=Number(label.style.top.replace('px',''));
+ assert.ok(bottom<=210,'Text must be above the head anchor');
+ const tail=h.guides[0].line.values.d;
+ assert.ok(tail.includes('60.0 232.0'),'Tail stops short of the actual horse');
+});
 function rosterHarness(){
  const horses=Array.from({length:18},(_,i)=>({
   idx:i,number:i+1,distance:18-i,postDistance:0,finished:false,finishTime:null
