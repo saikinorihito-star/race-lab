@@ -59,7 +59,7 @@ test('確定順位は現在距離・到達時刻を基準とし、馬番順で�
 });
 
 function guideHarness(){
- const projected=[-.7,-.2,.3,.8,-.5,...Array(12).fill(2),.9];
+ const projected=[-.7,-.2,.3,.8,-.5,...Array(12).fill(2),.65];
  const labels=Array.from({length:3},()=>({
   hidden:true,textContent:'',offsetWidth:92,style:{setProperty(){}},dataset:{}
  }));
@@ -77,6 +77,7 @@ function guideHarness(){
   camera:{updateMatrixWorld(){}},
   THREE:{Vector3:class {
    constructor(x,y,z){this.x=x;this.y=y;this.z=z}
+   add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this}
    project(){return this}
   }},
   officialPair:Array.from({length:18},(_,i)=>({group:{
@@ -138,7 +139,7 @@ test('中継では1頭ずつ順位順に切り替え、広角では2頭ずつ切
  h.update(7300);
  assert.deepEqual(h.active(),['試験馬1','試験馬2']);
  for(let t=7400;t<=10700;t+=100)h.update(t);
- assert.deepEqual(h.active(),['試験馬3','試験馬4']);
+ assert.deepEqual(h.active(),['試験馬3','試験馬5'],'Overlapping 4th runner is skipped');
  h.ctx.view='side';h.update(10800);
  assert.equal(h.active().length,0);
  assert.ok(h.guides.every(g=>g.group.style.display==='none'));
