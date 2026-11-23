@@ -102,7 +102,7 @@ test('broadcast stops using the opening-wide shot after 145m and keeps returning
  const opening=shots.find(x=>x.progress===50).shot;
  assert.ok(centerDist(close)<centerDist(opening)*.70,'Closeup should clearly exceed wide opening in scale');
  assert.match(fn('officialBroadcastCameraShot'),/if\(forming\|\|focusType==='wide'\|\|focusType==='gate'\)/);
- assert.match(fn('officialBroadcastCameraShot'),/focusType==='horseEye'\?34/);
+ assert.match(fn('officialBroadcastCameraShot'),/focusType==='horseEye'\?27/);
 });
 test('virtual cameras have finite nonidentical positions and target the running pack',()=>{
  for(const distance of [1400,2400,3400]){
@@ -232,10 +232,46 @@ test('TV editor alternates first-three close-up, third-place pack and wider fiel
  assert.ok(dist(first)<dist(wide)*.75,'Leader closeup must be clearly closer than wide shot');
  assert.ok(dist(third)<dist(wide)*.75,'Third-place pack should be much closer than overview');
 });
+test('approved horse materials keep 2K maps shared with anisotropic filtering',()=>{
+ const configure=runInNewContext('('+fn('improveApprovedHorseTextureSampling')+')',{
+  renderer:{capabilities:{getMaxAnisotropy:()=>16}}
+ });
+ const makeTexture=id=>({isTexture:true,anisotropy:1,
+  image:{id,width:2048,height:2048},needsUpdate:false});
+ const diffuse=makeTexture('diffuse'),normal=makeTexture('normal'),
+  metallic=makeTexture('metallic');
+ const source={traverse:cb=>{
+  cb({isMesh:true,material:{map:diffuse,normalMap:normal,
+   metalnessMap:metallic,roughnessMap:metallic}});
+  cb({isMesh:true,material:[{map:diffuse},{normalMap:normal}]});
+ }};
+ const images=[diffuse.image,normal.image,metallic.image];
+ assert.equal(configure(source),3);
+ for(const [i,t] of [diffuse,normal,metallic].entries()){
+  assert.equal(t.anisotropy,8);assert.equal(t.needsUpdate,true);
+  assert.equal(t.image,images[i],'Source texture data should remain shared and intact');
+ }
+ assert.match(fn('loadApprovedHorse'),/if\(isOfficialPairTest\)improveApprovedHorseTextureSampling\(horse\)/);
+ const limited=runInNewContext('('+fn('improveApprovedHorseTextureSampling')+')',{
+  renderer:{capabilities:{getMaxAnisotropy:()=>4}}
+ });
+ const low=makeTexture('limited');
+ assert.equal(limited({traverse:cb=>cb({isMesh:true,material:{map:low}})}),1);
+ assert.equal(low.anisotropy,4);
+});
+test('focused race views enlarge horse models but preserve overview and starting shots',()=>{
+ const src=fn('officialBroadcastCameraShot');
+ assert.match(src,/outside=12\.8;height=3\.9;ahead=12;fov=35/);
+ assert.match(src,/outside=14\.5;height=4\.1;ahead=1;fov=36/);
+ assert.match(src,/outside=10\.6;height=2\.8;ahead=10;fov=37/);
+ assert.match(src,/outside=14;height=4\.3;ahead=14;fov=35/);
+ assert.match(src,/focusType==='third'\?32:30/);
+ assert.match(src,/if\(forming\|\|focusType==='wide'\|\|focusType==='gate'\)/);
+});
 test('18-runner sharpness improvements preserve non-race modes and fixed framebuffer',()=>{
- assert.match(html,/isOfficialEighteenTest\?\{sharp:2\.0,standard:1\.65,light:1\.15\}/);
- assert.match(html,/renderQuality\.value==='auto'\?2\.0/);
- assert.match(html,/let auto18Dpr=2\.0,auto18ObservedFps=0/);
+ assert.match(html,/isOfficialEighteenTest\?\{sharp:2\.6,standard:1\.85,light:1\.15\}/);
+ assert.match(html,/renderQuality\.value==='auto'\?2\.25/);
+ assert.match(html,/let auto18Dpr=2\.25,auto18ObservedFps=0/);
  assert.match(html,/isOfficialEighteenTest\?512:256/g);
  assert.match(html,/isOfficialEighteenTest\?16:4/);
  const auto=fn('autoTune18HorseResolution');
