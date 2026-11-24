@@ -543,3 +543,25 @@ test('front-oblique cameras are on the outer-rail side for any track heading',()
   }
  }
 });
+
+test('final 400m locks broadcast on current leader and follows overtakes without stage cuts',()=>{
+ for(const distance of [1400,1600,1800,2000,2300,2400,2500,2600,3400]){
+  const camera=makeShot(distance);
+  const shotAt=(remaining,leaderIndex=0)=>{
+   const progress=distance-remaining;
+   const horses=Array.from({length:18},(_,i)=>({number:i+1,distance:progress-(i===leaderIndex?0:2+i),lane:4+i%4,postDistance:0,speed:16}));
+   return {shot:camera({horses,lead:horses[leaderIndex],leadDistance:progress,gap:19}),leader:horses[leaderIndex]};
+  };
+  assert.notEqual(shotAt(401).shot.broadcastShotId,'final-lead');
+  for(const remaining of [400,399,300,150,55,1,0]){
+   const {shot,leader}=shotAt(remaining,remaining<=150?5:0);
+   assert.equal(shot.broadcastShotId,'final-lead');
+   assert.equal(shot.focusedOnLead,true);
+   assert.equal(shot.focusNumbers.join(','),String(leader.number));
+   assert.ok(Math.abs(shot.target.x-leader.distance*.31)<1e-8);
+   assert.ok(Math.abs(shot.target.z-(leader.distance*.1-leader.lane))<1e-8);
+   assert.ok(Math.abs(shot.eye.z-shot.target.z-8.5)<1e-8,'outer-rail side retained');
+   assert.equal(shot.fov,40);
+  }
+ }
+});
