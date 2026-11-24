@@ -22,6 +22,7 @@ main{max-width:1320px;margin:0 auto}
  font-weight:750;pointer-events:none;line-height:1.5}
 #stage{height:min(69svh,720px);min-height:370px;position:relative;background:linear-gradient(#a2d1da,#cce5da);overflow:hidden;touch-action:none}
 #stage canvas{display:block}
+#stage > canvas.race-webgl-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #raceRainCanvas{position:absolute;inset:0;z-index:2;width:100%;height:100%;pointer-events:none;touch-action:none}
 #raceRainCanvas[hidden]{display:none!important}
 #telemetry{position:absolute;left:10px;top:10px;z-index:3;padding:8px 10px;border-radius:9px;background:#112736e8;color:#ecfff9;font-size:12px;line-height:1.55;border:1px solid #456b79;pointer-events:none}
@@ -852,9 +853,9 @@ function drawRunnerGuidePath(guide,startX,startY,endX,endY,color){
   clearRunnerGuidePath(guide);return;
  }
  // A single filled triangle with one tip, without folding control points.
- const d='M '+(startX-5).toFixed(1)+' '+(startY-1).toFixed(1)+
+ const d='M '+(startX-8).toFixed(1)+' '+(startY-1).toFixed(1)+
   ' L '+endX.toFixed(1)+' '+endY.toFixed(1)+
-  ' L '+(startX+5).toFixed(1)+' '+(startY-1).toFixed(1)+' Z';
+  ' L '+(startX+8).toFixed(1)+' '+(startY-1).toFixed(1)+' Z';
  guide.line.setAttribute('d',d);
  guide.line.setAttribute('fill','#07141b');
  guide.line.setAttribute('stroke',color);
@@ -892,7 +893,7 @@ if(isOfficialEighteenTest){
   runnerLabelLegend.appendChild(label);runnerNameLabels.push(label);
   const group=runnerGuideNode('g',runnerGuideLines);
   const line=runnerGuideNode('path',group);
-  line.setAttribute('stroke-width','0.8');
+  line.setAttribute('stroke-width','1.2');
   line.setAttribute('stroke-opacity','1');
   const guide={group,line};clearRunnerGuidePath(guide);
   runnerGuidePaths.push(guide);
@@ -1199,7 +1200,9 @@ const renderDprLevels=isOfficialEighteenTest?{sharp:2.6,standard:1.85,light:1.15
 const initialDpr=isOfficialPairTest?(renderQuality.value==='auto'?2.25:
  renderDprLevels[renderQuality.value]||1.05):1.4;
 renderer.setPixelRatio(Math.min(initialDpr,window.devicePixelRatio||1));
-renderer.setSize(stage.clientWidth,stage.clientHeight);
+renderer.domElement.classList.add('race-webgl-canvas');
+// CSS follows the live stage, rather than retaining pre-portrait pixel dimensions.
+renderer.setSize(stage.clientWidth,stage.clientHeight,false);
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.09;
@@ -4527,7 +4530,8 @@ async function initializeOfficialPair(source,clip){
   const action=mixer.clipAction(clip);
   action.setLoop(THREE.LoopRepeat,Infinity);action.play();
   action.time=i*.07;
-  officialPair.push({group,mixer,headBone:model.getObjectByName('head')});
+  officialPair.push({group,mixer,headBone:model.getObjectByName('head'),
+   labelBounds:source.userData.raceLabelBounds});
   if(isOfficialEighteenTest&&(i+1)%3===0&&i+1<OFFICIAL_TEST_COUNT){
    document.querySelector('#officialPairStatus').textContent=
     '正式Design 01を準備中：'+(i+1)+' / '+OFFICIAL_TEST_COUNT+'頭';
@@ -4624,6 +4628,10 @@ async function loadApprovedHorse(buffer){
  horse.scale.setScalar(scale);
  horse.position.set(-(bounds.min.x+bounds.max.x)*scale/2,-bounds.min.y*scale,
   -(bounds.min.z+bounds.max.z)*scale/2);
+ // Cache the actual normalized GLB bounds for screen-space occlusion tests.
+ horse.userData.raceLabelBounds={
+  min:bounds.min.clone().multiplyScalar(scale).add(horse.position).toArray(),
+  max:bounds.max.clone().multiplyScalar(scale).add(horse.position).toArray()};
  if(installedScene){runner.remove(installedScene)}
  runner.remove(fallback);runner.add(horse);installedScene=horse;
  runnerMixer=new THREE.AnimationMixer(horse);
@@ -4743,7 +4751,7 @@ const groupCameraOffset={yaw:0,pitch:0,zoom:1};
 const camera18={yaw:0,pitch:0,zoom:1,pan:0,lift:0};
 let camera18CutPending=false; // Avoid passing through black 3D objects between views.
 const broadcastCameraLabel=document.querySelector('#broadcastCameraLabel');
-let lastBroadcastShotId=null;
+let lastBroadcastShotId=null,lastBroadcastFocusNumbers=[];
 const camera18Follow=document.querySelector('#cam18Follow');
 let camera18LatestAnchor=null,camera18FixedAnchor=null;
 const camera18Inputs={
@@ -5025,21 +5033,23 @@ function officialBroadcastCameraShot(context){
  // Keep established leader/third/front/side/horse-eye/wide cuts, adding
  // deliberate mid-field and tail-pack coverage so the broadcast does not
  // repeatedly follow only the front runners.
- const cycle=Math.floor(Math.max(0,leadDistance-69)/130)%9;
+ const cycle=Math.floor(Math.max(0,leadDistance-69)/100)%9;
  const forming=officialOpeningFormationWide(leadDistance,ranked);
  const focusType=forming?'opening':stageShot.id==='gate'?'gate':
   remaining<=55?'lead':
-  ['lead','midPack','tailPack','third','frontPack','side','sidePack','horseEye','wide'][cycle];
- const selected=forming?ranked:
-  (focusType==='lead'||focusType==='horseEye')?ranked.slice(0,Math.min(3,ranked.length)):
+  ['lead','midPack','tailPack','wide','third','frontPack','side','sidePack','horseEye'][cycle];
+ // Only two of the nine normal shots prioritize the leaders.
+ // Preserve all requested angles while assigning different groups to them.
+ const selected=forming||focusType==='wide'?ranked:
+  focusType==='lead'?ranked.slice(0,Math.min(3,ranked.length)):
   focusType==='midPack'?ranked.slice(Math.min(4,ranked.length-1),Math.min(9,ranked.length)):
   focusType==='tailPack'?ranked.slice(Math.max(0,ranked.length-6)):
-  focusType==='frontPack'?ranked.slice(0,Math.min(5,ranked.length)):
+  focusType==='frontPack'?ranked.slice(Math.min(5,ranked.length-1),Math.min(10,ranked.length)):
   focusType==='third'?ranked.slice(Math.min(1,ranked.length-1),Math.min(5,ranked.length)):
-  focusType==='sidePack'?ranked.slice(0,Math.min(7,ranked.length)):
-  focusType==='side'?ranked.slice(0,Math.min(4,ranked.length)):
-  focusType==='gate'?ranked.slice(0,Math.min(8,ranked.length)):
-  gap<45?ranked:ranked.slice(0,Math.min(9,ranked.length));
+  focusType==='sidePack'?ranked.slice(Math.max(0,ranked.length-7)):
+  focusType==='side'?ranked.slice(Math.min(9,ranked.length-1),Math.min(14,ranked.length)):
+  focusType==='horseEye'?ranked.slice(Math.min(6,ranked.length-1),Math.min(9,ranked.length)):
+  ranked.slice(0,Math.min(8,ranked.length));
  const dist=h=>h.distance+(h.postDistance||0);
  const first=selected[0]||leader,last=selected[selected.length-1]||first;
  const focusDistance=(dist(first)+dist(last))*.5;
@@ -5106,11 +5116,11 @@ function officialBroadcastCameraShot(context){
   focusType==='midPack'?'中団馬群・5〜9番手を追走':
   focusType==='tailPack'?'後方馬群・最後尾まで追走':
   focusType==='third'?'3番手付近・斜め前':
-  focusType==='side'?'先頭集団・低い横位置':
-  focusType==='frontPack'?'先頭集団・斜め前から隊列を映す':
-  focusType==='sidePack'?'馬群・低い真横の追走映像':
-  focusType==='horseEye'?'馬の目線・馬群へ接近':'馬群全景';
- return {eye,target,gap,focusedOnLead:focusType==='lead',
+  focusType==='side'?'中団後方・低い横位置':
+  focusType==='frontPack'?'中団馬群・斜め前から隊列を映す':
+  focusType==='sidePack'?'後方馬群・低い真横の追走映像':
+  focusType==='horseEye'?'中団・馬の目線':'馬群全景';
+ return {eye,target,gap,focusedOnLead:focusType==='lead',focusNumbers:selected.map(h=>h.number),
   fov,broadcastShotId:forming?'opening-wide':stageShot.id+'-'+focusType,
   broadcastLabel:caption+'｜先頭 '+leader.number+'番 ／ 3番手 '+third.number+'番'};
 }
@@ -5135,11 +5145,12 @@ function clearRunnerNameLabels(){
  for(const label of runnerNameLabels)label.hidden=true;
  for(const guide of runnerGuidePaths)clearRunnerGuidePath(guide);
 }
-function runnerProjectedBodyRect(group,camera,width,height){
+function runnerProjectedBodyRect(group,camera,width,height,bounds){
  // Original approved 3D mesh bounds; include a small safety margin so that
  // speech boxes do not paint over any horse (including other packed runners).
  let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;
- for(const x of [-.35,.35])for(const y of [-.72,.73])for(const z of [-.99,.99]){
+ const min=bounds?.min||[-.58,0,-1.76],max=bounds?.max||[.58,2.45,1.76];
+ for(const x of [min[0],max[0]])for(const y of [min[1],max[1]])for(const z of [min[2],max[2]]){
   const p=group.localToWorld(new THREE.Vector3(x,y,z)).project(camera);
   if(!Number.isFinite(p.x+p.y+p.z)||p.z<=-1||p.z>=1)continue;
   const sx=(p.x*.5+.5)*width,sy=(.5-p.y*.5)*height;
@@ -5188,20 +5199,22 @@ function updateRunnerNameLabels(time){
   // The approved GLB has a separate animated head bone, so the name
   // follows the exact horse's head rather than hovering above the lane.
   const labelAnchor=runner.headBone?
-   runner.headBone.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,.08,0)):
-   runner.group.localToWorld(new THREE.Vector3(0,.39,.55));
+   runner.headBone.getWorldPosition(new THREE.Vector3()):
+   runner.group.localToWorld(new THREE.Vector3(0,1.75,1.05));
   const projected=labelAnchor.project(camera);
   if(!Number.isFinite(projected.x+projected.y+projected.z)||
       projected.z<=-1||projected.z>=1)continue;
   const x=(projected.x*.5+.5)*width,y=(.5-projected.y*.5)*height;
   if(x<8||x>width-8||y<70||y>height-14)continue;
-  const bodyRect=runnerProjectedBodyRect(runner.group,camera,width,height);
+  const bodyRect=runnerProjectedBodyRect(runner.group,camera,width,height,runner.labelBounds);
   visible.push({...item,x,y,bodyRect});
  }
  if(!visible.length)return;
  const selected=Number.isInteger(watchSelectedHorseIndex)?
   visible.find(h=>h.index===watchSelectedHorseIndex):null;
- const others=selected?visible.filter(h=>h.index!==selected.index):visible;
+ const otherVisible=selected?visible.filter(h=>h.index!==selected.index):visible;
+ const focused=otherVisible.filter(h=>lastBroadcastFocusNumbers.includes(h.number));
+ const others=focused.length?focused:otherVisible;
  // One name normally; two in a wide shot or when a user selects a horse.
  const limit=selected?2:wide?2:1;
  const stride=selected?1:wide?2:1;
@@ -5230,12 +5243,12 @@ function updateRunnerNameLabels(time){
   const leftEdge=labelWidth/2+7,rightEdge=width-labelWidth/2-7;
   let position=null;
   // More clearance above the model; no name box on the animated horse.
-  for(const rise of [3,5,7]){
+  for(const rise of [10,12,14]){
    const bottom=y-rise;
    if(bottom<35)continue;
-   for(const offset of [0,-4,4]){
+   for(const offset of [0,-6,6]){
     const left=Math.max(leftEdge,Math.min(rightEdge,x+offset));
-    if(Math.abs(left-x)>4)continue;
+    if(Math.abs(left-x)>6)continue;
     const rect={left:left-labelWidth/2,top:bottom-29,
      right:left+labelWidth/2,bottom};
     if(occupied.some(other=>rect.left<other.right+5&&
@@ -5255,8 +5268,8 @@ function updateRunnerNameLabels(time){
   label.style.left=position.left+'px';
   label.style.top=position.bottom+'px';
   // Keep the filled pointer short and outside the horse silhouette.
-  const tipY=Math.min(y-1,position.bottom+6);
-  if(Math.hypot(position.left-x,tipY-position.bottom)>8){
+  const tipY=y-1;
+  if(Math.hypot(position.left-x,tipY-position.bottom)>16){
    label.hidden=true;continue;
   }
   drawRunnerGuidePath(guide,position.left,position.bottom,x,tipY,
@@ -5398,7 +5411,7 @@ function setView(which){
   if(pairTrackingView(which))camera18CutPending=true;
   syncCamera18Controls();
   broadcastCameraLabel.hidden=which!=='broadcast';
-  lastBroadcastShotId=null;
+  lastBroadcastShotId=null;lastBroadcastFocusNumbers=[];
   if(which!=='broadcast'&&camera.fov!==43){
    camera.fov=43;camera.updateProjectionMatrix();
   }
@@ -5610,13 +5623,17 @@ function resize(){
  // Safari may fire resize events as address/tool bars animate even if the
  // WebGL stage size is unchanged. Avoid reallocating the drawing buffer,
  // a potential cause of sporadic full-canvas flashes on iPhone.
- if(isOfficialEighteenTest&&Math.abs(w-lastStageWidth)<3&&Math.abs(h-lastStageHeight)<3)return;
+ if(w<1||h<1||(w===lastStageWidth&&h===lastStageHeight))return;
  lastStageWidth=w;lastStageHeight=h;
  camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();renderer.setSize(w,h,false);
  if(view==='all'||view==='top'||view==='start'||view==='field')setView(view);
  drawElevationProfile();
 }
 window.addEventListener('resize',resize);
+// Watch the grid cell itself: portrait/editor layout and iOS browser bars can
+// change its size without dispatching a reliable window resize event.
+const raceStageObserver=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>resize()):null;
+raceStageObserver?.observe(stage);
 if(isOfficialPairTest){
  demoBtn.hidden=true; // The persistent bright in-video button is the only start control.
  document.querySelector('#officialGroupHeading').textContent='正式Design 01｜'+OFFICIAL_TEST_COUNT+'頭走行テスト';
@@ -6411,6 +6428,7 @@ function animate(time){
    const onBroadcast=isOfficialEighteenTest&&view==='broadcast';
    const cut=onBroadcast&&shot.broadcastShotId!==lastBroadcastShotId;
    if(onBroadcast){
+    lastBroadcastFocusNumbers=shot.focusNumbers||[];
     broadcastCameraLabel.textContent='📺 中継：'+shot.broadcastLabel;
     if(cut){
      lastBroadcastShotId=shot.broadcastShotId;
