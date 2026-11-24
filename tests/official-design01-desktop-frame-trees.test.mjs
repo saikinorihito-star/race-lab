@@ -27,7 +27,8 @@ test('approved 36-bone GLB remains intact, unique numbers are rendered on the or
  assert.match(loader,/const model=cloneSkeleton\(source\)/);
  assert.match(loader,/makeOfficialSaddleNumberTexture\(i\+1\)/);
  assert.match(loader,/tintOriginalHelmetAndCloth\(model,i\+1,numberTexture\)/);
- assert.match(loader,/headBone:model\.getObjectByName\('head'\)/);
+ assert.match(loader,/officialPair\.push\(\{group,mixer,jockeyMesh,/);
+ assert.match(extract('runnerJockeyLabelAnchor'),/mesh\.getVertexPosition\(232885,new THREE\.Vector3\(\)\)/);
  assert.doesNotMatch(loader,/addOfficialFrameCloth/);
  assert.doesNotMatch(html,/function addOfficialFrameCloth\(/);
  assert.match(shader,/mat=old\.clone\(\)/);
