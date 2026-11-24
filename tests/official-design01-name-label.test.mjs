@@ -367,7 +367,8 @@ test('rapidly alternating occlusion cannot flash a held name back on every frame
   assert.deepEqual(h.active(),['試験馬1']);
   const original=h.ctx.runnerProjectedBodyRect;
   let t=1000;
-  for(let i=0;i<20;i++){
+  for(let i=0;i<21;i++){
+   // End on an occluded frame so the stable recovery clock starts at clear.
    t+=interval;
    h.ctx.runnerProjectedBodyRect=i%2===0?()=>({left:0,right:400,top:100,bottom:240}):original;
    h.update(t);
