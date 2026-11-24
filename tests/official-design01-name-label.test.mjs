@@ -20,7 +20,8 @@ test('中継は馬名の黒い吹き出しと三角形のしっぽで馬体を�
  assert.ok(!html.includes("const outline=runnerGuideNode('path',group)"));
  assert.ok(!html.includes("const dot=runnerGuideNode('circle',group)"));
  assert.ok(html.includes('RUNNER_BUBBLE_INTERVAL_MS=4500'));
- assert.ok(html.includes("runner.headBone.getWorldPosition(new THREE.Vector3())"));
+ assert.ok(html.includes("mesh.getVertexPosition(232885,new THREE.Vector3())"));
+ assert.ok(!html.includes("runner.headBone.getWorldPosition"));
  assert.ok(!html.includes('runnerHorseBadges'));
  assert.ok(!html.includes('.runner-horse-badge'));
  assert.ok(html.includes('const model=cloneSkeleton(source)'));
@@ -82,8 +83,11 @@ function guideHarness(){
    project(){return this}
   }},
   officialPair:Array.from({length:18},(_,i)=>({group:{
-   visible:true,updateWorldMatrix(){},
+   visible:true,updateWorldMatrix(){},updateMatrixWorld(){},
    localToWorld(v){v.x=projected[i];v.y=0;v.z=0;return v}
+  },jockeyMesh:{
+   getVertexPosition(index,v){v.x=projected[i];v.y=0;v.z=0;return v},
+   localToWorld(v){return v}
   }})),
   rankedOfficialRunners:()=>Array.from({length:18},(_,index)=>({
    index,number:index+1,name:'試験馬'+(index+1)
@@ -93,6 +97,7 @@ function guideHarness(){
   RACE_FRAME_COLORS:[{name:'白',hex:'#fff',ink:'#111'}],
   officialFrameIndex:()=>0
  };
+ ctx.runnerJockeyLabelAnchor=runInNewContext('('+extract('runnerJockeyLabelAnchor')+')',ctx);
  ctx.runnerProjectedBodyRect=runInNewContext('('+extract('runnerProjectedBodyRect')+')',ctx);
  ctx.clearRunnerGuidePath=runInNewContext('('+extract('clearRunnerGuidePath')+')',ctx);
  ctx.clearRunnerNameLabels=runInNewContext('('+extract('clearRunnerNameLabels')+')',ctx);
@@ -115,18 +120,22 @@ test('発走前と発走から5秒未満は、選択中の馬でも吹き出し�
  assert.deepEqual(h.active(),[],'Race restart must remove old bubbles');
  assert.ok(h.guides.every(g=>g.group.style.display==='none'));
 });
-test('近くの頭上以外に吹き出しを置かず、馬の頭の骨に追従する',()=>{
+test('吹き出しは騎手の帽子頂点のスキニング後の位置に追従する',()=>{
  const h=guideHarness();
- let moved=false;
- h.ctx.officialPair[0].headBone={
-  getWorldPosition(v){moved=true;v.x=0;v.y=0;v.z=0;return v;}
+ let sampled=false,updated=false,world=false;
+ h.ctx.officialPair[0].group.updateMatrixWorld=()=>{updated=true};
+ h.ctx.officialPair[0].jockeyMesh={
+  getVertexPosition(index,v){assert.equal(index,232885);assert.ok(updated);
+   sampled=true;v.x=0;v.y=0;v.z=0;return v;},
+  localToWorld(v){world=true;return v}
  };
  h.update(1000);
- assert.ok(moved,'The horse-specific head bone should drive the label');
+ assert.ok(sampled&&world,'Use the exact animated helmet surface in world coordinates');
  assert.ok(Math.abs(Number(h.labels[0].style.left.replace('px',''))-200)<1);
  assert.match(extract('updateRunnerNameLabels'),/for\(const rise of \[15,17,20\]\)/);
  assert.match(extract('updateRunnerNameLabels'),/for\(const offset of \[0,-6,6,-10,10\]\)/);
  assert.match(extract('updateRunnerNameLabels'),/Math\.hypot\(position\.left-x,tipY-position\.bottom\)>20/);
+
 });
 test('中継では1頭ずつ順位順に切り替え、広角では2頭ずつ切り替える',()=>{
  const h=guideHarness();
@@ -259,6 +268,12 @@ test('BGMの初期音量は10％で手動変更可能',()=>{
  assert.match(html,/id="raceBgmVolume" type="range" min="0" max="100" step="5" value="10"/);
  assert.match(html,/id="raceBgmVolumeValue">10%<\/output>/);
  assert.match(html,/Number\(raceBgmVolume\.value\)\/100\*fade/);
+});
+test('帽子メッシュがない場合は馬の頭へ戻さず表示しない',()=>{
+ const h=guideHarness();
+ h.ctx.officialPair[0].jockeyMesh=null;
+ h.update(1000);
+ assert.ok(!h.active().includes('試験馬1'));
 });
 function rosterHarness(){
  const horses=Array.from({length:18},(_,i)=>({
