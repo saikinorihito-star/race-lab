@@ -394,7 +394,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
      <label for="raceBgmFile">BGMファイル（最初に一度だけ選択）</label>
      <input id="raceBgmFile" type="file" accept="audio/mpeg,audio/*" aria-label="2番の120秒BGMを選択"/>
      <div id="raceBgmStatus" role="status" aria-live="polite">音源未登録｜120秒のMP3を選んでください</div>
-     <label for="raceBgmVolume">BGM音量<input id="raceBgmVolume" type="range" min="0" max="100" step="5" value="25" aria-label="BGMの音量"/><output id="raceBgmVolumeValue">25%</output></label>
+     <label for="raceBgmVolume">BGM音量<input id="raceBgmVolume" type="range" min="0" max="100" step="5" value="10" aria-label="BGMの音量"/><output id="raceBgmVolumeValue">10%</output></label>
      <div class="camNote">足音とは別の音量です。レースの一時停止・再開・10秒送りに連動し、曲を繰り返します。音源は同じ端末に保存します。</div>
     </div>
    </div>
@@ -5125,8 +5125,9 @@ function officialBroadcastCameraShot(context){
   broadcastLabel:caption+'｜先頭 '+leader.number+'番 ／ 3番手 '+third.number+'番'};
 }
 let broadcastLabelCutAt=0,lastRunnerLabelPaint=-1;
-const RUNNER_BUBBLE_INTERVAL_MS=3000;
+const RUNNER_BUBBLE_INTERVAL_MS=4500;
 let runnerBubbleStep=0,runnerBubbleTime=0,runnerBubbleLastTime=-1,runnerBubbleShot='';
+let runnerBubbleHeld=[],runnerBubbleSelection=null;
 function rankedOfficialRunners(){
  return officialPair.map((entry,index)=>{
   const position=officialPairVisualState(index),record=raceHorses[index];
@@ -5164,22 +5165,29 @@ function updateRunnerNameLabels(time){
     !activePlan||officialPair.length!==18||raceElapsed<5){
   clearRunnerNameLabels();
   runnerBubbleShot='';runnerBubbleLastTime=-1;runnerBubbleStep=0;runnerBubbleTime=0;
+  runnerBubbleHeld=[];runnerBubbleSelection=null;
   return;
  }
  if(time-lastRunnerLabelPaint<16)return;
  lastRunnerLabelPaint=time;
  const shot=lastBroadcastShotId||'';
- if(runnerBubbleShot!==shot||runnerBubbleLastTime<0||
-    time<runnerBubbleLastTime||time-runnerBubbleLastTime>5000){
-  runnerBubbleShot=shot;runnerBubbleStep=0;runnerBubbleTime=0;
+ const changedShot=runnerBubbleShot!==shot;
+ const changedSelection=runnerBubbleSelection!==watchSelectedHorseIndex;
+ if(runnerBubbleLastTime<0||time<runnerBubbleLastTime||
+    time-runnerBubbleLastTime>5000||changedSelection){
+  runnerBubbleHeld=[];runnerBubbleStep=0;runnerBubbleTime=0;
+ }else if(changedShot){
+  // Preserve still-visible names across the cut, with a fresh reading interval.
+  runnerBubbleStep=0;runnerBubbleTime=0;
  }else if(playing){
   runnerBubbleTime+=Math.min(300,time-runnerBubbleLastTime);
   if(runnerBubbleTime>=RUNNER_BUBBLE_INTERVAL_MS){
    runnerBubbleStep+=Math.floor(runnerBubbleTime/RUNNER_BUBBLE_INTERVAL_MS);
    runnerBubbleTime%=RUNNER_BUBBLE_INTERVAL_MS;
+   runnerBubbleHeld=[];
   }
  }
- runnerBubbleLastTime=time;
+ runnerBubbleLastTime=time;runnerBubbleShot=shot;runnerBubbleSelection=watchSelectedHorseIndex;
  const wide=shot.endsWith('-wide')||shot.endsWith('-gate')||
   shot.endsWith('-sidePack')||shot.endsWith('-midPack')||shot.endsWith('-tailPack');
  const ranked=rankedOfficialRunners();
@@ -5220,11 +5228,17 @@ function updateRunnerNameLabels(time){
  const stride=selected?1:wide?2:1;
  const first=others.length?(runnerBubbleStep*stride)%others.length:0;
  const candidates=selected?[selected]:[];
- // Include later visible runners as fallback when a pair would overlap.
- // The rendering loop stops after the requested 1–2 bubbles have been placed.
- for(let i=0;i<others.length;i++)
-  candidates.push(others[(first+i)%others.length]);
- const occupied=[],occupiedTorso=[];
+ // Retain horse identities even when live ranks and candidate order change.
+ const eligibleHeld=runnerBubbleHeld.filter(h=>others.some(o=>o.index===h.index));
+ for(const held of eligibleHeld){
+  const item=others.find(o=>o.index===held.index);
+  if(item&&!candidates.some(o=>o.index===item.index))candidates.push(item);
+ }
+ for(let i=0;i<others.length;i++){
+  const item=others[(first+i)%others.length];
+  if(!candidates.some(o=>o.index===item.index))candidates.push(item);
+ }
+ const occupied=[],occupiedTorso=[],nextHeld=[];
  let slot=0;
  for(const item of candidates){
   if(slot>=limit)break;
@@ -5243,12 +5257,12 @@ function updateRunnerNameLabels(time){
   const leftEdge=labelWidth/2+7,rightEdge=width-labelWidth/2-7;
   let position=null;
   // More clearance above the model; no name box on the animated horse.
-  for(const rise of [10,12,14]){
+  for(const rise of [15,17,20]){
    const bottom=y-rise;
    if(bottom<35)continue;
-   for(const offset of [0,-6,6]){
+   for(const offset of [0,-6,6,-10,10]){
     const left=Math.max(leftEdge,Math.min(rightEdge,x+offset));
-    if(Math.abs(left-x)>6)continue;
+    if(Math.abs(left-x)>10)continue;
     const rect={left:left-labelWidth/2,top:bottom-29,
      right:left+labelWidth/2,bottom};
     if(occupied.some(other=>rect.left<other.right+5&&
@@ -5262,20 +5276,32 @@ function updateRunnerNameLabels(time){
    }
    if(position)break;
   }
-  if(!position){label.hidden=true;continue}
+  if(!position){
+   label.hidden=true;
+   // A momentary overlap must not cause rapid substitution of horse names.
+   const held=runnerBubbleHeld.find(h=>h.index===item.index);
+   if(held){const missed=held.missed??time;if(time-missed<750){
+    nextHeld.push({index:item.index,missed});slot++;
+   }}
+   continue;
+  }
   occupied.push(position.rect);
   occupiedTorso.push({x,y});
   label.style.left=position.left+'px';
   label.style.top=position.bottom+'px';
   // Keep the filled pointer short and outside the horse silhouette.
-  const tipY=y-1;
-  if(Math.hypot(position.left-x,tipY-position.bottom)>16){
+  const tipY=y-5;
+  if(Math.hypot(position.left-x,tipY-position.bottom)>20){
    label.hidden=true;continue;
   }
   drawRunnerGuidePath(guide,position.left,position.bottom,x,tipY,
    frame.name==='黒'?'#f5f5f5':frame.hex);
-  slot++;
+  nextHeld.push({index:item.index,missed:null});slot++;
  }
+ // Give a newly substituted name a full reading interval instead of
+ // rotating it immediately at the end of the preceding name's interval.
+ if(nextHeld.some(h=>!runnerBubbleHeld.some(old=>old.index===h.index)))runnerBubbleTime=0;
+ runnerBubbleHeld=nextHeld;
 }
 function officialEighteenCameraShot(which,context){
  if(which==='broadcast')return officialBroadcastCameraShot(context);
