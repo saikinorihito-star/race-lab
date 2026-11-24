@@ -845,25 +845,19 @@ function runnerGuideNode(type,parent){
 }
 function clearRunnerGuidePath(guide){
  guide.group.style.display='none';
- guide.outline.setAttribute('d','');
  guide.line.setAttribute('d','');
 }
 function drawRunnerGuidePath(guide,startX,startY,endX,endY,color){
- if(![startX,startY,endX,endY].every(Number.isFinite)){
+ if(![startX,startY,endX,endY].every(Number.isFinite)||endY<=startY){
   clearRunnerGuidePath(guide);return;
  }
- // Filled, curved speech-tail triangle rather than a thin connecting line.
- const d='M '+(startX-7).toFixed(1)+' '+(startY-1).toFixed(1)+
-  ' Q '+(startX-5).toFixed(1)+' '+(startY+13).toFixed(1)+
-  ' '+endX.toFixed(1)+' '+endY.toFixed(1)+
-  ' Q '+(startX+5).toFixed(1)+' '+(startY+13).toFixed(1)+
-  ' '+(startX+7).toFixed(1)+' '+(startY-1).toFixed(1)+' Z';
- guide.outline.setAttribute('d',d);
+ // A single filled triangle with one tip, without folding control points.
+ const d='M '+(startX-5).toFixed(1)+' '+(startY-1).toFixed(1)+
+  ' L '+endX.toFixed(1)+' '+endY.toFixed(1)+
+  ' L '+(startX+5).toFixed(1)+' '+(startY-1).toFixed(1)+' Z';
  guide.line.setAttribute('d',d);
- guide.outline.setAttribute('fill','#07141b');
  guide.line.setAttribute('fill','#07141b');
  guide.line.setAttribute('stroke',color);
- guide.dot.setAttribute('r','0');
  guide.group.style.display='';
 }
 if(isOfficialEighteenTest){
@@ -897,18 +891,10 @@ if(isOfficialEighteenTest){
   label.className='runner-name-label';label.hidden=true;
   runnerLabelLegend.appendChild(label);runnerNameLabels.push(label);
   const group=runnerGuideNode('g',runnerGuideLines);
-  const outline=runnerGuideNode('path',group);
   const line=runnerGuideNode('path',group);
-  const dot=runnerGuideNode('circle',group);
-  outline.setAttribute('stroke','#08131c');
-  outline.setAttribute('stroke-width','3.6');
-  outline.setAttribute('stroke-opacity','.78');
-  line.setAttribute('stroke-width','1.8');
-  line.setAttribute('stroke-opacity','.95');
-  dot.setAttribute('r','2.5');
-  dot.setAttribute('stroke','#06151b');
-  dot.setAttribute('stroke-width','1');
-  const guide={group,outline,line,dot};clearRunnerGuidePath(guide);
+  line.setAttribute('stroke-width','0.8');
+  line.setAttribute('stroke-opacity','1');
+  const guide={group,line};clearRunnerGuidePath(guide);
   runnerGuidePaths.push(guide);
  }
  document.querySelector('#officialPairTools').appendChild(info);
@@ -5169,7 +5155,7 @@ function updateRunnerNameLabels(time){
   runnerBubbleShot='';runnerBubbleLastTime=-1;runnerBubbleStep=0;runnerBubbleTime=0;
   return;
  }
- if(time-lastRunnerLabelPaint<50)return;
+ if(time-lastRunnerLabelPaint<16)return;
  lastRunnerLabelPaint=time;
  const shot=lastBroadcastShotId||'';
  if(runnerBubbleShot!==shot||runnerBubbleLastTime<0||
@@ -5202,8 +5188,8 @@ function updateRunnerNameLabels(time){
   // The approved GLB has a separate animated head bone, so the name
   // follows the exact horse's head rather than hovering above the lane.
   const labelAnchor=runner.headBone?
-   runner.headBone.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,.17,0)):
-   runner.group.localToWorld(new THREE.Vector3(0,.47,.55));
+   runner.headBone.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,.08,0)):
+   runner.group.localToWorld(new THREE.Vector3(0,.39,.55));
   const projected=labelAnchor.project(camera);
   if(!Number.isFinite(projected.x+projected.y+projected.z)||
       projected.z<=-1||projected.z>=1)continue;
@@ -5244,11 +5230,12 @@ function updateRunnerNameLabels(time){
   const leftEdge=labelWidth/2+7,rightEdge=width-labelWidth/2-7;
   let position=null;
   // More clearance above the model; no name box on the animated horse.
-  for(const rise of [7,11,15]){
+  for(const rise of [3,5,7]){
    const bottom=y-rise;
    if(bottom<35)continue;
-   for(const offset of [0,-7,7]){
+   for(const offset of [0,-4,4]){
     const left=Math.max(leftEdge,Math.min(rightEdge,x+offset));
+    if(Math.abs(left-x)>4)continue;
     const rect={left:left-labelWidth/2,top:bottom-29,
      right:left+labelWidth/2,bottom};
     if(occupied.some(other=>rect.left<other.right+5&&
@@ -5268,11 +5255,11 @@ function updateRunnerNameLabels(time){
   label.style.left=position.left+'px';
   label.style.top=position.bottom+'px';
   // Keep the filled pointer short and outside the horse silhouette.
-  const tipY=Math.min(y-2,position.bottom+7);
-  if(Math.hypot(position.left-x,tipY-position.bottom)>12){
+  const tipY=Math.min(y-1,position.bottom+6);
+  if(Math.hypot(position.left-x,tipY-position.bottom)>8){
    label.hidden=true;continue;
   }
-  drawRunnerGuidePath(guide,position.left,position.bottom+1,x,tipY,
+  drawRunnerGuidePath(guide,position.left,position.bottom,x,tipY,
    frame.name==='黒'?'#f5f5f5':frame.hex);
   slot++;
  }
