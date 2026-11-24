@@ -3667,13 +3667,15 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  let lane=holdingOutside?railHoldingLane:
   Math.min(stableInner,railHoldingLane+Math.min(
    lateralRate*dt,inwardBudget,Math.max(0,stableInner-railHoldingLane)));
- // 18 horses cannot all join one lane after the start: the 6m clearance
- // balances earlier inward moves with a realistically compact field.
- // Unlike 8 runners, the complete pack needs 2–4 lanes and some stagger.
+ // During formation, allow safe inward gaps slightly earlier. Restore the
+ // normal 6m buffer gradually from 170 to 230m; never relax the final
+ // two-dimensional collision check or the lateral-distance budget.
+ const mergeBuffer=5+THREE.MathUtils.smoothstep(h.distance,170,230)*
+  (EIGHTEEN_MERGE_LONGITUDINAL_BUFFER-5);
  for(const other of snapshot){
   if(other.idx===h.idx||other.finished)continue;
   const along=other.distance+other.speed*dt-distance;
-  if(Math.abs(along)<EIGHTEEN_MERGE_LONGITUDINAL_BUFFER&&other.lane>h.lane)
+  if(Math.abs(along)<mergeBuffer&&other.lane>h.lane)
    lane=Math.min(lane,other.lane+railFrameShift-2.35);
  }
  // On a bend, a trapped runner checks an inside gap first. If it is not
