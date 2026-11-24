@@ -91,7 +91,7 @@ export function routeAt(route,distance){
   if(d<=leg.length||i===route.legs.length-1){
    if(leg.kind==='pocket'){
     const p=at(leg.joinKind,leg.joinStation),remain=leg.length-d;
-    return {...p,x:p.x-p.tx*remain,z:p.z-p.tz*remain,y:p.y,kind:'pocket',width:32};
+    return {...p,x:p.x-p.tx*remain,z:p.z-p.tz*remain,y:p.y,kind:'pocket',width:lerp(32,widthAt(leg.joinKind,leg.joinStation),d/leg.length)};
    }
    const p=at(leg.kind,leg.start+d);return {...p,width:widthAt(leg.kind,p.station)};
   }
