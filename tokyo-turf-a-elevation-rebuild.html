@@ -5185,10 +5185,11 @@ function officialBroadcastCameraShot(context){
  const focusLane=selected.reduce((sum,h)=>sum+h.lane,0)/Math.max(1,selected.length);
  const at=fieldCenterAt(activePlan,Math.max(0,focusDistance));
  const along=at.t.clone().normalize();
- const side=new THREE.Vector3(at.t.z,0,-at.t.x).normalize();
+ // Positive lane points toward the inner rail (same normal as positionAt).
+ const inward=new THREE.Vector3(at.t.z,0,-at.t.x).normalize();
  // Aim slightly below the former sightline, reducing empty sky and giving
  // horses, hooves and the turf more vertical space in the race broadcast.
- const target=at.p.clone().addScaledVector(side,focusLane)
+ const target=at.p.clone().addScaledVector(inward,focusLane)
   .add(new THREE.Vector3(0,forming?2.35:focusType==='wide'?2.15:1.55,0));
  let outside,height,ahead,fov;
  if(forming){
@@ -5222,10 +5223,10 @@ function officialBroadcastCameraShot(context){
  }
  else if(focusType==='lead'){outside=8.5;height=3.15;ahead=15.5;fov=40}
  else{outside=9;height=3.25;ahead=17;fov=41}
- // Reference composition: track from the outside and ahead of the selected
- // group; the nearest horse appears on the left, with the queue receding right.
+ // Move along the negative inward normal: the camera sees the pack from
+ // the outer-rail side, not from the infield. Keep the close tracking radius.
  const frontOblique=['lead','third','midPack','frontPack','tailPack'].includes(focusType);
- const eye=at.p.clone().addScaledVector(side,frontOblique?focusLane+outside:-outside)
+ const eye=at.p.clone().addScaledVector(inward,frontOblique?focusLane-outside:-outside)
   .addScaledVector(along,ahead).add(new THREE.Vector3(0,height,0));
  // Fitting all 18 horses is appropriate ONLY for the temporary opening
  // overview and the occasional wide cut. It pushes the camera too far
