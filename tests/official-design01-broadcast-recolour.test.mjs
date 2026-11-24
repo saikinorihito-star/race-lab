@@ -516,10 +516,30 @@ test('reference front oblique views occupy eight of twelve slots and show the gr
   if(!types.has(shot.broadcastShotId.split('-').at(-1)))continue;
   frontCount++;
   assert.ok(shot.eye.x-shot.target.x>=15&&shot.eye.x-shot.target.x<=19,'closer camera ahead of pack');
-  assert.ok(shot.eye.z-shot.target.z<=-8&&shot.eye.z-shot.target.z>=-10.01,'closer camera on outside of pack');
+  assert.ok(shot.eye.z-shot.target.z>=8&&shot.eye.z-shot.target.z<=10.01,'closer camera on outside of pack');
   assert.ok(Math.hypot(shot.eye.x-shot.target.x,shot.eye.y-shot.target.y,shot.eye.z-shot.target.z)<=21.2,'close tracking radius');
   assert.ok(shot.eye.y-2<=3.5,'low ground-relative height');
   assert.ok(shot.fov>=40&&shot.fov<=42,'slightly tighter lens');
  }
  assert.equal(frontCount,8);
+});
+
+test('front-oblique cameras are on the outer-rail side for any track heading',()=>{
+ assert.match(fn('positionAt'),/const inward=new THREE\.Vector3\(dz,0,-dx\)/);
+ const source=fn('officialBroadcastCameraShot');
+ for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1],[Math.SQRT1_2,Math.SQRT1_2]]){
+  const tangent=new V(dx,0,dz),inward=new V(dz,0,-dx);
+  const camera=runInNewContext('('+source+')',{
+   THREE,activePlan:{distance:2400},officialBroadcastStage:stages,officialOpeningFormationWide:forming,
+   fieldCenterAt:(_p,d)=>({p:tangent.clone().addScaledVector(tangent,d).add(new V(0,2,0)),t:tangent.clone()}),fitBroadcastToRunners:()=>{}
+  });
+  for(const lane of [-12,0,12])for(const progress of [145,245,345,545,645,1045,1145,1245,2370]){
+   const horses=Array.from({length:18},(_,j)=>({number:j+1,distance:progress-j*2,lane:lane+(j%3),postDistance:0,speed:16}));
+   const shot=camera({horses,lead:horses[0],leadDistance:progress,gap:34});
+   const relative=shot.eye.clone().sub(shot.target);
+   assert.ok(relative.dot(inward)<=-8&&relative.dot(inward)>=-10.01,'negative inward coordinate is the outer side');
+   assert.ok(relative.dot(tangent)>=15&&relative.dot(tangent)<=19,'retain front angle');
+   assert.ok(relative.length()<=21.2,'retain close camera distance');
+  }
+ }
 });
