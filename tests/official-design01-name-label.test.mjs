@@ -341,11 +341,15 @@ test('brief offscreen or overlapping horse reserves its slot until scheduled rot
  const h=guideHarness();h.update(1000);
  h.projected[0]=3;
  for(let t=1100;t<=2500;t+=100){h.update(t);assert.deepEqual(h.active(),[]);}
- h.projected[0]=-.7;h.update(2600);assert.deepEqual(h.active(),['試験馬1']);
+ h.projected[0]=-.7;h.update(2600);assert.deepEqual(h.active(),[]);
+ for(let t=2700;t<=3000;t+=100)h.update(t);
+ assert.deepEqual(h.active(),['試験馬1']);
  const original=h.ctx.runnerProjectedBodyRect;
  h.ctx.runnerProjectedBodyRect=()=>({left:0,right:400,top:100,bottom:240});
- for(let t=2700;t<=4000;t+=100){h.update(t);assert.deepEqual(h.active(),[]);}
- h.ctx.runnerProjectedBodyRect=original;h.update(4100);assert.deepEqual(h.active(),['試験馬1']);
+ for(let t=3100;t<=4000;t+=100){h.update(t);assert.deepEqual(h.active(),[]);}
+ h.ctx.runnerProjectedBodyRect=original;h.update(4100);assert.deepEqual(h.active(),[]);
+ for(let t=4200;t<=4500;t+=100)h.update(t);
+ assert.deepEqual(h.active(),['試験馬1']);
  h.update(5500);assert.deepEqual(h.active(),['試験馬2']);
 });
 test('name cadence uses wall clock rather than FPS or playback speed',()=>{
@@ -355,4 +359,32 @@ test('name cadence uses wall clock rather than FPS or playback speed',()=>{
   const next=1000+Math.ceil(4500/interval)*interval;
   h.update(next);assert.deepEqual(h.active(),['試験馬2']);
  }
+});
+
+test('rapidly alternating occlusion cannot flash a held name back on every frame',()=>{
+ for(const interval of [17,34,100]){
+  const h=guideHarness();h.update(1000);
+  assert.deepEqual(h.active(),['試験馬1']);
+  const original=h.ctx.runnerProjectedBodyRect;
+  let t=1000;
+  for(let i=0;i<21;i++){
+   // End on an occluded frame so the stable recovery clock starts at clear.
+   t+=interval;
+   h.ctx.runnerProjectedBodyRect=i%2===0?()=>({left:0,right:400,top:100,bottom:240}):original;
+   h.update(t);
+   assert.deepEqual(h.active(),[]);
+   assert.ok(h.guides.every(g=>g.group.style.display==='none'));
+  }
+  h.ctx.runnerProjectedBodyRect=original;
+  const clear=t+interval;
+  for(t=clear;t<clear+350;t+=interval){h.update(t);assert.deepEqual(h.active(),[]);}
+  h.update(t);assert.deepEqual(h.active(),['試験馬1']);
+ }
+});
+test('temporary disappearance of all horses also requires stable recovery',()=>{
+ const h=guideHarness();h.update(1000);const original=h.projected.slice();
+ h.projected.fill(3);h.update(1100);assert.deepEqual(h.active(),[]);
+ h.projected.splice(0,18,...original);h.update(1200);assert.deepEqual(h.active(),[]);
+ h.update(1300);h.update(1400);h.update(1500);assert.deepEqual(h.active(),[]);
+ h.update(1600);assert.deepEqual(h.active(),['試験馬1']);
 });
