@@ -5201,7 +5201,7 @@ function officialBroadcastCameraShot(context){
  else if(focusType==='frontPack'){
   // Reference 1: low front oblique view, leading horses in foreground,
   // following pack receding toward the stand in the same composition.
-  outside=13;height=3.25;ahead=24;fov=43;
+  outside=9.5;height=3.25;ahead=17.5;fov=41;
  }
  else if(focusType==='sidePack'){
   // Reference 2: low lateral tracking with several runners across frame.
@@ -5209,19 +5209,19 @@ function officialBroadcastCameraShot(context){
  }
  else if(focusType==='midPack'){
   // Rank 5–9: lower side-front view of horses behind the leaders.
-  outside=12.5;height=3.3;ahead=23;fov=43;
+  outside=9;height=3.3;ahead=17;fov=41;
  }
  else if(focusType==='tailPack'){
   // Last six runners seen from ahead, with the following horses receding into depth.
-  outside=13.5;height=3.4;ahead=25;fov=44;
+  outside=10;height=3.4;ahead=18.5;fov=42;
  }
  else if(focusType==='side'){outside=14.5;height=4.1;ahead=1;fov=36}
  else if(focusType==='horseEye'){
   // Low tracking shot: no camera is allowed under the turf.
   outside=10.6;height=2.8;ahead=10;fov=37;
  }
- else if(focusType==='lead'){outside=11.5;height=3.15;ahead=21;fov=42}
- else{outside=12;height=3.25;ahead=23;fov=43}
+ else if(focusType==='lead'){outside=8.5;height=3.15;ahead=15.5;fov=40}
+ else{outside=9;height=3.25;ahead=17;fov=41}
  // Reference composition: track from the outside and ahead of the selected
  // group; the nearest horse appears on the left, with the queue receding right.
  const frontOblique=['lead','third','midPack','frontPack','tailPack'].includes(focusType);
