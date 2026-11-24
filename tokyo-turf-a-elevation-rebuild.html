@@ -2505,7 +2505,7 @@ function eightStartLane(width,index){
 // 加速差と前馬の空き状況によって自然な前後の馬群を形成する。
 function eighteenStartLane(width,index){
  const spacing=Math.min(1.92,Math.max(1.12,
-  (width-FOUR_RAIL_CENTER_CLEARANCE-1.65)/17));
+  (width-FOUR_RAIL_CENTER_CLEARANCE-(width>=31?2.1:1.65))/17));
  return fourHorseInnerLane(width)-index*spacing;
 }
 // 4頭だけ外寄りから内ラチへ一度だけ寄る。既に確認済みの2頭は変更しない。
@@ -3840,7 +3840,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  const finalWidth=fieldCenterAt(activePlan,distance).width;
  const finalOrigin=h.lane+(finalWidth-width)*.5;
  const finalBudget=Math.max(0,distance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD;
- lane=THREE.MathUtils.clamp(finalOrigin+THREE.MathUtils.clamp(lane-railHoldingLane,-finalBudget,finalBudget),-finalWidth/2+1.48,fourHorseInnerLane(finalWidth)-.05);
+ lane=Math.max(-finalWidth/2+1.48,finalOrigin+THREE.MathUtils.clamp(lane-railHoldingLane,-finalBudget,finalBudget));
  return {distance,lane,speed};
 }
 function stepOfficialPair(tick){
