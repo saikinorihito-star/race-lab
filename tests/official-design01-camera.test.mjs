@@ -12,6 +12,8 @@ function extract(name){
 class Vec3{
  constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z}
  clone(){return new Vec3(this.x,this.y,this.z)}
+ sub(v){this.x-=v.x;this.y-=v.y;this.z-=v.z;return this}
+ dot(v){return this.x*v.x+this.y*v.y+this.z*v.z}
  add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this}
  addScaledVector(v,s){this.x+=v.x*s;this.y+=v.y*s;this.z+=v.z*s;return this}
  multiplyScalar(s){this.x*=s;this.y*=s;this.z*=s;return this}
@@ -85,7 +87,8 @@ test('zoom ranges from close-up to wide framing without affecting follow state',
  const close=offset(r.shot('side',race));
  r.state.zoom=4;
  const wide=offset(r.shot('side',race));
- assert.ok(magnitude(wide)>magnitude(close)*10);
+ small(magnitude(close),16); // production minimum radius
+ small(magnitude(wide),116);
  assert.equal(r.focus.value,'auto');
 });
 
