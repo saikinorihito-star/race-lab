@@ -5161,12 +5161,13 @@ function officialBroadcastCameraShot(context){
  // Keep established leader/third/front/side/horse-eye/wide cuts, adding
  // deliberate mid-field and tail-pack coverage so the broadcast does not
  // repeatedly follow only the front runners.
- const cycle=Math.floor(Math.max(0,leadDistance-69)/100)%9;
+ // Give low front-oblique tracking eight of twelve editorial slots.
+ const cycle=Math.floor(Math.max(0,leadDistance-69)/100)%12;
  const forming=officialOpeningFormationWide(leadDistance,ranked);
  const focusType=forming?'opening':stageShot.id==='gate'?'gate':
   remaining<=55?'lead':
-  ['lead','midPack','tailPack','wide','third','frontPack','side','sidePack','horseEye'][cycle];
- // Only two of the nine normal shots prioritize the leaders.
+  ['lead','midPack','tailPack','wide','third','frontPack','side','sidePack','horseEye','midPack','frontPack','tailPack'][cycle];
+ // Only two of the twelve normal slots prioritize the leaders.
  // Preserve all requested angles while assigning different groups to them.
  const selected=forming||focusType==='wide'?ranked:
   focusType==='lead'?ranked.slice(0,Math.min(3,ranked.length)):
@@ -5200,7 +5201,7 @@ function officialBroadcastCameraShot(context){
  else if(focusType==='frontPack'){
   // Reference 1: low front oblique view, leading horses in foreground,
   // following pack receding toward the stand in the same composition.
-  outside=14.2;height=3.45;ahead=22;fov=39;
+  outside=13;height=3.25;ahead=24;fov=43;
  }
  else if(focusType==='sidePack'){
   // Reference 2: low lateral tracking with several runners across frame.
@@ -5208,20 +5209,23 @@ function officialBroadcastCameraShot(context){
  }
  else if(focusType==='midPack'){
   // Rank 5–9: lower side-front view of horses behind the leaders.
-  outside=17.5;height=4.3;ahead=9;fov=39;
+  outside=12.5;height=3.3;ahead=23;fov=43;
  }
  else if(focusType==='tailPack'){
-  // Last six runners: rear three-quarter tracking, not a long overhead shot.
-  outside=18.5;height=4.4;ahead=-11;fov=40;
+  // Last six runners seen from ahead, with the following horses receding into depth.
+  outside=13.5;height=3.4;ahead=25;fov=44;
  }
  else if(focusType==='side'){outside=14.5;height=4.1;ahead=1;fov=36}
  else if(focusType==='horseEye'){
   // Low tracking shot: no camera is allowed under the turf.
   outside=10.6;height=2.8;ahead=10;fov=37;
  }
- else if(focusType==='lead'){outside=12.8;height=3.9;ahead=12;fov=35}
- else{outside=14;height=4.3;ahead=14;fov=35}
- const eye=at.p.clone().addScaledVector(side,-outside)
+ else if(focusType==='lead'){outside=11.5;height=3.15;ahead=21;fov=42}
+ else{outside=12;height=3.25;ahead=23;fov=43}
+ // Reference composition: track from the outside and ahead of the selected
+ // group; the nearest horse appears on the left, with the queue receding right.
+ const frontOblique=['lead','third','midPack','frontPack','tailPack'].includes(focusType);
+ const eye=at.p.clone().addScaledVector(side,frontOblique?focusLane+outside:-outside)
   .addScaledVector(along,ahead).add(new THREE.Vector3(0,height,0));
  // Fitting all 18 horses is appropriate ONLY for the temporary opening
  // overview and the occasional wide cut. It pushes the camera too far
