@@ -279,6 +279,19 @@ body.official18.race-watch-portrait #raceSpeedButtons[hidden]{display:none!impor
 body.official18.race-watch-portrait #raceSpeedButtons button{min-width:46px;min-height:36px;padding:4px;font-size:11px;border-radius:7px}
 body.official18.race-watch-portrait #stageStartBtn{min-width:72px;min-height:36px;padding:4px 5px;font-size:11px;border-radius:7px;box-shadow:none;flex:0 0 auto}
 #watchPlaybackGroup{display:contents}
+#watchPlaybackSpeed[hidden]{display:none!important}
+#watchPlaybackSpeed{min-width:52px;white-space:nowrap;background:#1b3d4b;color:white;border-color:#87b4bf;font-weight:800}
+body.official18.race-watch-portrait #watchPlaybackSpeed{flex:0 0 43px;min-width:43px;min-height:36px;padding:3px;font-size:11px;border-radius:7px}
+body.official18.race-watch-portrait #watchPlaybackGroup{flex-shrink:1}
+@media(max-width:400px){
+ body.official18.race-watch-portrait #watchSeekBack,body.official18.race-watch-portrait #watchSeekForward{min-width:48px;padding:3px;font-size:10px}
+ body.official18.race-watch-portrait #stageStartBtn{min-width:64px;font-size:10px}
+ body.official18.race-watch-portrait #cameraAdjustToggle{padding:4px;font-size:9px}
+}
+@media(max-width:340px){
+ body.official18.race-watch-portrait #stageDock{flex-wrap:wrap}
+ body.official18.race-watch-portrait #watchPlaybackGroup{margin-left:auto}
+}
 body.official18.race-watch-portrait #watchPlaybackGroup{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-left:auto;flex:0 0 auto;min-width:0}
 body.official18.race-watch-portrait #watchPlaybackGroup button{margin:0}
 body.official18.race-watch-portrait #watchSeekBack,body.official18.race-watch-portrait #watchSeekForward{display:block;min-width:61px;min-height:36px;padding:4px 5px;font-size:11px;font-weight:800;border:1px solid #87b4bf;border-radius:7px;background:#1b3d4b;color:white;flex:0 0 auto}
@@ -407,6 +420,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   </div>
   <div id="watchPlaybackGroup" role="group" aria-label="レース再生操作">
    <button id="watchSeekBack" hidden type="button">↶ 10秒</button>
+   <button id="watchPlaybackSpeed" hidden type="button" aria-label="再生速度1.5倍。押すと2倍">1.5倍</button>
    <button id="stageStartBtn" type="button" aria-label="レースをスタート">▶ スタート</button>
    <button id="watchSeekForward" hidden type="button">10秒 ↷</button>
   </div>
@@ -662,6 +676,7 @@ import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
 const demoBtn=document.querySelector('#demo'),rate=document.querySelector('#rate'),checkLabels=document.querySelector('#labels');
 const raceSpeedButtons=document.querySelector('#raceSpeedButtons');
+const watchPlaybackSpeed=document.querySelector('#watchPlaybackSpeed');
 const courseSigns=document.querySelector('#courseSigns');
 const showStands=document.querySelector('#showStands');
 const fieldMode=document.querySelector('#fieldMode'),gridStatus=document.querySelector('#gridStatus');
@@ -926,6 +941,10 @@ if(isOfficialPairTest){
 if(isOfficialEighteenTest){
  raceSpeedButtons.hidden=true;
  document.querySelector('#legacyRateLabel').hidden=true;
+ // Keep the legacy selector for other modes; the race watcher has its own rates.
+ rate.replaceChildren(...[1.5,2,3].map(v=>new Option(v+'倍',String(v))));
+ rate.value='1.5';
+ watchPlaybackSpeed.hidden=false;
 }
 if(isOfficialEighteenTest){
  const racingCameraViews=new Set(['broadcast','side','front3q','chase','field']);
@@ -2272,7 +2291,7 @@ function seekRaceSeconds(delta){
  const target=Math.max(0,raceElapsed+delta);
  const checkpoint=[...raceSeekSnapshots].reverse().find(p=>p.time<=target+1e-7);
  // Suspend only while restoring the deterministic 60 Hz race state.
- playing=false;rate.value='1';raceAccumulator=0;
+ playing=false;raceAccumulator=0;
  if(checkpoint){
   raceHorses=structuredClone(checkpoint.horses);raceElapsed=checkpoint.time;
   raceFinished=[...checkpoint.finished];raceContactWarnings=checkpoint.warnings;
@@ -2293,6 +2312,7 @@ function seekRaceSeconds(delta){
  demoBtn.textContent=completed?'ゴール・もう一度':playing?'一時停止':'再開';
  camera18CutPending=true;
  lastWatchPaint=-Infinity;updateOfficialPair(0);renderRaceWatchUI(performance.now(),true);
+ seekRaceBgm(true);
  syncStageStartButton();
 }
 const RACE_CLEARANCE=.96;     // 近い位置にいる馬同士の横方向中心間隔の目標
@@ -4873,22 +4893,20 @@ const camera18Inputs={
 };
 function setRacePlaybackSpeed(speed){
  const next=Number(speed);
- if(![1,2,4].includes(next))return;
- // 1x is the normal default; clicking the selected multiplier restores 1x.
+ if(![1.5,2,3].includes(next))return;
  rate.value=String(next);
- for(const button of raceSpeedButtons.querySelectorAll('[data-race-speed]')){
-  const active=Number(button.dataset.raceSpeed)===next;
-  button.classList.toggle('selected',active);
-  button.setAttribute('aria-pressed',String(active));
- }
+ watchPlaybackSpeed.textContent=next+'倍';
+ const after=next===1.5?2:next===2?3:1.5;
+ watchPlaybackSpeed.setAttribute('aria-label','再生速度'+next+'倍。押すと'+after+'倍');
+}
+function cycleRacePlaybackSpeed(){
+ const current=Number(rate.value);
+ setRacePlaybackSpeed(current===1.5?2:current===2?3:1.5);
 }
 if(isOfficialEighteenTest){
- for(const button of raceSpeedButtons.querySelectorAll('[data-race-speed]'))
-  button.addEventListener('click',()=>{
-   const requested=Number(button.dataset.raceSpeed);
-   setRacePlaybackSpeed(Number(rate.value)===requested?1:requested);
-  });
+ watchPlaybackSpeed.addEventListener('click',cycleRacePlaybackSpeed);
  rate.addEventListener('change',()=>setRacePlaybackSpeed(rate.value));
+ setRacePlaybackSpeed(1.5);
 }
 function wrapCameraAngle(angle){
  return ((angle+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
@@ -6298,7 +6316,9 @@ function updateRaceBgm(){
  const fade=THREE.MathUtils.smoothstep(raceElapsed,0,2.5);
  const desired=Number(raceBgmVolume.value)/100*fade;
  if(Math.abs(raceBgmAudio.volume-desired)>.012)raceBgmAudio.volume=desired;
- seekRaceBgm();
+ // Keep music at natural tempo; accelerated race time must not repeatedly
+ // skip the audio forward. Explicit seek/restart still synchronizes it.
+ if(Number(rate.value)===1)seekRaceBgm();
 }
 raceBgmToggle.addEventListener('click',()=>{
  if(!raceBgmLoaded){raceBgmInput.click();return}
