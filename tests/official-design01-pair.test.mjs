@@ -166,8 +166,8 @@ test('render-time 4-horse inward movement is smoothly interpolated',()=>{
 });
 
 test('4-horse render defaults to sharp antialiasing with adjustable fallback',()=>{
- assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:!\(isOfficialEightTest\|\|isOfficialEighteenTest\),/);
- assert.match(html,/const renderDprLevels=isOfficialEighteenTest\?\{sharp:1\.80,standard:1\.35,light:1\.05\}:\{sharp:1\.35,standard:1\.05,light:\.90\}/);
+ assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:true,/);
+ assert.match(html,/const renderDprLevels=isOfficialEighteenTest\?\{sharp:2\.6,standard:1\.85,light:1\.15\}:\{sharp:1\.35,standard:1\.05,light:\.90\}/);
  assert.match(html,/renderQuality\.addEventListener\('change',\(\)=>\{/);
  assert.match(html,/cloneSkeleton\(source\)/);
  assert.match(html,/h\.mixer\.setTime\(gaitTime\)/);
@@ -373,7 +373,7 @@ test('actual four-horse formation creates nose-to-tail stacking, safe overtakes 
 test('four-horse role order displays independently of the approved source saddlecloth',()=>{
  assert.match(html,/現在の隊列：/);
  assert.match(html,/ゼッケン4は正式デザインのままです。/);
- assert.match(html,/h\.role=isOfficialEighteenTest\?EIGHTEEN_PACE_PROFILES\[i\]\.role:/);
+ assert.match(html,/h\.role=isOfficialEighteenTest\?h\.raceProfile\.role:/);
  assert.match(html,/const FOUR_PACE_PROFILES=\[/);
  assert.match(html,/FOUR_MIN_LONGITUDINAL=4\.8,FOUR_LATERAL_SHARED=3\.05/);
  assert.match(html,/const FOUR_INWARD_RATE=4\.4/);
@@ -422,7 +422,8 @@ test('horse alongside must not cut across a nearby occupied lane',()=>{
 test('four-horse gait phase advances with actual forward metres, not elapsed stationary time',()=>{
  const update=extract('updateOfficialPair');
  assert.match(update,/const gaitTime=isOfficialMultiTest\?/);
- assert.match(update,/\(state\.distance\+\(state\.postDistance\|\|0\)\)\/16\.0\+i\*\.07/);
+ assert.match(update,/const gaitDistance=\(state\.distance\+\(state\.postDistance\|\|0\)\)\*\s*\(isOfficialEighteenTest\?1\.42065:1\)/);
+ assert.match(update,/gaitDistance\/16\.0\+\s*\(isOfficialEighteenTest\?Math\.min\(1,Math\.max\(0,\(state\.distance-12\)\/24\)\):1\)\*i\*\.07/);
  assert.match(update,/h\.mixer\.setTime\(gaitTime\)/);
  assert.match(update,/shownTime\*Math\.min\(2,Number\(rate\.value\)\)\+i\*\.07/);
 });
