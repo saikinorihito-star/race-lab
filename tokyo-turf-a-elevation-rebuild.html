@@ -560,7 +560,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <label>編集する馬 <select id="abilityHorseSelect" aria-label="能力を編集する馬"></select></label>
   <p class="abilityHint">数値能力はすべて1〜10の10段階、5が以前の50に相当する標準値です。保存済みの0〜100は自動的に引き継ぎます。脚質は5種類から選択します。</p>
   <p id="abilityDistanceHint" class="abilityHint">距離適性は得意距離から離れた距離への対応力、コース適性はコーナーでの減速を抑える能力です。</p>
-  <div class="abilityRow"><label for="abilitySpeed">速度</label><input id="abilitySpeed" type="range" min="1" max="10" step="1" value="5"/><output id="abilitySpeedValue" for="abilitySpeed">5</output></div>
+  <div class="abilityRow"><label for="abilitySpeed">スピード</label><input id="abilitySpeed" type="range" min="1" max="10" step="1" value="5"/><output id="abilitySpeedValue" for="abilitySpeed">5</output></div>
   <div class="abilityRow"><label for="abilityStamina">スタミナ</label><input id="abilityStamina" type="range" min="1" max="10" step="1" value="5"/><output id="abilityStaminaValue" for="abilityStamina">5</output></div>
   <div class="abilityRow"><label for="abilityAcceleration">瞬発力</label><input id="abilityAcceleration" type="range" min="1" max="10" step="1" value="5"/><output id="abilityAccelerationValue" for="abilityAcceleration">5</output></div>
   <div class="abilityRow"><label for="abilityCourse">コース適性</label><input id="abilityCourse" type="range" min="1" max="10" step="1" value="5"/><output id="abilityCourseValue" for="abilityCourse">5</output></div>
@@ -2919,14 +2919,7 @@ function eightHorseSafeStep(h,snapshot,dt,targetSpeed){
 const EIGHTEEN_PACE_PROFILES=Array.from({length:18},(_,idx)=>{
  const type=['先行','差し','中団','逃げ','先行','中団','差し','追込','先行',
   '中団','差し','先行','追込','中団','差し','先行','中団','追込'][idx];
- return {role:type,
-  accel:3.12+(idx*7%9)*.037,
-  early:15.78+(idx*11%15)*.037,
-  kickStart:type==='追込'?.37:type==='差し'?.29:.72,
-  kick:type==='追込'?.76:type==='差し'?.52:type==='中団'?.31:.18,
-  endurance:.84+(idx*13%17)*.009,
-  finishStrength:.72+(idx*5%11)*.045,
-  preferredDistance:1400+(idx*5%9)*250};
+ return {role:type,preferredDistance:1400+(idx*5%9)*250};
 });
 // Per-horse ability editing applies to 18-horse AI only. The approved
 // GLB design and other runner counts retain their existing behavior.
@@ -3013,11 +3006,8 @@ const horseAbilities=isOfficialEighteenTest?loadHorseAbilities():[];
 if(isOfficialEighteenTest)for(const h of horseLibrary)
  if(h.ability)horseAbilities[h.id]=normalizeHorseAbility(h.ability,h.id);
 function baseForRegisteredHorse(id){
- if(id<18)return EIGHTEEN_PACE_PROFILES[id];
  const b=EIGHTEEN_PACE_PROFILES[id%18];
- return {...b,early:b.early+((id*7)%9-4)*.013,
-  accel:b.accel+((id*11)%7-3)*.022,
-  preferredDistance:1400+(id*5%9)*250};
+ return {role:b.role,preferredDistance:1400+(id*5%9)*250};
 }
 const raceGoingSelect=document.querySelector('#raceGoing'),
  raceGoingQuick=document.querySelector('#raceGoingQuick'),
@@ -3139,7 +3129,7 @@ function effectiveEighteenProfile(index,overrideAbility=null){
  const timingByRole={逃げ:.72,先行:.72,中団:.72,差し:.29,追込:.37};
  // Numeric ratings, explicit distance and role are the sole intrinsic inputs.
  // The old fictional base speed, endurance and kick variance are not inherited.
- return {role,abilityModel:2,baseEarly:16.0,
+ return {role,abilityModel:2,
   preferredDistance:v.preferredDistance??baseForRegisteredHorse(identity).preferredDistance,
   courseBonus:(v.course-5)*.035*balanceWeights.course,
   distanceAbility:v.distance,composureAbility:v.composure,trafficAbility:v.traffic,
@@ -3591,7 +3581,7 @@ function cornerPacePenalty(distance,profile){
  const data=cornerDataAt(distance);
  const intensity=THREE.MathUtils.clamp(Math.abs(data.kappa)*145,0,1.50);
  const aptitude=THREE.MathUtils.clamp(profile?.courseBonus??0,-.45,.45);
- return intensity*(profile?.abilityModel===2?Math.max(.06,.25-aptitude):(.25-.11*aptitude));
+ return intensity*Math.max(.06,.25-aptitude);
 }
 // 18頭専用の2D位置試験モデル。3Dモデルのシルエットを変えない。
 // スタート時は幅に合わせ18頭を並べ、前に空きができた馬から
@@ -3610,7 +3600,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // Physical pace is converted into reference-distance progress. Wide
  // routes cover more ground; the outer runners need more effort to keep up.
  let desiredSpeed=Math.max(9.5,targetSpeed-cornerPacePenalty(
-  h.distance,h.raceProfile||EIGHTEEN_PACE_PROFILES[h.idx]))/
+  h.distance,h.raceProfile||effectiveEighteenProfile(h.idx)))/
   cornerPathFactor(h.distance,h.lane);
  // When the course narrows again later in a long-distance race,
  // gently stagger close runners instead of forcing two horses sideways
@@ -3637,15 +3627,13 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // One simultaneous gate release: individual speeds diverge after 12m.
  const commonLaunch=h.distance<12;
  if(commonLaunch)desiredSpeed=15.8;
- const profile=h.raceProfile||EIGHTEEN_PACE_PROFILES[h.idx];
+ const profile=h.raceProfile||effectiveEighteenProfile(h.idx);
  // Shared first 12m preserves synchronous launch; runners then separate.
  const launchPhase=commonLaunch?0:
   1-THREE.MathUtils.smoothstep(h.distance,12,110);
  desiredSpeed+=((profile.startAbility??5)-5)*.10*balanceWeights.start*launchPhase;
- const acceleration=profile.abilityModel===2?
-  THREE.MathUtils.lerp(3.32*(1+((profile.startAbility??5)-5)*.035*balanceWeights.start),profile.accel,
-   THREE.MathUtils.smoothstep(h.distance,100,180)):
-  commonLaunch?3.32:profile.accel*(1+((profile.startAbility??5)-5)*.055*balanceWeights.start*launchPhase);
+ const acceleration=THREE.MathUtils.lerp(3.32*(1+((profile.startAbility??5)-5)*.035*balanceWeights.start),profile.accel,
+   THREE.MathUtils.smoothstep(h.distance,100,180));
  let speed=h.speed+THREE.MathUtils.clamp(desiredSpeed-h.speed,
   -(desiredSpeed<h.speed?4.4:acceleration)*dt,acceleration*dt);
  speed=Math.max(Math.min(EIGHTEEN_MIN_ROLL_BASE+
@@ -3686,7 +3674,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // never crossed instantaneously, even when it is the shorter path.
  if(h.distance>105&&h.distance<activePlan.distance-90&&
     h.blockedFor>THREE.MathUtils.clamp(
-     .9-((h.raceProfile?.trafficAbility??5)-5)*.085*balanceWeights.traffic+
+     .9-((profile.trafficAbility??5)-5)*.085*balanceWeights.traffic+
       (h.raceFlow?.trafficPatience??0),.50,1.45)&&
     h.passUntil<=h.distance&&h.passCooldown<=h.distance&&
     !holdingOutside&&
@@ -3878,7 +3866,7 @@ function stepOfficialPair(tick){
    h.lane=lane;h.targetLane=lane;
   }else{
    const profile=isOfficialEighteenTest?
-    (h.raceProfile||EIGHTEEN_PACE_PROFILES[i]):
+    (h.raceProfile||effectiveEighteenProfile(i)):
     isOfficialEightTest?EIGHT_PACE_PROFILES[i]:FOUR_PACE_PROFILES[i];
    const progress=h.distance/Math.max(1,activePlan.distance);
    const launch=THREE.MathUtils.clamp((h.distance-180)/540,0,1);
@@ -3889,66 +3877,25 @@ function stepOfficialPair(tick){
     const remaining=Math.max(0,activePlan.distance-h.distance);
     const progress18=h.distance/Math.max(1,activePlan.distance);
     const energy=h.energy??1;
-    const closing=THREE.MathUtils.smoothstep(455-remaining,0,370);
-    const earlyBonus=profile.role==='逃げ'?.20:
-     profile.role==='先行'?.10:profile.role==='追込'?-.15:0;
-    const fit=1-Math.min(1,Math.abs(activePlan.distance-profile.preferredDistance)/1900);
-    targetSpeed=profile.early+earlyBonus*Math.max(0,1-progress18*2.2)+
-     profile.kick*(profile.finishStrength??1)*closing*(.38+.62*energy)-
-     (1-energy)*(1.30-profile.endurance)*.82+
-     (fit-.5)*.70+(profile.courseBonus??0);
-    // Resilience across distances beyond the runner's inherited preference.
-    targetSpeed+=((profile.distanceAbility??5)-5)*.095*balanceWeights.distance*(1-fit);
-    // Changing going is a race condition; 良/5 has zero new effect.
+    const mismatch=Math.min(1,Math.abs(activePlan.distance-profile.preferredDistance)/1900);
+    const tolerance=THREE.MathUtils.clamp(1-((profile.distanceAbility??5)-5)*.10*balanceWeights.distance,.45,1.45);
     const wet=GOING_SEVERITY[raceGoingAtStart]??0;
-    targetSpeed+=wet*(-.34+((profile.goingAbility??5)-5)*.115*balanceWeights.going);
-    // Use unexaggerated course elevation. DISPLAY_RELIEF affects 3D only.
+    // Use real model height, never the display exaggeration.
     const next=Math.min(activePlan.distance,h.distance+12);
     const previousDist=Math.max(0,h.distance-12);
     const uphill=THREE.MathUtils.clamp(
-     (fieldCenterAt(activePlan,next).p.y-
-      fieldCenterAt(activePlan,previousDist).p.y)/
+     (fieldCenterAt(activePlan,next).p.y-fieldCenterAt(activePlan,previousDist).p.y)/
      Math.max(1,next-previousDist)/DISPLAY_RELIEF,0,.045);
-    targetSpeed+=((profile.hillAbility??5)-5)*uphill*3.6*balanceWeights.hill;
-    // Seeded pace variations preserve the same deterministic 60Hz engine.
-    // Early pace pressure varies with role; the end of the race can reverse it.
+    const sprint=THREE.MathUtils.smoothstep(650-remaining,0,430);
+    const rolePace=({逃げ:.32,先行:.14,中団:0,差し:-.18,追込:-.34})[profile.role]??0;
+    const fatigue=THREE.MathUtils.smoothstep(progress18,.25,.95)*Math.pow(1-energy,1.5)*1.6/Math.max(.60,profile.endurance);
+    const accelerationBonus=((profile.accelerationAbility??5)-5)*.055*balanceWeights.acceleration*sprint;
+    targetSpeed=profile.early+rolePace*(1-sprint)+(profile.kick+accelerationBonus)*sprint*(.38+.62*energy)-fatigue-
+     .55*mismatch*tolerance-wet*(.34-((profile.goingAbility??5)-5)*.055*balanceWeights.going)-
+     uphill*(13-((profile.hillAbility??5)-5)*1.55*balanceWeights.hill);
     if(raceFlowAtStart.mode==='varied'&&h.raceFlow){
-     const early=1-THREE.MathUtils.smoothstep(progress18,.18,.65);
-     const mid=THREE.MathUtils.clamp(1-Math.abs(progress18-.55)*4,0,1);
-     const lateRun=THREE.MathUtils.smoothstep(progress18,
-      Math.max(.50,1-570/activePlan.distance),
-      Math.max(.68,1-170/activePlan.distance));
-     const pressure=profile.role==='逃げ'||profile.role==='先行'?1:.5;
-     targetSpeed+=h.raceFlow.early*early+h.raceFlow.middle*mid+
-      h.raceFlow.late*lateRun+raceFlowAtStart.tempo*pressure*early;
-    }
-    // A fast horse explicitly assigned a closing role must not simply run
-    // wire-to-wire. Bank energy in the first half, then release the pace cap
-    // smoothly so the last 600m can produce a visible, actual position gain.
-    // All default 50-point profiles remain unchanged.
-    if(profile.customized&&['追込','差し','中団'].includes(profile.role)){
-     const chase=profile.role==='追込';
-     const cap=profile.baseEarly+(chase?-.13:profile.role==='差し'?.05:.15);
-     const startRelease=chase?Math.max(650,activePlan.distance*.31):
-      profile.role==='差し'?Math.max(540,activePlan.distance*.26):
-      Math.max(480,activePlan.distance*.23);
-     const release=THREE.MathUtils.smoothstep(startRelease-remaining,0,330);
-     targetSpeed=THREE.MathUtils.lerp(Math.min(targetSpeed,cap),targetSpeed,release);
-    }
-    if(profile.abilityModel===2){
-     const mismatch=1-fit;
-     const tolerance=THREE.MathUtils.clamp(1-((profile.distanceAbility??5)-5)*.10*balanceWeights.distance,.45,1.45);
-     const sprint=THREE.MathUtils.smoothstep(650-remaining,0,430);
-     const rolePace=({逃げ:.32,先行:.14,中団:0,差し:-.18,追込:-.34})[profile.role]??0;
-     const fatigue=THREE.MathUtils.smoothstep(progress18,.25,.95)*Math.pow(1-energy,1.5)*1.6/Math.max(.60,profile.endurance);
-     const accelerationBonus=((profile.accelerationAbility??5)-5)*.055*(balanceWeights.acceleration??1)*sprint;
-     targetSpeed=profile.early+rolePace*(1-sprint)+(profile.kick+accelerationBonus)*sprint*(.38+.62*energy)-fatigue-
-      .55*mismatch*tolerance-wet*(.34-((profile.goingAbility??5)-5)*.055*balanceWeights.going)-
-      uphill*(13-((profile.hillAbility??5)-5)*1.55*balanceWeights.hill);
-     if(raceFlowAtStart.mode==='varied'&&h.raceFlow){
-      const early=1-THREE.MathUtils.smoothstep(progress18,.18,.65),mid=Math.max(0,1-Math.abs(progress18-.55)*4);
-      targetSpeed+=h.raceFlow.early*early+h.raceFlow.middle*mid+h.raceFlow.late*sprint+raceFlowAtStart.tempo*early;
-     }
+     const early=1-THREE.MathUtils.smoothstep(progress18,.18,.65),mid=Math.max(0,1-Math.abs(progress18-.55)*4);
+     targetSpeed+=h.raceFlow.early*early+h.raceFlow.middle*mid+h.raceFlow.late*sprint+raceFlowAtStart.tempo*early;
     }
     const blocked=previous.some(o=>o.idx!==h.idx&&!o.finished&&
      o.distance>h.distance&&o.distance-h.distance<13&&
@@ -3979,11 +3926,11 @@ function stepOfficialPair(tick){
     const effort=THREE.MathUtils.clamp((result.speed-14.4)/2.6,0,1.6);
     const load=Math.sqrt(activePlan.distance/1800);
     const earlyShare=Math.max(0,1-(h.distance/activePlan.distance)/.70);
-    const composure=1-((profile.composureAbility??5)-5)*(profile.abilityModel===2?.085:.06)*balanceWeights.composure*earlyShare;
+    const composure=1-((profile.composureAbility??5)-5)* .085*balanceWeights.composure*earlyShare;
     const cost=physicalStep/Math.max(1,activePlan.distance)*
      (.37+.29*effort)*load/Math.max(.60,profile.endurance)*composure*
-     (profile.abilityModel===2?1+(GOING_SEVERITY[raceGoingAtStart]??0)*Math.max(0,.16-((profile.goingAbility??5)-5)*.023*balanceWeights.going):1);
-    const uphillWork=profile.abilityModel===2?Math.max(0,(fieldCenterAt(activePlan,result.distance).p.y-fieldCenterAt(activePlan,h.distance).p.y)/DISPLAY_RELIEF)*.006*(1-((profile.hillAbility??5)-5)*.085*balanceWeights.hill):0;
+     (1+(GOING_SEVERITY[raceGoingAtStart]??0)*Math.max(0,.16-((profile.goingAbility??5)-5)*.023*balanceWeights.going));
+    const uphillWork=Math.max(0,(fieldCenterAt(activePlan,result.distance).p.y-fieldCenterAt(activePlan,h.distance).p.y)/DISPLAY_RELIEF)*.006*(1-((profile.hillAbility??5)-5)*.085*balanceWeights.hill);
     h.energy=THREE.MathUtils.clamp((h.energy??1)-cost-uphillWork,.07,1);
    }
    // Compare the old and new widths BEFORE committing the new distance.
