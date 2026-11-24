@@ -7,12 +7,72 @@ export function stable(value){
  if(Array.isArray(value))return '['+value.map(stable).join(',')+']';
  return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+stable(value[k])).join(',')+'}';
 }
+
+// Named races are independent snapshots of the 18 starting slots, not
+// references to mutable registry objects. A later edit never changes a saved race.
+export const RACE_ARCHIVE_LIMIT=30;
+const RACE_KEYS=['speed','stamina','acceleration','course','distance','composure','traffic','going','hill','start'];
+const DISTANCES=[1400,1600,1800,2000,2300,2400,2500,2600,3400];
+const ROLES=['逃げ','先行','中団','差し','追込'];
+const GOINGS=['good','slightlyHeavy','heavy','bad'];
+const WEATHERS=['sunny','cloudy','rain'];
+function validRaceHorse(h){
+ const a=h?.ability;
+ return Number.isSafeInteger(h?.id)&&h.id>=0&&h.id<10000&&typeof h.name==='string'&&
+  h.name.trim().length>0&&h.name.length<=24&&a&&
+  RACE_KEYS.every(k=>Number.isInteger(a[k])&&a[k]>=1&&a[k]<=10)&&ROLES.includes(a.role)&&
+  Number.isInteger(a.preferredDistance)&&a.preferredDistance>=1000&&a.preferredDistance<=4000&&a.preferredDistance%50===0;
+}
+export function validRacePreset(r){
+ const s=r?.conditions;
+ return typeof r?.id==='string'&&/^[a-zA-Z0-9-]{1,64}$/.test(r.id)&&
+  typeof r.name==='string'&&r.name.trim().length>0&&r.name.length<=60&&
+  Array.isArray(r.horses)&&r.horses.length===18&&r.horses.every(validRaceHorse)&&
+  new Set(r.horses.map(h=>h.id)).size===18&&s&&DISTANCES.includes(s.distance)&&
+  WEATHERS.includes(s.weather)&&GOINGS.includes(s.going)&&['standard','varied'].includes(s.flowMode)&&
+  Number.isInteger(s.flowSeed)&&s.flowSeed>=1&&s.flowSeed<=999999;
+}
+export function validRaceArchive(a){
+ return a?.version===1&&Array.isArray(a.races)&&a.races.length<=RACE_ARCHIVE_LIMIT&&
+  a.races.every(validRacePreset)&&new Set(a.races.map(r=>r.id)).size===a.races.length&&
+  (a.activeId===null||a.races.some(r=>r.id===a.activeId));
+}
+export function makeRacePreset(id,name,payload){
+ const l=payload.library,s=payload.settings;
+ const r={id,name:String(name).trim(),horses:l.lineup.map(id=>{
+  const h=l.horses.find(h=>h.id===id);
+  if(!h)throw Error('出走馬のデータがありません');
+  return {id:h.id,name:h.name,ability:structuredClone(h.ability)};
+ }),conditions:{distance:s.distance,weather:s.weather,going:s.going,flowMode:s.flowMode,flowSeed:s.flowSeed}};
+ if(!validRacePreset(r))throw Error('レース名または出走馬・条件を確認してください');
+ return r;
+}
+export function saveRacePreset(archive,preset,replace=false){
+ if(!validRaceArchive(archive)||!validRacePreset(preset))throw Error('レースデータの形式が正しくありません');
+ const exists=archive.races.some(r=>r.id===preset.id);
+ if(exists!==replace)throw Error('保存先を確認してください');
+ if(!exists&&archive.races.length>=RACE_ARCHIVE_LIMIT)throw Error('保存できるのは30レースまでです');
+ const races=exists?archive.races.map(r=>r.id===preset.id?structuredClone(preset):r):
+  [...archive.races,structuredClone(preset)];
+ return {version:1,races,activeId:preset.id};
+}
+export function restoreRacePreset(library,preset){
+ if(!validRacePreset(preset))throw Error('保存済みレースの形式が正しくありません');
+ // Preserve reserves and stable registry IDs. Restore only the 18 race entries.
+ const horses=new Map(library.horses.map(h=>[h.id,structuredClone(h)]));
+ for(const h of preset.horses)horses.set(h.id,structuredClone(h));
+ if(horses.size>100)throw Error('登録馬が100頭を超えるため呼び出せません。控え馬を整理してください。');
+ return {version:1,horses:[...horses.values()],lineup:preset.horses.map(h=>h.id),
+  nextId:Math.max(library.nextId,...preset.horses.map(h=>h.id+1))};
+}
+
 export function validPayload(p){
  const l=p?.library;
  if(p?.version!==1||l?.version!==1||!Array.isArray(l.horses)||l.horses.length<18||l.horses.length>100||
   !Array.isArray(l.lineup)||l.lineup.length!==18||new Set(l.lineup).size!==18||
   !Number.isSafeInteger(l.nextId)||l.nextId<18||l.nextId>10000||
-  !p.settings||typeof p.settings!=='object'||Array.isArray(p.settings))return false;
+  !p.settings||typeof p.settings!=='object'||Array.isArray(p.settings)||
+  (Object.hasOwn(p.settings,'raceArchive')&&!validRaceArchive(p.settings.raceArchive)))return false;
  const ids=l.horses.map(h=>h?.id);
  return new Set(ids).size===ids.length&&l.horses.every(h=>Number.isSafeInteger(h?.id)&&h.id>=0&&h.id<10000&&h.id<l.nextId&&
   typeof h.name==='string'&&h.name.trim().length>0&&h.name.length<=24&&
