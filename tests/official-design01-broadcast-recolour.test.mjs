@@ -312,10 +312,10 @@ test('TV editor alternates first-three close-up, third-place pack and wider fiel
  assert.ok(dist(first)<dist(wide)*.75,'Leader closeup must be clearly closer than wide shot');
  assert.ok(dist(third)<dist(wide)*.75,'Third-place pack should be much closer than overview');
 });
-test('normal broadcast distributes nine cuts across front, middle and rear ranks',()=>{
+test('normal broadcast distributes twelve slots across front, middle and rear ranks',()=>{
  const camera=makeShot(2400);
  const groups=[];
- for(let i=0;i<9;i++){
+ for(let i=0;i<12;i++){
   const progress=145+i*100;
   const horses=Array.from({length:18},(_,j)=>({
    number:j+1,distance:progress-j*2,lane:3+(j%4)*2,postDistance:0,speed:16
@@ -327,7 +327,8 @@ test('normal broadcast distributes nine cuts across front, middle and rear ranks
   '1,2,3','5,6,7,8,9','13,14,15,16,17,18',
   '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18',
   '2,3,4,5','6,7,8,9,10','10,11,12,13,14',
-  '12,13,14,15,16,17,18','7,8,9'
+  '12,13,14,15,16,17,18','7,8,9',
+  '5,6,7,8,9','6,7,8,9,10','13,14,15,16,17,18'
  ]);
 });
 test('reference front-pack and side-pack cameras use distinct low perspectives with real pack anchoring',()=>{
@@ -342,7 +343,7 @@ test('reference front-pack and side-pack cameras use distinct low perspectives w
  const diagonal=shotAt(620),lateral=shotAt(820);
  assert.match(diagonal.broadcastShotId,/-frontPack$/);
  assert.match(lateral.broadcastShotId,/-sidePack$/);
- assert.equal(diagonal.fov,39);
+ assert.equal(diagonal.fov,43);
  assert.equal(lateral.fov,43);
  assert.ok(diagonal.eye.y>diagonal.target.y&&lateral.eye.y>lateral.target.y,
   'Both references retain low but above-ground camera positions');
@@ -351,7 +352,7 @@ test('reference front-pack and side-pack cameras use distinct low perspectives w
  const source=fn('officialBroadcastCameraShot');
  assert.match(source,/focusType==='frontPack'\?ranked\.slice\(Math\.min\(5,ranked\.length-1\),Math\.min\(10,ranked\.length\)\)/);
  assert.match(source,/focusType==='sidePack'\?ranked\.slice\(Math\.max\(0,ranked\.length-7\)\)/);
- assert.match(source,/outside=14\.2;height=3\.45;ahead=22;fov=39/);
+ assert.match(source,/outside=13;height=3\.25;ahead=24;fov=43/);
  assert.match(source,/outside=23\.5;height=4\.2;ahead=0;fov=43/);
  assert.match(html,/shot\.endsWith\('-sidePack'\)/);
  assert.match(html,/shot\.endsWith\('-midPack'\)/);
@@ -381,7 +382,7 @@ test('opening sees all 18 and rear group cuts track actual last-place horses',()
  assert.match(script,/focusType==='tailPack'\?ranked\.slice\(Math\.max\(0,ranked\.length-6\)\)/);
  assert.match(script,/outside=43;height=11\.5;ahead=20;fov=55/);
  assert.match(script,/maxDistance=forming\?88/);
- assert.match(script,/outside=18\.5;height=4\.4;ahead=-11;fov=40/);
+ assert.match(script,/outside=13\.5;height=3\.4;ahead=25;fov=44/);
  const seen=[];
  const fit=runInNewContext('('+fn('officialBroadcastCameraShot')+')',{
   ...{
@@ -487,10 +488,10 @@ test('approved horse materials keep 2K maps shared with anisotropic filtering',(
 });
 test('focused race views enlarge horse models but preserve overview and starting shots',()=>{
  const src=fn('officialBroadcastCameraShot');
- assert.match(src,/outside=12\.8;height=3\.9;ahead=12;fov=35/);
+ assert.match(src,/outside=11\.5;height=3\.15;ahead=21;fov=42/);
  assert.match(src,/outside=14\.5;height=4\.1;ahead=1;fov=36/);
  assert.match(src,/outside=10\.6;height=2\.8;ahead=10;fov=37/);
- assert.match(src,/outside=14;height=4\.3;ahead=14;fov=35/);
+ assert.match(src,/outside=12;height=3\.25;ahead=23;fov=43/);
  assert.match(src,/focusType==='third'\?32:30/);
  assert.match(src,/if\(forming\|\|focusType==='wide'\|\|focusType==='gate'\)/);
 });
@@ -503,4 +504,21 @@ test('18-runner sharpness improvements preserve non-race modes and fixed framebu
  const auto=fn('autoTune18HorseResolution');
  assert.ok(!auto.includes('renderer.setPixelRatio('));
  assert.ok(!auto.includes('renderer.setSize('));
+});
+
+test('reference front oblique views occupy eight of twelve slots and show the group from ahead and outside',()=>{
+ const camera=makeShot(2400),types=new Set(['lead','third','midPack','frontPack','tailPack']);
+ let frontCount=0;
+ for(let i=0;i<12;i++){
+  const progress=145+i*100;
+  const horses=Array.from({length:18},(_,j)=>({number:j+1,distance:progress-j*2,lane:3+(j%4)*2,postDistance:0,speed:16}));
+  const shot=camera({horses,lead:horses[0],leadDistance:progress,gap:34});
+  if(!types.has(shot.broadcastShotId.split('-').at(-1)))continue;
+  frontCount++;
+  assert.ok(shot.eye.x-shot.target.x>=20,'camera ahead of pack');
+  assert.ok(shot.eye.z-shot.target.z<=-11,'camera on outside of pack');
+  assert.ok(shot.eye.y-2<=3.5,'low ground-relative height');
+  assert.ok(shot.fov>=42&&shot.fov<=44,'field of view includes trailing horses');
+ }
+ assert.equal(frontCount,8);
 });
