@@ -3960,11 +3960,13 @@ function stepOfficialPair(tick){
      (.37+.29*effort)*load/Math.max(.72,profile.endurance)*composure;
     h.energy=THREE.MathUtils.clamp((h.energy??1)-cost,.07,1);
    }
-   h.distance=result.distance;h.speed=result.speed;
+   // Compare the old and new widths BEFORE committing the new distance.
+   // A shift of the lane coordinate origin is not a real steering motion.
    const lateralVelocity=(result.lane-h.lane-
     (isOfficialEighteenTest?
      (fieldCenterAt(activePlan,result.distance).width-
       fieldCenterAt(activePlan,h.distance).width)*.5:0))/tick;
+   h.distance=result.distance;h.speed=result.speed;
    if(isOfficialEighteenTest){
     // Dampen one-frame steering reversals in the 3D horse orientation;
     // actual race position and collision geometry remain unchanged.
