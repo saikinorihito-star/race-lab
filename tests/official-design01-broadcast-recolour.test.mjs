@@ -17,6 +17,9 @@ class V{
  copy(v){this.x=v.x;this.y=v.y;this.z=v.z;return this}
  sub(v){this.x-=v.x;this.y-=v.y;this.z-=v.z;return this}
  length(){return Math.hypot(this.x,this.y,this.z)}
+ dot(v){return this.x*v.x+this.y*v.y+this.z*v.z}
+ distanceTo(v){return this.clone().sub(v).length()}
+ lerp(v,t){this.x+=(v.x-this.x)*t;this.y+=(v.y-this.y)*t;this.z+=(v.z-this.z)*t;return this}
  add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this}
  addScaledVector(v,n){this.x+=v.x*n;this.y+=v.y*n;this.z+=v.z*n;return this}
  normalize(){const n=Math.hypot(this.x,this.y,this.z)||1;this.x/=n;this.y/=n;this.z/=n;return this}
@@ -127,14 +130,72 @@ test('virtual cameras have finite nonidentical positions and target the running 
   assert.ok(ids.size>=5,'Need multiple distinct source cameras for '+distance);
  }
 });
-test('camera uses hard cuts between stations and gentle pan inside each shot',()=>{
- assert.match(html,/const cut=onBroadcast&&shot\.broadcastShotId!==lastBroadcastShotId/);
- assert.match(html,/if\(cut\|\|camera18CutPending\)\{\s*camera\.position\.copy\(shot\.eye\)/);
- assert.match(html,/camera\.position\.lerp\(shot\.eye,alpha\)/);
- assert.match(html,/broadcastCameraLabel\.textContent='📺 中継：'\+shot\.broadcastLabel/);
- assert.match(html,/camera\.fov=shot\.fov/);
- assert.match(html,/camera\.updateProjectionMatrix\(\)/);
+test('near camera moves are eased and distant views dissolve without flying across the field',()=>{
+ const mode=runInNewContext('('+fn('broadcastTransitionMode')+')',{});
+ const eye=new V(0,6,0),target=new V(0,2,20);
+ assert.equal(mode(eye,target,{eye:new V(5,6,0),target:new V(5,2,20)}),'pan');
+ assert.equal(mode(eye,target,{eye:new V(60,6,0),target:new V(60,2,20)}),'dissolve');
+ assert.equal(mode(eye,target,{eye:new V(0,6,25),target:new V(0,2,5)}),'dissolve');
+ assert.match(html,/const BROADCAST_PAN_MS=420,BROADCAST_DISSOLVE_MS=200/);
+ assert.match(html,/applyBroadcastCameraShot\(shot,time,dt,camera18CutPending\)/);
+ assert.match(html,/renderer\.render\(scene,camera\);\s*if\(isOfficialEighteenTest\)captureBroadcastTransitionFrame\(\)/);
  assert.match(fn('officialEighteenCameraShot'),/which==='broadcast'/);
+});
+function transitionHarness(){
+ const canvas={hidden:true,style:{},width:0,height:0,setAttribute(){},
+  getContext(){return {clearRect(){},drawImage(){},getImageData(){return {data:[30,70,90,255]}}}}};
+ const ctx={camera:{position:new V(0,6,0),fov:40,updateProjectionMatrix(){}},
+  controls:{target:new V(0,2,20)},lastBroadcastShotId:'lead',lastBroadcastFocusNumbers:[1],
+  broadcastLabelCutAt:0,broadcastCameraLabel:{textContent:''},
+  broadcastTransition:null,broadcastTransitionCanvas:null,
+  BROADCAST_PAN_MS:420,BROADCAST_DISSOLVE_MS:200,
+  document:{createElement:()=>canvas},stage:{appendChild(){}},
+  renderer:{domElement:{width:800,height:600}}};
+ for(const name of ['broadcastTransitionMode','resetBroadcastTransition',
+  'captureBroadcastTransitionFrame','updateBroadcastDissolve','applyBroadcastCameraShot'])
+  ctx[name]=runInNewContext('('+fn(name)+')',ctx);
+ return {ctx,canvas,apply:ctx.applyBroadcastCameraShot};
+}
+test('near cut interpolates position, target and FOV and finishes exactly',()=>{
+ const h=transitionHarness(),shot={eye:new V(6,6,0),target:new V(6,2,20),fov:50,broadcastShotId:'mid',focusNumbers:[5],broadcastLabel:'中団'};
+ h.apply(shot,1000,.016,false);
+ assert.equal(h.ctx.camera.position.x,0);
+ assert.equal(h.ctx.camera.fov,40);
+ h.apply(shot,1210,.016,false);
+ assert.equal(h.ctx.camera.position.x,3);
+ assert.equal(h.ctx.camera.fov,45);
+ h.apply(shot,1420,.016,false);
+ assert.equal(h.ctx.camera.position.x,6);
+ assert.equal(h.ctx.camera.fov,50);
+ assert.equal(h.ctx.broadcastTransition,null);
+});
+test('distant cut captures once, jumps safely, fades out and resets on manual seek',()=>{
+ const h=transitionHarness(),shot={eye:new V(60,6,0),target:new V(60,2,20),fov:45,broadcastShotId:'tail',focusNumbers:[18],broadcastLabel:'後方'};
+ h.apply(shot,1000,.016,false);
+ assert.equal(h.ctx.broadcastTransition.mode,'capture');
+ assert.equal(h.ctx.camera.position.x,0);
+ h.ctx.captureBroadcastTransitionFrame();
+ assert.equal(h.ctx.broadcastTransition.mode,'ready');
+ h.apply(shot,1016,.016,false);
+ assert.equal(h.ctx.camera.position.x,60);
+ assert.equal(h.canvas.hidden,false);
+ h.apply(shot,1116,.016,false);
+ assert.equal(h.canvas.style.opacity,'0.5');
+ h.apply(shot,1216,.016,false);
+ assert.equal(h.canvas.hidden,true);
+ assert.equal(h.ctx.broadcastTransition,null);
+ h.apply({...shot,eye:new V(120,6,0),target:new V(120,2,20),broadcastShotId:'wide'},1300,.016,true);
+ assert.equal(h.ctx.camera.position.x,120);
+ assert.equal(h.ctx.broadcastTransition,null);
+});
+test('failed canvas capture uses a direct cut instead of a black overlay',()=>{
+ const h=transitionHarness(),shot={eye:new V(60,6,0),target:new V(60,2,20),fov:45,broadcastShotId:'tail',focusNumbers:[18],broadcastLabel:'後方'};
+ h.canvas.getContext=()=>({clearRect(){},drawImage(){},getImageData(){return {data:[0,0,0,255]}}});
+ h.apply(shot,1000,.016,false);h.ctx.captureBroadcastTransitionFrame();
+ h.apply(shot,1016,.016,false);
+ assert.equal(h.ctx.camera.position.x,60);
+ assert.equal(h.canvas.hidden,true);
+ assert.equal(h.ctx.broadcastTransition,null);
 });
 test('auto broadcast is the default and manual camera override remains available',()=>{
  assert.match(html,/data-view="broadcast"/);
