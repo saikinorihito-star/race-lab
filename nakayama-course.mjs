@@ -61,8 +61,12 @@ export function widthAt(kind,s){
  const lap=kind==='inner'?SPEC.innerLap:SPEC.outerLap;
  const rem=mod(lap-s,lap);
  // Approximate width distribution, constrained to published A-course ranges.
- const min=kind==='inner'?20:24;
- return min+(32-min)*Math.max(0,1-Math.min(rem,lap-rem)/420);
+ // On the shared sections both routes use exactly the same width, so a
+ // runner or a route-centre marker never jumps sideways at the finish.
+ if(rem<=600||s<=517.1)return 24+8*Math.max(0,1-Math.min(rem,lap-rem)/420);
+ const span=kind==='inner'?550:722.6;
+ const u=(s-517.1)/span;
+ return kind==='inner'?24-4*Math.sin(Math.PI*u)**2:24+4*Math.sin(Math.PI*u)**2;
 }
 export const ROUTE_LABELS={1200:'外回り',1600:'外回り・ポケット',1800:'内回り',2000:'内回り',2200:'外回り',2500:'外回り発走→内回り',2600:'外回り',3200:'外回り発走→内回り',3600:'内回り・2周',4000:'外回り・2周'};
 export function makeRoute(distance){
