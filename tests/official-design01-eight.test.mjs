@@ -35,7 +35,7 @@ test('official eight uses original full-detail GLB with independent bones, its o
  assert.match(html,/const OFFICIAL_TEST_COUNT=isOfficialEighteenTest\?18:isOfficialEightTest\?8:isOfficialFourTest\?4:2/);
  assert.match(html,/renderQuality\.value='auto'/);
  assert.match(html,/renderQuality\.value=isOfficialEightTest\?'standard'/);
- assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:!\(isOfficialEightTest\|\|isOfficialEighteenTest\),/);
+ assert.match(html,/new THREE\.WebGLRenderer\(\{antialias:true,/);
  assert.match(extract('initializeOfficialPair'),/cloneSkeleton\(source\)/);
  assert.match(extract('initializeOfficialPair'),/for\(let i=0;i<OFFICIAL_TEST_COUNT;i\+\+\)/);
  assert.match(extract('updateOfficialPair'),/h\.mixer\.setTime\(gaitTime\)/);
