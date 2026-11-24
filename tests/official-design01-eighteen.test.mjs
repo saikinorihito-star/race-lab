@@ -28,10 +28,10 @@ function sim(distance,variant='actual'){
   "const fieldCenterAt=(_p,d)=>({p:{y:0},width:variant==='actual'?widthAt(startStation+d):variant==='pocket24'?(d<250?24:d<310?24+12*(d-250)/60:36):(d<250?28:d<310?28+8*(d-250)/60:36)});",
   "let raceElapsed=0,raceFinished=[];const firstWidth=fieldCenterAt(activePlan,0).width;",
   "const raceHorses=Array.from({length:18},(_,i)=>({idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,slot:i,lane:eighteenStartLane(firstWidth,i),energy:1,passGoal:null,passUntil:0,passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,blockedFor:0,last600StartTime:null}));",
-  "let rail=Infinity,outer=Infinity,minSep=Infinity,stops=0,postStops=0,sideOnly=0,stacked=0;",
+  "let rail=Infinity,outer=Infinity,minSep=Infinity,stops=0,postStops=0,sideOnly=0,stacked=0,maxSteeringError=0;",
   "const marks={};",
   "for(let tick=0;tick<32000&&raceFinished.length<18;tick++){",
-  "const before=raceHorses.map(h=>({d:h.distance,l:h.lane,p:h.postDistance||0,f:h.finished}));",
+  "const before=raceHorses.map(h=>({d:h.distance,l:h.lane,p:h.postDistance||0,f:h.finished,steering:h.smoothedSideSpeed??0}));",
   "stepOfficialPair(1/60);",
   "const lead=Math.max(...raceHorses.map(h=>h.distance));",
   "for(const m of [45,100,200,300])if(!marks[m]&&lead>=m){",
@@ -43,7 +43,8 @@ function sim(distance,variant='actual'){
   "if(b.f&&raceFinished.length<18&&h.postDistance-b.p<.01)postStops++;",
   "if(h.finished)continue;",
   "const w=fieldCenterAt(activePlan,h.distance).width;rail=Math.min(rail,w/2-h.lane);outer=Math.min(outer,w/2+h.lane);",
-  "const dx=h.distance-b.d,side=Math.max(0,h.lane-b.l-(fieldCenterAt(activePlan,h.distance).width-fieldCenterAt(activePlan,b.d).width)*.5);",
+  "const lateral=h.lane-b.l-(fieldCenterAt(activePlan,h.distance).width-fieldCenterAt(activePlan,b.d).width)*.5;const dx=h.distance-b.d,side=Math.max(0,lateral);",
+  "const expectedSteering=b.steering+(lateral*60-b.steering)*.1;maxSteeringError=Math.max(maxSteeringError,Math.abs(h.sideSpeed-expectedSteering));",
   "if(h.distance>30&&(h.speed<8||dx<.03))stops++;",
   "if(side>dx*.30001+.000001)sideOnly++;",
   "}",
@@ -53,7 +54,7 @@ function sim(distance,variant='actual'){
   "if(dy<2.35&&dx>4.8&&dx<20)stacked++;",
   "}",
   "}",
-  "return {done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks};"
+  "return {done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks,maxSteeringError};"
  ].join('\n');
  return new Function('distance','variant',source)(distance,variant);
 }
@@ -126,4 +127,12 @@ test('18-runners camera and automatic resolution retain the source model',()=>{
  assert.match(fn('resize'),/w===lastStageWidth&&h===lastStageHeight/);
  assert.match(html,/const EIGHTEEN_MERGE_LONGITUDINAL_BUFFER=6\.0/);
  assert.match(html,/const EIGHTEEN_SPACING_FROM=300/);
+});
+
+test('width transitions do not appear as false steering in the horse animation',()=>{
+ for(const variant of ['actual','pocket24','pocket28']){
+  const r=sim(2400,variant);
+  assert.equal(r.done,18);
+  assert.ok(r.maxSteeringError<1e-8,'Width-origin shift must not appear in filtered steering velocity: '+r.maxSteeringError);
+ }
 });
