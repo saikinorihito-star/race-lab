@@ -539,6 +539,24 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  </div>
  <p>初回は登録済みのiPhoneを先に保存してください。同じアカウントでMacにログインして受信すると、以後は自動同期します。登録内容は本人のみアクセス可能です。音源ファイル・画質は端末別です。</p>
 </details>
+<details id="racePresetPanel" hidden style="margin:9px 12px;padding:12px;background:#142b36;border:1px solid #537c80;border-radius:11px">
+ <summary>🏆 レースの登録・呼び出し <span id="racePresetActive"></span></summary>
+ <div style="display:grid;gap:10px;max-width:660px;margin-top:12px">
+  <label for="racePresetName">レース名（例：ジャパンカップ 2026）</label>
+  <input id="racePresetName" maxlength="60" type="text" placeholder="レース名を入力" style="min-height:44px;width:100%;box-sizing:border-box"/>
+  <button id="racePresetNew" type="button" style="min-height:44px">現在の出走馬・条件で新規登録</button>
+  <label for="racePresetSelect">保存済みのレース（最大30件）</label>
+  <select id="racePresetSelect" style="min-height:44px;width:100%"></select>
+  <div style="display:flex;flex-wrap:wrap;gap:7px">
+   <button id="racePresetLoad" type="button" style="min-height:44px">呼び出す</button>
+   <button id="racePresetUpdate" type="button" style="min-height:44px">選んだレースを上書き保存</button>
+   <button id="racePresetDelete" type="button" style="min-height:44px">削除</button>
+  </div>
+  <p id="racePresetPreview" style="white-space:pre-line;margin:0;font-size:12px;line-height:1.6"></p>
+  <p id="racePresetStatus" role="status" aria-live="polite" style="margin:0;color:#d8eebb"></p>
+  <p style="margin:0;font-size:12px;line-height:1.6">下の馬名・能力設定で18頭を編集し、ここでレースごとに保存します。他のレースの保存内容は変わりません。呼び出しは発馬機に戻してから行います。クラウド接続時はiPhone・Macで共有します。</p>
+ </div>
+</details>
 <details id="horseLibraryPanel" hidden>
  <summary>🐴 馬の登録・出走選択（最大100頭）</summary>
  <div class="libraryForm">
@@ -6770,17 +6788,21 @@ animate(0);
 // Optional cloud sync is isolated from the existing physics/render loop.
 if(isOfficialEighteenTest){
  const SHARED_SETTINGS='race-lab-shared-settings-v1';
+ const RACE_PRESET_BACKUP='race-lab-before-preset-load-v1';
+ let raceArchive=null,restoringSnapshot=false;
  function captureSharedSettings(){
   return {distance:Number(raceSelector.value),weather:raceWeatherSelect.value,
    going:raceGoingSelect.value,flowMode:raceFlowModeInput.value,
    flowSeed:validFlowSeed(raceFlowSeedInput.value),playback:Number(rate.value),
    bgmVolume:Number(raceBgmVolume.value),bgmEnabled:raceBgmEnabled,
    hoofVolume:Number(hoofSoundVolume.value),hoofEnabled:hoofSoundEnabled,
-   balance:Object.fromEntries(HORSE_ABILITY_KEYS.map(k=>[k,balanceWeights[k]]))};
+   balance:Object.fromEntries(HORSE_ABILITY_KEYS.map(k=>[k,balanceWeights[k]])),
+   ...(raceArchive?{raceArchive}: {})};
  }
  function captureSharedPayload(){
   return {version:1,library:{version:1,nextId:nextHorseLibraryId,lineup:horseIdentityBySlot.slice(),
-   horses:horseLibrary.map(h=>({id:h.id,name:h.name,ability:normalizeHorseAbility(horseAbilities[h.id]||h.ability,h.id)}))},
+   horses:horseLibrary.map(h=>({id:h.id,name:horseIdentityBySlot.includes(h.id)?officialRunnerNames[horseIdentityBySlot.indexOf(h.id)]:h.name,
+    ability:normalizeHorseAbility(horseAbilities[h.id]||h.ability,h.id)}))},
    settings:captureSharedSettings()};
  }
  function loadSharedSettings(s){
@@ -6803,8 +6825,13 @@ if(isOfficialEighteenTest){
   }
   refreshFlowStatus();syncRaceBgmControls();syncHoofSoundControls();selectRace();
  }
- try{loadSharedSettings(JSON.parse(localStorage.getItem(SHARED_SETTINGS)||'null'))}catch(e){console.warn('共有設定の読込に失敗',e)}
+ try{
+  const stored=JSON.parse(localStorage.getItem(SHARED_SETTINGS)||'null');
+  raceArchive=stored?.raceArchive??null;
+  loadSharedSettings(stored);
+ }catch(e){console.warn('共有設定の読込に失敗',e)}
  const saveSharedSettings=()=>{
+  if(restoringSnapshot)return;
   try{
    const current=JSON.stringify(captureSharedSettings());
    if(localStorage.getItem(SHARED_SETTINGS)!==current)localStorage.setItem(SHARED_SETTINGS,current);
@@ -6818,7 +6845,8 @@ if(isOfficialEighteenTest){
   const editing=active?.matches('input:not([type=button]):not([type=checkbox]),textarea,select');
   return !playing&&raceElapsed===0&&!balanceAuditBusy&&!editing&&
    !document.querySelector('#abilityStatus')?.textContent.startsWith('未保存')&&
-   !document.querySelector('#libraryName')?.value.trim();
+   !document.querySelector('#libraryName')?.value.trim()&&
+   !document.querySelector('#racePresetName')?.value.trim();
  }
  function restoreCloudPayload(payload,bind){
   if(!safeCloudReceive())throw Error('編集中です。保存してから同期してください。');
@@ -6832,17 +6860,103 @@ if(isOfficialEighteenTest){
    bind();
   }catch(e){set(RUNNER_LIBRARY_KEY,oldLibrary);set(SHARED_SETTINGS,oldSettings);throw e}
   // pagehide's local settings listener must not overwrite the freshly received state.
+  restoringSnapshot=true;
   window.removeEventListener('pagehide',saveSharedSettings);
   location.reload();
  }
  const byId=id=>document.getElementById(id);
  const panel=byId('cloudSyncPanel');panel.hidden=false;
- import('./race-cloud-sync.mjs').then(({startPrivateSync})=>startPrivateSync({
+ function initRacePresets(api){
+  const p=byId('racePresetPanel'),name=byId('racePresetName'),select=byId('racePresetSelect'),
+   status=byId('racePresetStatus'),preview=byId('racePresetPreview');
+  const empty=()=>({version:1,races:[],activeId:null});
+  const archive=()=>raceArchive??empty();
+  const selected=()=>archive().races.find(r=>r.id===select.value);
+  const say=t=>status.textContent=t;
+  const refreshPreview=()=>{
+   const r=selected();
+   preview.textContent=r?r.name+'｜芝'+r.conditions.distance+'m｜18頭\n'+r.horses.map((h,i)=>(i+1)+'番 '+h.name).join(' / '):'保存済みのレースはありません。';
+   byId('racePresetLoad').disabled=!r;byId('racePresetUpdate').disabled=!r;byId('racePresetDelete').disabled=!r;
+  };
+  const refresh=(id)=>{
+   select.replaceChildren();
+   for(const r of archive().races)select.add(new Option(r.name+'（芝'+r.conditions.distance+'m）',r.id));
+   if(id&&archive().races.some(r=>r.id===id))select.value=id;
+   const active=archive().races.find(r=>r.id===archive().activeId);
+   byId('racePresetActive').textContent=active?'｜'+active.name:'';
+   refreshPreview();
+  };
+  const safeEdit=()=>{
+   // Blur the race name field first, but never discard unsaved horse edits.
+   if(playing||raceElapsed!==0||balanceAuditBusy||
+    byId('abilityStatus')?.textContent.startsWith('未保存')||byId('libraryName')?.value.trim())
+    throw Error('発馬機に戻り、馬名・能力の編集中の内容を保存してください。');
+   if(restoringSnapshot)throw Error('レースを読み込み中です。');
+  };
+  function persistArchive(next){
+   if(!api.validRaceArchive(next))throw Error('保存内容が不正です。');
+   const before=raceArchive;raceArchive=next;
+   try{
+    const payload=captureSharedPayload();
+    if(!api.validPayload(payload)||new TextEncoder().encode(JSON.stringify(payload)).length>230000)
+     throw Error('同期データの容量上限です。古いレースを整理してください。');
+    localStorage.setItem(SHARED_SETTINGS,JSON.stringify(payload.settings));
+   }catch(e){raceArchive=before;throw e}
+  }
+  function currentPreset(id,title){return api.makeRacePreset(id,title,captureSharedPayload())}
+  function save(replace){
+   try{
+    safeEdit();
+    const existing=selected();
+    if(replace&&(!existing||!confirm('「'+existing.name+'」を現在の出走馬・能力で上書きしますか？')))return;
+    const title=name.value.trim()||(replace?existing.name:'');
+    if(!title)throw Error('レース名を入力してください。');
+    const id=replace?existing.id:crypto.randomUUID();
+    const preset=currentPreset(id,title);
+    persistArchive(api.saveRacePreset(archive(),preset,replace));
+    name.value='';refresh(id);say('「'+title+'」を保存しました。');
+   }catch(e){say(e.message)}
+  }
+  select.addEventListener('change',refreshPreview);
+  byId('racePresetNew').addEventListener('click',()=>save(false));
+  byId('racePresetUpdate').addEventListener('click',()=>save(true));
+  byId('racePresetDelete').addEventListener('click',()=>{
+   try{
+    safeEdit();const r=selected();if(!r||!confirm('「'+r.name+'」の保存済みレースを削除しますか？ 現在の馬は削除されません。'))return;
+    const a=archive();
+    persistArchive({version:1,races:a.races.filter(x=>x.id!==r.id),activeId:a.activeId===r.id?null:a.activeId});
+    refresh();say('レースを削除しました。');
+   }catch(e){say(e.message)}
+  });
+  byId('racePresetLoad').addEventListener('click',()=>{
+   try{
+    safeEdit();const r=selected();if(!r)return;
+    if(!confirm('「'+r.name+'」を呼び出しますか？ 現在の未登録・未上書きのレース設定は置き換わります。'))return;
+    const current=captureSharedPayload(),library=api.restoreRacePreset(current.library,r);
+    const next={...archive(),activeId:r.id},settings={...current.settings,...r.conditions,raceArchive:next};
+    const oldLibrary=localStorage.getItem(RUNNER_LIBRARY_KEY),oldSettings=localStorage.getItem(SHARED_SETTINGS);
+    const restore=(key,value)=>value===null?localStorage.removeItem(key):localStorage.setItem(key,value);
+    localStorage.setItem(RACE_PRESET_BACKUP,JSON.stringify(current));
+    try{
+     localStorage.setItem(RUNNER_LIBRARY_KEY,JSON.stringify(library));
+     localStorage.setItem(SHARED_SETTINGS,JSON.stringify(settings));
+    }catch(e){restore(RUNNER_LIBRARY_KEY,oldLibrary);restore(SHARED_SETTINGS,oldSettings);throw e}
+    restoringSnapshot=true;window.removeEventListener('pagehide',saveSharedSettings);location.reload();
+   }catch(e){say(e.message)}
+  });
+  p.hidden=false;
+  if(!api.validRaceArchive(archive())){say('保存済みレースの形式が不正です。上書きせず保持しています。');throw Error('不正なレース保存データ');}
+  refresh(archive().activeId);
+ }
+ import('./race-cloud-sync.mjs?v=2').then(api=>{
+  initRacePresets(api);
+  return api.startPrivateSync({
   capture:captureSharedPayload,restore:restoreCloudPayload,safe:safeCloudReceive,status:byId('cloudSyncStatus'),
   ui:{auth:byId('cloudAuth'),actions:byId('cloudActions'),email:byId('cloudEmail'),
    password:byId('cloudPassword'),signup:byId('cloudSignup'),login:byId('cloudLogin'),
    logout:byId('cloudLogout'),send:byId('cloudSend'),receive:byId('cloudReceive'),refresh:byId('cloudRefresh')}
- })).catch(e=>{byId('cloudSyncStatus').textContent='同期機能を読み込めません。端末保存は継続します。';console.warn(e)});
+  });
+ }).catch(e=>{byId('cloudSyncStatus').textContent='同期機能を読み込めません。端末保存は継続します。';console.warn(e)});
 }
 </script>
 </body></html>
