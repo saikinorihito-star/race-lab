@@ -30,10 +30,10 @@ export function syncDecision(binding,uid,local,remote){
 }
 function readBinding(){try{return JSON.parse(localStorage.getItem(BIND)||'null')}catch{return null}}
 export async function startPrivateSync({capture,restore,safe,status,ui}){
- let client=null,busy=false,user=null,latest=null,choice=false;
+ let client=null,busy=false,user=null,latest=null;
  const say=t=>status.textContent=t;
  const show=(logged,manual)=>{
-  ui.auth.hidden=logged;ui.actions.hidden=!logged;
+  ui.auth.hidden=logged;ui.auth.style.display=logged?'none':'flex';ui.actions.hidden=!logged;
   ui.email.disabled=logged;ui.password.disabled=logged;
   ui.send.hidden=!manual;ui.receive.hidden=!manual||!latest;
   ui.receive.disabled=!latest;
@@ -59,8 +59,8 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
   const request=remote?client.from(TABLE).update(next).eq('user_id',user.id).eq('revision',remote.revision):
    client.from(TABLE).insert(next);
   const {data,error}=await request.select('revision,payload,updated_at').maybeSingle();
-  if(error||!data){latest=await read();choice=true;show(true,true);throw Error('同期先が変更されたか、保存に失敗しました。端末データは保持されています。')}
-  bind(data);latest=data;choice=false;show(true,false);
+  if(error||!data){latest=await read();show(true,true);throw Error('同期先が変更されたか、保存に失敗しました。端末データは保持されています。')}
+  bind(data);latest=data;show(true,false);
   say('同期済み（クラウドに保存）');
  }
  function receive(local,remote){
@@ -78,7 +78,7 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
    const {data,error}=await client.auth.getSession();
    if(error)throw error;
    user=data.session?.user||null;
-   if(!user){latest=null;choice=false;show(false,false);say('未接続：端末内に保存しています');return}
+   if(!user){latest=null;show(false,false);say('未接続：端末内に保存しています');return}
    const local=capture(),remote=await read();latest=remote;
    if(!validPayload(local))throw Error('端末のデータ形式を確認できません。');
    // Never replace or upload an unseen local edit while a request was in flight.
@@ -95,13 +95,13 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
     receive(local,remote);return;
    }
    if(decision==='setup'||decision==='conflict'){
-    choice=true;show(true,true);
+    show(true,true);
     say(decision==='conflict'?'両端末に変更があります。上書き先を選んでください。':
      remote?'初回同期：クラウドを受信するか、この端末を基準にするか選択してください。':
      '初回同期：登録済みのiPhoneから「この端末をクラウドに保存」を押してください。');
     return;
    }
-   choice=false;show(true,false);
+   show(true,false);
    if(decision==='equal'){say('同期済み');return}
    if(decision==='ack'){bind(remote);say('同期済み');return}
    if(!safe()){say('同期保留：レース・編集終了後に反映します');return}
