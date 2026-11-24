@@ -3643,7 +3643,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   1-THREE.MathUtils.smoothstep(h.distance,12,110);
  desiredSpeed+=((profile.startAbility??5)-5)*.10*balanceWeights.start*launchPhase;
  const acceleration=profile.abilityModel===2?
-  THREE.MathUtils.lerp(3.32*(1+((profile.startAbility??5)-5)*.065*balanceWeights.start),profile.accel,
+  THREE.MathUtils.lerp(3.32*(1+((profile.startAbility??5)-5)*.035*balanceWeights.start),profile.accel,
    THREE.MathUtils.smoothstep(h.distance,100,180)):
   commonLaunch?3.32:profile.accel*(1+((profile.startAbility??5)-5)*.055*balanceWeights.start*launchPhase);
  let speed=h.speed+THREE.MathUtils.clamp(desiredSpeed-h.speed,
@@ -3672,8 +3672,9 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // During formation, allow safe inward gaps slightly earlier. Restore the
  // normal 6m buffer gradually from 170 to 230m; never relax the final
  // two-dimensional collision check or the lateral-distance budget.
- const mergeBuffer=5+THREE.MathUtils.smoothstep(h.distance,170,230)*
-  (EIGHTEEN_MERGE_LONGITUDINAL_BUFFER-5);
+ const earlyMerge=4.8;
+ const mergeBuffer=earlyMerge+THREE.MathUtils.smoothstep(h.distance,170,230)*
+  (EIGHTEEN_MERGE_LONGITUDINAL_BUFFER-earlyMerge);
  for(const other of snapshot){
   if(other.idx===h.idx||other.finished)continue;
   const along=other.distance+other.speed*dt-distance;
@@ -3700,12 +3701,12 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   // Race-replay-inspired driving rule: an outside move is exceptional.
   // Require sustained obstruction by a specific slower horse directly ahead.
   // Merely detecting congestion somewhere in the pack is insufficient.
+  const trafficRating=((profile.trafficAbility??5)-5)*balanceWeights.traffic;
   const blockingHorse=snapshot.filter(o=>o.idx!==h.idx&&!o.finished&&
    o.distance-h.distance>1.5&&o.distance-h.distance<10.5&&
    Math.abs(o.lane-h.lane)<1.85&&
-   targetSpeed>o.speed+.60&&h.speed>o.speed-.65)
+   targetSpeed>o.speed+Math.max(.32,.60-trafficRating*.04)&&h.speed>o.speed-.65)
    .sort((a,b)=>a.distance-b.distance)[0];
-  const trafficRating=((profile.trafficAbility??5)-5)*balanceWeights.traffic;
   const outsideAllowed=Boolean(blockingHorse)&&h.blockedFor>=Math.max(.95,1.65-trafficRating*.12)&&
    h.distance>140&&h.distance<activePlan.distance-110;
   const congestionAt=destination=>snapshot.reduce((total,o)=>{
@@ -3805,7 +3806,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   }
   let longitudinal=distance-predictedOtherDistance;
   let side=lane-otherLane;
-  const clearance=1.10; // 18 narrow gates start 1.12–1.15m apart
+  const clearance=widthAtNext>=31&&h.distance>12?1.50:1.10; // Preserve narrow gate spacing.
   if(Math.hypot(longitudinal,side)>=clearance)continue;
   const originalSide=railHoldingLane-otherLane;
   if(Math.abs(originalSide)>Math.abs(side)+.001){
@@ -3835,6 +3836,11 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   h.passGoal<railHoldingLane-.08&&h.passUntil>h.distance&&
   !!passTarget&&h.distance<=passTarget.distance+8;
  if(lane<railHoldingLane-1e-5&&!activeOutsidePass)lane=railHoldingLane;
+ // Braking can shorten the forward step after lateral motion was selected.
+ const finalWidth=fieldCenterAt(activePlan,distance).width;
+ const finalOrigin=h.lane+(finalWidth-width)*.5;
+ const finalBudget=Math.max(0,distance-h.distance)*FOUR_MAX_LATERAL_PER_FORWARD;
+ lane=THREE.MathUtils.clamp(finalOrigin+THREE.MathUtils.clamp(lane-railHoldingLane,-finalBudget,finalBudget),-finalWidth/2+1.48,fourHorseInnerLane(finalWidth)-.05);
  return {distance,lane,speed};
 }
 function stepOfficialPair(tick){
@@ -3973,11 +3979,12 @@ function stepOfficialPair(tick){
     const effort=THREE.MathUtils.clamp((result.speed-14.4)/2.6,0,1.6);
     const load=Math.sqrt(activePlan.distance/1800);
     const earlyShare=Math.max(0,1-(h.distance/activePlan.distance)/.70);
-    const composure=1-((profile.composureAbility??5)-5)*.06*balanceWeights.composure*earlyShare;
+    const composure=1-((profile.composureAbility??5)-5)*(profile.abilityModel===2?.085:.06)*balanceWeights.composure*earlyShare;
     const cost=physicalStep/Math.max(1,activePlan.distance)*
      (.37+.29*effort)*load/Math.max(.60,profile.endurance)*composure*
      (profile.abilityModel===2?1+(GOING_SEVERITY[raceGoingAtStart]??0)*Math.max(0,.16-((profile.goingAbility??5)-5)*.023*balanceWeights.going):1);
-    h.energy=THREE.MathUtils.clamp((h.energy??1)-cost,.07,1);
+    const uphillWork=profile.abilityModel===2?Math.max(0,(fieldCenterAt(activePlan,result.distance).p.y-fieldCenterAt(activePlan,h.distance).p.y)/DISPLAY_RELIEF)*.006*(1-((profile.hillAbility??5)-5)*.085*balanceWeights.hill):0;
+    h.energy=THREE.MathUtils.clamp((h.energy??1)-cost-uphillWork,.07,1);
    }
    // Compare the old and new widths BEFORE committing the new distance.
    // A shift of the lane coordinate origin is not a real steering motion.
