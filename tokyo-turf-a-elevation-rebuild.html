@@ -4781,8 +4781,22 @@ const camera18={yaw:0,pitch:0,zoom:1,pan:0,lift:0};
 let camera18CutPending=false; // Avoid passing through black 3D objects between views.
 const broadcastCameraLabel=document.querySelector('#broadcastCameraLabel');
 let lastBroadcastShotId=null,lastBroadcastFocusNumbers=[];
-let broadcastTransition=null,broadcastTransitionCanvas=null;
-const BROADCAST_PAN_MS=420,BROADCAST_DISSOLVE_MS=200;
+let broadcastTransition=null,broadcastTransitionCanvas=null,broadcastTracking=null;
+const BROADCAST_PAN_MS=680,BROADCAST_DISSOLVE_MS=320;
+// Critically damped tracking: exact time-domain update, no frame-count dependence.
+function smoothBroadcastVector(current,desired,velocity,dt){
+ const elapsed=Math.max(0,Math.min(.05,dt)),omega=18;
+ const decay=Math.exp(-omega*elapsed);
+ for(const axis of ['x','y','z']){
+  const error=current[axis]-desired[axis],v=velocity[axis];
+  const c=v+omega*error;
+  current[axis]=desired[axis]+(error+c*elapsed)*decay;
+  velocity[axis]=(v-omega*c*elapsed)*decay;
+ }
+}
+function newBroadcastTracking(){
+ return {eye:{x:0,y:0,z:0},target:{x:0,y:0,z:0}};
+}
 function broadcastTransitionMode(eye,target,shot){
  const a=target.clone().sub(eye),b=shot.target.clone().sub(shot.eye);
  // Only interpolate nearby, similarly oriented views; distant cameras
@@ -4791,8 +4805,9 @@ function broadcastTransitionMode(eye,target,shot){
  return eye.distanceTo(shot.eye)<=18&&target.distanceTo(shot.target)<=12&&
   cosine>=.82?'pan':'dissolve';
 }
-function resetBroadcastTransition(){
+function resetBroadcastTransition(preserveTracking=false){
  broadcastTransition=null;
+ if(!preserveTracking)broadcastTracking=null;
  if(broadcastTransitionCanvas){
   broadcastTransitionCanvas.hidden=true;
   broadcastTransitionCanvas.style.opacity='0';
@@ -4829,8 +4844,8 @@ function captureBroadcastTransitionFrame(){
 function updateBroadcastDissolve(time){
  if(broadcastTransition?.mode!=='dissolve')return;
  const u=Math.max(0,Math.min(1,(time-broadcastTransition.started)/BROADCAST_DISSOLVE_MS));
- if(u>=1){resetBroadcastTransition();return}
- const eased=u*u*(3-2*u);
+ if(u>=1){resetBroadcastTransition(true);return}
+ const eased=u*u*u*(u*(u*6-15)+10);
  if(broadcastTransitionCanvas)broadcastTransitionCanvas.style.opacity=String(1-eased);
 }
 function applyBroadcastCameraShot(shot,time,dt,force){
@@ -4852,8 +4867,9 @@ function applyBroadcastCameraShot(shot,time,dt,force){
    }
   }else if(broadcastTransitionMode(camera.position,controls.target,shot)==='pan'){
    resetBroadcastTransition();
-   broadcastTransition={mode:'pan',started:time,eye:camera.position.clone(),
-    target:controls.target.clone(),fov:camera.fov};
+   broadcastTransition={mode:'pan',started:time,
+    eyeOffset:camera.position.clone().sub(shot.eye),
+    targetOffset:controls.target.clone().sub(shot.target),fovOffset:camera.fov-shot.fov};
   }else{
    resetBroadcastTransition();
    // Hold the previous camera for ONE render; capture its image then cut
@@ -4865,16 +4881,28 @@ function applyBroadcastCameraShot(shot,time,dt,force){
  if(broadcastTransition?.mode==='pan'){
   const t=broadcastTransition;
   const u=Math.max(0,Math.min(1,(time-t.started)/BROADCAST_PAN_MS));
-  const eased=u*u*(3-2*u);
-  camera.position.copy(t.eye).lerp(shot.eye,eased);
-  controls.target.copy(t.target).lerp(shot.target,eased);
-  camera.fov=t.fov+(shot.fov-t.fov)*eased;
-  if(u>=1)resetBroadcastTransition();
+  const eased=u*u*u*(u*(u*6-15)+10);
+  // Decay the initial offset relative to the MOVING destination, rather than
+  // repeatedly lerping from a fixed world position towards a running horse.
+  const oldEye=camera.position.clone(),oldTarget=controls.target.clone();
+  camera.position.copy(shot.eye).addScaledVector(t.eyeOffset,1-eased);
+  controls.target.copy(shot.target).addScaledVector(t.targetOffset,1-eased);
+  camera.fov=shot.fov+t.fovOffset*(1-eased);
+  if(u>=1){
+   broadcastTracking=newBroadcastTracking();
+   const elapsed=Math.max(.001,Math.min(.05,dt));
+   for(const axis of ['x','y','z']){
+    broadcastTracking.eye[axis]=Math.max(-70,Math.min(70,(camera.position[axis]-oldEye[axis])/elapsed));
+    broadcastTracking.target[axis]=Math.max(-70,Math.min(70,(controls.target[axis]-oldTarget[axis])/elapsed));
+   }
+   resetBroadcastTransition(true);
+  }
  }else if(!cut&&!force){
-  const alpha=1-Math.exp(-Math.min(.05,dt)*12);
-  camera.position.lerp(shot.eye,alpha);
-  controls.target.lerp(shot.target,alpha);
-  camera.fov=shot.fov;
+  if(!broadcastTracking)broadcastTracking=newBroadcastTracking();
+  smoothBroadcastVector(camera.position,shot.eye,broadcastTracking.eye,dt);
+  smoothBroadcastVector(controls.target,shot.target,broadcastTracking.target,dt);
+  const alpha=1-Math.exp(-Math.max(0,Math.min(.05,dt))*10);
+  camera.fov+=(shot.fov-camera.fov)*alpha;
  }
  if(cut){lastBroadcastShotId=shot.broadcastShotId;broadcastLabelCutAt=time}
  lastBroadcastFocusNumbers=shot.focusNumbers||[];
