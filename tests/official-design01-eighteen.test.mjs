@@ -8,7 +8,7 @@ function fn(name){
  assert.ok(p>=0&&e>p,'Missing actual function '+name);
  return html.slice(p,e+2);
 }
-function sim(distance,variant='actual'){
+function sim(distance,variant='actual',overrides={}){
  const p4=html.match(/const FOUR_PACE_PROFILES=\[[\s\S]*?\];/)?.[0];
  const p8=html.match(/const EIGHT_PACE_PROFILES=\[[\s\S]*?\];/)?.[0];
  const p18=html.match(/const EIGHTEEN_PACE_PROFILES=Array\.from\([\s\S]*?\n\}\);/)?.[0];
@@ -21,13 +21,15 @@ function sim(distance,variant='actual'){
   "const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35,FOUR_RAIL_CENTER_CLEARANCE=2.8,FOUR_START_OUTSIDE_OFFSET=8,FOUR_INWARD_SETTLE_DISTANCE=160,FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=3.05,FOUR_INWARD_RATE=4.4,FOUR_MAX_LATERAL_PER_FORWARD=.30,EIGHT_MERGE_LONGITUDINAL_BUFFER=4.0,EIGHTEEN_MERGE_LONGITUDINAL_BUFFER=6.0,EIGHTEEN_SPACING_FROM=300,EIGHTEEN_MIN_ROLL_BASE=10.4,EIGHTEEN_MIN_ROLL_STAGGER=.01;",
   "const isOfficialEighteenTest=true,isOfficialEightTest=false,isOfficialFourTest=false,isOfficialMultiTest=true,OFFICIAL_TEST_COUNT=18;",
   width,p4,p8,p18,...names.map(fn),
+  html.match(/const HORSE_ABILITY_KEYS=\[[\s\S]*?\];/)[0],
+  ...['baseForRegisteredHorse','defaultHorseAbility','effectiveEighteenProfile'].map(fn),
   // Flat synthetic track profile: this fixture tests lane/pace mechanics, not real 3D course geometry.
-  "const eighteenCornerProfile=[],EIGHTEEN_CORNER_STEP=5,DISPLAY_RELIEF=1;const balanceWeights={distance:1,going:1,hill:1,start:1,traffic:1,composure:1};const GOING_SEVERITY={good:0},raceGoingAtStart='good',raceFlowAtStart={mode:'standard'};function captureRaceAnalysis(){}",
+  "const eighteenCornerProfile=[],EIGHTEEN_CORNER_STEP=5,DISPLAY_RELIEF=1;const balanceWeights={distance:1,going:1,hill:1,start:1,traffic:1,composure:1,course:1,speed:1,stamina:1,acceleration:1};const horseIdentityBySlot=Array.from({length:18},(_,i)=>i),horseAbilities=[];const GOING_SEVERITY={good:0},raceGoingAtStart='good',raceFlowAtStart={mode:'standard'};function captureRaceAnalysis(){}",
   "const LAP=2083.1,FINISH_DISTANCE=525.9,startStation=((FINISH_DISTANCE-distance)%LAP+LAP)%LAP;",
   "const activePlan={distance};",
   "const fieldCenterAt=(_p,d)=>({p:{y:0},width:variant==='actual'?widthAt(startStation+d):variant==='pocket24'?(d<250?24:d<310?24+12*(d-250)/60:36):(d<250?28:d<310?28+8*(d-250)/60:36)});",
   "let raceElapsed=0,raceFinished=[];const firstWidth=fieldCenterAt(activePlan,0).width;",
-  "const raceHorses=Array.from({length:18},(_,i)=>({idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,slot:i,lane:eighteenStartLane(firstWidth,i),energy:1,passGoal:null,passUntil:0,passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,blockedFor:0,last600StartTime:null}));",
+  "const raceHorses=Array.from({length:18},(_,i)=>({idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,slot:i,lane:eighteenStartLane(firstWidth,i),energy:1,passGoal:null,passUntil:0,passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,blockedFor:0,last600StartTime:null,raceProfile:overrides[i]?effectiveEighteenProfile(i,{...defaultHorseAbility(i),...overrides[i]}):undefined}));",
   "let rail=Infinity,outer=Infinity,minSep=Infinity,stops=0,postStops=0,sideOnly=0,stacked=0,maxSteeringError=0;",
   "const marks={};",
   "for(let tick=0;tick<32000&&raceFinished.length<18;tick++){",
@@ -54,9 +56,9 @@ function sim(distance,variant='actual'){
   "if(dy<2.35&&dx>4.8&&dx<20)stacked++;",
   "}",
   "}",
-  "return {done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks,maxSteeringError};"
+  "return {done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks,maxSteeringError,results:raceHorses.map(h=>({time:h.finishTime,energy:h.energy}))};"
  ].join('\n');
- return new Function('distance','variant',source)(distance,variant);
+ return new Function('distance','variant','overrides',source)(distance,variant,overrides);
 }
 
 test('18 horses keep the approved original Design01 GLB, rig and animation',()=>{
@@ -135,4 +137,26 @@ test('width transitions do not appear as false steering in the horse animation',
   assert.equal(r.done,18);
   assert.ok(r.maxSteeringError<1e-8,'Width-origin shift must not appear in filtered steering velocity: '+r.maxSteeringError);
  }
+});
+
+
+test('customized profiles preserve existing collision and completion thresholds',()=>{
+ const overrides=Object.fromEntries(Array.from({length:18},(_,i)=>[i,{speed:i%2?10:1,stamina:i%3?10:1,acceleration:i%2?1:10,course:i%3?1:10,start:i%2?10:1,traffic:i%2?10:1,composure:i%3?10:1,distance:i%2?10:1,preferredDistance:i%2?1400:3400}]));
+ for(const [distance,variant] of [[1400,'actual'],[2400,'actual'],[3400,'actual'],[2400,'pocket24']]){
+  const r=sim(distance,variant,overrides);
+  assert.equal(r.done,18,'all finish '+distance+' '+variant);
+  assert.equal(r.stops,0);assert.equal(r.postStops,0);assert.equal(r.sideOnly,0);
+  assert.ok(r.rail>=2.8-1e-7);assert.ok(r.outer>=1.48-1e-7);
+  assert.ok(r.minSep>=(variant==='actual'?1.48:1.08),'center separation '+distance+' '+variant+' '+r.minSep);
+ }
+});
+
+test('stamina and distance setting affect actual simulated race rather than just editor',()=>{
+ const low=sim(3400,'actual',{0:{stamina:1,preferredDistance:3400}}).results[0];
+ const high=sim(3400,'actual',{0:{stamina:10,preferredDistance:3400}}).results[0];
+ const wrong=sim(3400,'actual',{0:{stamina:10,preferredDistance:1400}}).results[0];
+ console.log('3400m sensitivity (seconds, remaining energy)',{low,high,wrong});
+ assert.ok(high.energy>low.energy,'stamina preserves energy');
+ assert.ok(high.time<low.time,'stamina improves race time');
+ assert.ok(high.time<wrong.time,'matching preferred distance improves race time');
 });

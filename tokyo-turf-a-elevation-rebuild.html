@@ -536,7 +536,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
    <button id="libraryRename" type="button">入力した名前に変更</button>
    <button id="libraryDelete" type="button">控え馬を削除する</button>
   </div>
-  <p>18頭の枠は固定です。出走枠の馬と交代しても登録馬の名前・11能力・脚質を維持します。レース中は出走馬を変更できません。</p>
+  <p>18頭の枠は固定です。出走枠の馬と交代しても登録馬の名前・10能力・脚質を維持します。レース中は出走馬を変更できません。</p>
   <p id="libraryStatus" role="status" aria-live="polite"></p>
  </div>
 </details>
@@ -555,11 +555,11 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  </div>
 </details>
 <details id="horseAbilityEditor" hidden>
- <summary>🐎 18頭の能力設定（11能力・10段階＋脚質）</summary>
+ <summary>🐎 18頭の能力設定（10能力・10段階＋脚質）</summary>
  <div class="abilityForm">
   <label>編集する馬 <select id="abilityHorseSelect" aria-label="能力を編集する馬"></select></label>
   <p class="abilityHint">数値能力はすべて1〜10の10段階、5が以前の50に相当する標準値です。保存済みの0〜100は自動的に引き継ぎます。脚質は5種類から選択します。</p>
-  <p id="abilityDistanceHint" class="abilityHint">距離適性は元の得意距離から離れた距離への対応力、コース適性は東京芝Aへの適性です。</p>
+  <p id="abilityDistanceHint" class="abilityHint">距離適性は得意距離から離れた距離への対応力、コース適性は東京芝Aへの適性です。得意距離は1000〜4000m、50m単位です。</p>
   <div class="abilityRow"><label for="abilitySpeed">速度</label><input id="abilitySpeed" type="range" min="1" max="10" step="1" value="5"/><output id="abilitySpeedValue" for="abilitySpeed">5</output></div>
   <div class="abilityRow"><label for="abilityStamina">スタミナ</label><input id="abilityStamina" type="range" min="1" max="10" step="1" value="5"/><output id="abilityStaminaValue" for="abilityStamina">5</output></div>
   <div class="abilityRow"><label for="abilityAcceleration">瞬発力</label><input id="abilityAcceleration" type="range" min="1" max="10" step="1" value="5"/><output id="abilityAccelerationValue" for="abilityAcceleration">5</output></div>
@@ -570,7 +570,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <div class="abilityRow"><label for="abilityGoing">馬場状態適性</label><input id="abilityGoing" type="range" min="1" max="10" step="1" value="5"/><output id="abilityGoingValue" for="abilityGoing">5</output></div>
   <div class="abilityRow"><label for="abilityHill">坂適性</label><input id="abilityHill" type="range" min="1" max="10" step="1" value="5"/><output id="abilityHillValue" for="abilityHill">5</output></div>
   <div class="abilityRow"><label for="abilityStart">スタート能力</label><input id="abilityStart" type="range" min="1" max="10" step="1" value="5"/><output id="abilityStartValue" for="abilityStart">5</output></div>
-  <div class="abilityRow"><label for="abilityFinish">末脚</label><input id="abilityFinish" type="range" min="1" max="10" step="1" value="5"/><output id="abilityFinishValue" for="abilityFinish">5</output></div>
+  <label>得意距離（m） <input id="abilityPreferredDistance" type="number" min="1000" max="4000" step="50" inputmode="numeric" aria-describedby="abilityDistanceHint"/></label>
   <label>脚質 <select id="abilityRole">
    <option value="逃げ">逃げ</option><option value="先行">先行</option>
    <option value="中団">中団</option><option value="差し">差し</option>
@@ -600,11 +600,11 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  <p class="analysisNote">残り800m・400m・200mで先頭馬が通過した瞬間の順位を記録します。数値はレース計算の結果であり、実際のJRA競走データではありません。映像の「この馬を追尾」は斜め前からの手動追尾視点です。</p>
 </details>
 <details id="balanceAuditPanel" hidden>
- <summary>⚖️ 11能力の自動バランス検証・補正</summary>
- <p>選んだ出走馬の各能力を5と10に設定して、2つの展開番号で計44走の比較を行います。対象馬のほかの能力は5に固定し、他の17頭の登録設定は変えません。現在の距離と馬場状態で検証します（良馬場では「馬場状態適性」の差は出ません）。結果は架空のAIモデルに対する感度検査です。</p>
+ <summary>⚖️ 10能力の自動バランス検証・補正</summary>
+ <p>選んだ出走馬の各能力を5と10に設定して、2つの展開番号で計40走の比較を行います。対象馬のほかの能力は5に固定し、他の17頭の登録設定は変えません。現在の距離と馬場状態で検証します（良馬場では「馬場状態適性」の差は出ません）。結果は架空のAIモデルに対する感度検査です。</p>
  <div class="balanceActions">
   <label>検証する馬 <select id="balanceHorse"></select></label>
-  <button type="button" id="balanceRun">11能力を自動検証</button>
+  <button type="button" id="balanceRun">10能力を自動検証</button>
   <button type="button" id="balanceApply" disabled>推奨補正を適用</button>
   <button type="button" id="balanceReset">補正を初期値に戻す</button>
  </div>
@@ -2933,11 +2933,11 @@ const EIGHTEEN_PACE_PROFILES=Array.from({length:18},(_,idx)=>{
 const HORSE_ABILITIES_KEY='race-lab-design01-18-abilities-v2';
 const HORSE_ABILITIES_LEGACY_KEY='race-lab-design01-18-abilities-v1';
 const HORSE_ROLE_OPTIONS=['逃げ','先行','中団','差し','追込'];
-const HORSE_ABILITY_KEYS=['speed','stamina','acceleration','finish','course',
+const HORSE_ABILITY_KEYS=['speed','stamina','acceleration','course',
  'distance','composure','traffic','going','hill','start'];
 const BALANCE_WEIGHTS_KEY='race-lab-18-ability-balance-v1';
 const BALANCE_ABILITY_LABELS={
- speed:'スピード',stamina:'スタミナ',acceleration:'瞬発力',finish:'末脚',
+ speed:'スピード',stamina:'スタミナ',acceleration:'瞬発力',
  course:'コース適性',distance:'距離適性',composure:'折り合い',
  traffic:'馬群対応力',going:'馬場状態適性',hill:'坂適性',start:'スタート能力'
 };
@@ -2969,9 +2969,10 @@ function storeBalanceWeights(next){
 }
 
 function defaultHorseAbility(index){
- return {speed:5,stamina:5,acceleration:5,finish:5,course:5,
+ return {speed:5,stamina:5,acceleration:5,course:5,
   distance:5,composure:5,traffic:5,going:5,hill:5,start:5,
-  role:baseForRegisteredHorse(index).role};
+  role:baseForRegisteredHorse(index).role,
+  preferredDistance:baseForRegisteredHorse(index).preferredDistance};
 }
 function normalizeHorseAbility(raw,index){
  const result=defaultHorseAbility(index);
@@ -2982,6 +2983,8 @@ function normalizeHorseAbility(raw,index){
    result[key]=THREE.MathUtils.clamp(Math.round(val),1,10);
  }
  if(HORSE_ROLE_OPTIONS.includes(raw.role))result.role=raw.role;
+ if(typeof raw.preferredDistance==='number'&&Number.isFinite(raw.preferredDistance))
+  result.preferredDistance=THREE.MathUtils.clamp(Math.round(raw.preferredDistance/50)*50,1000,4000);
  return result;
 }
 // Read version 1 without modifying it: 50->5, 100->10, 0->1.
@@ -2997,7 +3000,7 @@ function loadHorseAbilities(){
   if(old?.version===1&&Array.isArray(old.horses))
    return defaults.map((_,i)=>{
     const raw=old.horses[i],migrated={};
-    for(const key of ['speed','stamina','acceleration','finish','course'])
+    for(const key of ['speed','stamina','acceleration','course'])
      if(typeof raw?.[key]==='number'&&Number.isFinite(raw[key]))
       migrated[key]=THREE.MathUtils.clamp(Math.round(raw[key]/10),1,10);
     if(HORSE_ROLE_OPTIONS.includes(raw?.role))migrated.role=raw.role;
@@ -3138,18 +3141,21 @@ function effectiveEighteenProfile(index,overrideAbility=null){
  const kickByRole={逃げ:.18,先行:.18,中団:.31,差し:.52,追込:.76};
  const timingByRole={逃げ:.72,先行:.72,中団:.72,差し:.29,追込:.37};
  return {...b,role,customized,baseEarly:b.early,
-  courseBonus:(v.course-5)*.10*balanceWeights.course,
+  courseBonus:(v.course-5)*.055*balanceWeights.course,
+  preferredDistance:v.preferredDistance??b.preferredDistance,
+  baseAccel:b.accel,
+  accelerationAbility:v.acceleration,
+  staminaAbility:v.stamina,
   distanceAbility:v.distance,
   composureAbility:v.composure,
   trafficAbility:v.traffic,
   goingAbility:v.going,
   hillAbility:v.hill,
   startAbility:v.start,
-  early:b.early+(v.speed-5)*.17*balanceWeights.speed,
-  accel:b.accel*(1+(v.acceleration-5)*.10*balanceWeights.acceleration),
+  early:b.early+(v.speed-5)*.10*balanceWeights.speed,
+  accel:b.accel*(1+(v.acceleration-5)*.09*balanceWeights.acceleration),
   endurance:THREE.MathUtils.clamp(b.endurance*
-   (1+(v.stamina-5)*.06*balanceWeights.stamina),.65,1.30),
-  finishStrength:b.finishStrength*(1+(v.finish-5)*.14*balanceWeights.finish),
+   (1+(v.stamina-5)*.09*balanceWeights.stamina),.60,1.42),
   kick:modified?kickByRole[role]:b.kick,
   kickStart:modified?timingByRole[role]:b.kickStart};
 }
@@ -3304,6 +3310,7 @@ function initHorseAbilityEditor(){
  const panel=document.querySelector('#horseAbilityEditor');
  const selector=document.querySelector('#abilityHorseSelect');
  const roleInput=document.querySelector('#abilityRole');
+ const preferredInput=document.querySelector('#abilityPreferredDistance');
  const status=document.querySelector('#abilityStatus');
  const ranges={
   speed:document.querySelector('#abilitySpeed'),
@@ -3315,8 +3322,7 @@ function initHorseAbilityEditor(){
   traffic:document.querySelector('#abilityTraffic'),
   going:document.querySelector('#abilityGoing'),
   hill:document.querySelector('#abilityHill'),
-  start:document.querySelector('#abilityStart'),
-  finish:document.querySelector('#abilityFinish')
+  start:document.querySelector('#abilityStart')
  };
  for(let i=0;i<18;i++)selector.add(new Option((i+1)+'番 '+officialRunnerNames[i],String(i)));
  refreshReserveAbilityOptions();
@@ -3329,10 +3335,10 @@ function initHorseAbilityEditor(){
   const v=horseAbilities[identity]||defaultHorseAbility(identity);
   for(const [key,range] of Object.entries(ranges))range.value=v[key];
   roleInput.value=v.role;
+  preferredInput.value=v.preferredDistance;
   updateLabels();
   document.querySelector('#abilityDistanceHint').textContent=
-   'この馬の元の得意距離：約'+baseForRegisteredHorse(identity).preferredDistance+
-   'm。距離適性は他の距離への対応力を表します。';
+   '得意距離は1000〜4000m・50m単位。距離適性は他の距離への対応力です。';
   status.textContent='編集後は「この馬の能力を保存」を押してください。';
  };
  const dirty=()=>{
@@ -3341,6 +3347,7 @@ function initHorseAbilityEditor(){
  selector.addEventListener('change',loadSelected);
  for(const range of Object.values(ranges))range.addEventListener('input',dirty);
  roleInput.addEventListener('change',dirty);
+ preferredInput.addEventListener('input',dirty);
  const persist=()=>{
   try{
    if(!persistHorseLibrary())throw new Error('登録馬の保存に失敗しました');
@@ -3358,8 +3365,10 @@ function initHorseAbilityEditor(){
   const index=text.startsWith('reserve:')?Number(text.slice(8)):
    horseIdentityBySlot[slot]??slot;
   const old=horseAbilities[index];
+  if(!reset&&preferredInput.value.trim()===''){status.textContent='得意距離を入力してください。';return;}
+  if(!reset&&!preferredInput.reportValidity())return;
   const changes=reset?defaultHorseAbility(index):
-   normalizeHorseAbility({role:roleInput.value,...Object.fromEntries(
+   normalizeHorseAbility({role:roleInput.value,preferredDistance:Number(preferredInput.value),...Object.fromEntries(
     Object.entries(ranges).map(([key,range])=>[key,Number(range.value)]))},index);
   horseAbilities[index]=changes;
   if(!persist()){horseAbilities[index]=old;return}
@@ -3389,6 +3398,7 @@ function balanceTrial(slot,key,level,seed,starterSnapshot){
  try{
   const id=horseIdentityBySlot[slot],ability=defaultHorseAbility(id);
   ability.role=(horseAbilities[id]||ability).role;
+  ability.preferredDistance=(horseAbilities[id]||ability).preferredDistance;
   ability[key]=level;
   raceHorses=starterSnapshot.map(h=>{
    const profile=h.idx===slot?effectiveEighteenProfile(h.idx,ability):
@@ -3482,7 +3492,7 @@ function initBalanceAudit(){
    }
    recommendedBalanceWeights=proposals?weights:null;
    apply.disabled=!recommendedBalanceWeights;
-   info.textContent='44走の比較完了。偏り候補'+
+   info.textContent='40走の比較完了。偏り候補'+
     rows.filter(r=>r.warning).length+'項目・補正候補'+proposals+
     '項目。'+(proposals?'適用ボタンを押すまで変更しません。':
      '補正の追加は不要と判定しました。');
@@ -3511,11 +3521,11 @@ function initBalanceAudit(){
      mean(high,'rank'),wins,warning});
     writeRows(rows);
    }
-   info.textContent='実走AIを比較中：'+progress+'/44走';
+   info.textContent='実走AIを比較中：'+progress+'/40走';
    if(progress===jobs.length)finish();
    else requestAnimationFrame(next);
   };
-  info.textContent='実走AIを比較中：0/44走';
+  info.textContent='実走AIを比較中：0/40走';
   requestAnimationFrame(next);
  });
  apply.addEventListener('click',()=>{
@@ -3536,7 +3546,7 @@ function initBalanceAudit(){
   }
   recommendedBalanceWeights=null;apply.disabled=true;tbody.replaceChildren();
   if(activePlan)initRaceHorses();
-  info.textContent='11能力の補正係数を初期値に戻しました。';
+  info.textContent='10能力の補正係数を初期値に戻しました。';
  });
  panel.hidden=false;
 }
@@ -3643,7 +3653,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   1-THREE.MathUtils.smoothstep(h.distance,12,110);
  desiredSpeed+=((profile.startAbility??5)-5)*.10*balanceWeights.start*launchPhase;
  const acceleration=commonLaunch?3.32:
-  profile.accel*(1+((profile.startAbility??5)-5)*.055*balanceWeights.start*launchPhase);
+  THREE.MathUtils.lerp(profile.accel,profile.baseAccel??profile.accel,launchPhase)*
+   (1+((profile.startAbility??5)-5)*.065*balanceWeights.start*launchPhase);
  let speed=h.speed+THREE.MathUtils.clamp(desiredSpeed-h.speed,
   -(desiredSpeed<h.speed?4.4:acceleration)*dt,acceleration*dt);
  speed=Math.max(Math.min(EIGHTEEN_MIN_ROLL_BASE+
@@ -3683,7 +3694,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // never crossed instantaneously, even when it is the shorter path.
  if(h.distance>105&&h.distance<activePlan.distance-90&&
     h.blockedFor>THREE.MathUtils.clamp(
-     .9-((h.raceProfile?.trafficAbility??5)-5)*.085*balanceWeights.traffic+
+     .9-((h.raceProfile?.trafficAbility??5)-5)*.10*balanceWeights.traffic+
       (h.raceFlow?.trafficPatience??0),.50,1.45)&&
     h.passUntil<=h.distance&&h.passCooldown<=h.distance&&
     !holdingOutside&&
@@ -3703,7 +3714,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
    Math.abs(o.lane-h.lane)<1.85&&
    targetSpeed>o.speed+.60&&h.speed>o.speed-.65)
    .sort((a,b)=>a.distance-b.distance)[0];
-  const outsideAllowed=Boolean(blockingHorse)&&h.blockedFor>=1.65&&
+  const outsideAllowed=Boolean(blockingHorse)&&h.blockedFor>=THREE.MathUtils.clamp(
+    1.65-((h.raceProfile?.trafficAbility??5)-5)*.07*balanceWeights.traffic,1.3,2.0)&&
    h.distance>140&&h.distance<activePlan.distance-110;
   const congestionAt=destination=>snapshot.reduce((total,o)=>{
    if(o.idx===h.idx||o.finished)return total;
@@ -3890,9 +3902,12 @@ function stepOfficialPair(tick){
      (fit-.5)*.70+(profile.courseBonus??0);
     // Resilience across distances beyond the runner's inherited preference.
     targetSpeed+=((profile.distanceAbility??5)-5)*.095*balanceWeights.distance*(1-fit);
+     // Stamina affects fatigue; acceleration supplies the closing burst.
+     targetSpeed+=((profile.staminaAbility??5)-5)*.16*(1-energy)*(balanceWeights.stamina??1);
+     targetSpeed+=((profile.accelerationAbility??5)-5)*.085*closing*energy*(balanceWeights.acceleration??1);
     // Changing going is a race condition; 良/5 has zero new effect.
     const wet=GOING_SEVERITY[raceGoingAtStart]??0;
-    targetSpeed+=wet*(-.34+((profile.goingAbility??5)-5)*.115*balanceWeights.going);
+    targetSpeed+=wet*(-.34+((profile.goingAbility??5)-5)*.085*balanceWeights.going);
     // Use unexaggerated course elevation. DISPLAY_RELIEF affects 3D only.
     const next=Math.min(activePlan.distance,h.distance+12);
     const previousDist=Math.max(0,h.distance-12);
@@ -3900,7 +3915,7 @@ function stepOfficialPair(tick){
      (fieldCenterAt(activePlan,next).p.y-
       fieldCenterAt(activePlan,previousDist).p.y)/
      Math.max(1,next-previousDist)/DISPLAY_RELIEF,0,.045);
-    targetSpeed+=((profile.hillAbility??5)-5)*uphill*3.6*balanceWeights.hill;
+    targetSpeed+=((profile.hillAbility??5)-5)*uphill*6.5*balanceWeights.hill;
     // Seeded pace variations preserve the same deterministic 60Hz engine.
     // Early pace pressure varies with role; the end of the race can reverse it.
     if(raceFlowAtStart.mode==='varied'&&h.raceFlow){
