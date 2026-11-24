@@ -22,6 +22,8 @@ main{max-width:1320px;margin:0 auto}
  font-weight:750;pointer-events:none;line-height:1.5}
 #stage{height:min(69svh,720px);min-height:370px;position:relative;background:linear-gradient(#a2d1da,#cce5da);overflow:hidden;touch-action:none}
 #stage canvas{display:block}
+#broadcastTransitionFrame{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
+#broadcastTransitionFrame[hidden]{display:none!important}
 #stage > canvas.race-webgl-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #raceRainCanvas{position:absolute;inset:0;z-index:2;width:100%;height:100%;pointer-events:none;touch-action:none}
 #raceRainCanvas[hidden]{display:none!important}
@@ -4759,6 +4761,107 @@ const camera18={yaw:0,pitch:0,zoom:1,pan:0,lift:0};
 let camera18CutPending=false; // Avoid passing through black 3D objects between views.
 const broadcastCameraLabel=document.querySelector('#broadcastCameraLabel');
 let lastBroadcastShotId=null,lastBroadcastFocusNumbers=[];
+let broadcastTransition=null,broadcastTransitionCanvas=null;
+const BROADCAST_PAN_MS=420,BROADCAST_DISSOLVE_MS=200;
+function broadcastTransitionMode(eye,target,shot){
+ const a=target.clone().sub(eye),b=shot.target.clone().sub(shot.eye);
+ // Only interpolate nearby, similarly oriented views; distant cameras
+ // cut in place so their flight never crosses grandstands or the horses.
+ const cosine=a.dot(b)/Math.max(.001,a.length()*b.length());
+ return eye.distanceTo(shot.eye)<=18&&target.distanceTo(shot.target)<=12&&
+  cosine>=.82?'pan':'dissolve';
+}
+function resetBroadcastTransition(){
+ broadcastTransition=null;
+ if(broadcastTransitionCanvas){
+  broadcastTransitionCanvas.hidden=true;
+  broadcastTransitionCanvas.style.opacity='0';
+ }
+}
+function captureBroadcastTransitionFrame(){
+ if(broadcastTransition?.mode!=='capture')return;
+ // Capture once, synchronously after the normal scene render. No second
+ // WebGL render, no preserveDrawingBuffer, no per-frame GPU readback.
+ broadcastTransition.mode='ready';
+ try{
+  if(!broadcastTransitionCanvas){
+   broadcastTransitionCanvas=document.createElement('canvas');
+   broadcastTransitionCanvas.id='broadcastTransitionFrame';
+   broadcastTransitionCanvas.hidden=true;
+   broadcastTransitionCanvas.setAttribute('aria-hidden','true');
+   stage.appendChild(broadcastTransitionCanvas);
+  }
+  const source=renderer.domElement;
+  if(!source.width||!source.height)return;
+  const scale=Math.min(1,960/Math.max(source.width,source.height));
+  const w=Math.max(1,Math.round(source.width*scale)),h=Math.max(1,Math.round(source.height*scale));
+  if(broadcastTransitionCanvas.width!==w)broadcastTransitionCanvas.width=w;
+  if(broadcastTransitionCanvas.height!==h)broadcastTransitionCanvas.height=h;
+  const ctx=broadcastTransitionCanvas.getContext('2d');
+  if(!ctx)return;
+  ctx.clearRect(0,0,w,h);
+  ctx.drawImage(source,0,0,w,h);
+  // Reject blank/black captures rather than introducing an iOS flash.
+  const sample=ctx.getImageData(Math.floor(w/2),Math.floor(h/4),1,1).data;
+  broadcastTransition.captured=sample[3]>0&&(sample[0]+sample[1]+sample[2]>18);
+ }catch(error){broadcastTransition.captured=false}
+}
+function updateBroadcastDissolve(time){
+ if(broadcastTransition?.mode!=='dissolve')return;
+ const u=Math.max(0,Math.min(1,(time-broadcastTransition.started)/BROADCAST_DISSOLVE_MS));
+ if(u>=1){resetBroadcastTransition();return}
+ const eased=u*u*(3-2*u);
+ if(broadcastTransitionCanvas)broadcastTransitionCanvas.style.opacity=String(1-eased);
+}
+function applyBroadcastCameraShot(shot,time,dt,force){
+ const cut=shot.broadcastShotId!==lastBroadcastShotId;
+ if(force||lastBroadcastShotId===null){
+  resetBroadcastTransition();
+  camera.position.copy(shot.eye);controls.target.copy(shot.target);
+  camera.fov=shot.fov;
+ }else if(cut){
+  if(broadcastTransition?.mode==='ready'){
+   const captured=broadcastTransition.captured;
+   resetBroadcastTransition();
+   camera.position.copy(shot.eye);controls.target.copy(shot.target);
+   camera.fov=shot.fov;
+   if(captured&&broadcastTransitionCanvas){
+    broadcastTransition={mode:'dissolve',started:time};
+    broadcastTransitionCanvas.style.opacity='1';
+    broadcastTransitionCanvas.hidden=false;
+   }
+  }else if(broadcastTransitionMode(camera.position,controls.target,shot)==='pan'){
+   resetBroadcastTransition();
+   broadcastTransition={mode:'pan',started:time,eye:camera.position.clone(),
+    target:controls.target.clone(),fov:camera.fov};
+  }else{
+   resetBroadcastTransition();
+   // Hold the previous camera for ONE render; capture its image then cut
+   // on the next frame. The normal race simulation continues unchanged.
+   broadcastTransition={mode:'capture',captured:false};
+   return;
+  }
+ }
+ if(broadcastTransition?.mode==='pan'){
+  const t=broadcastTransition;
+  const u=Math.max(0,Math.min(1,(time-t.started)/BROADCAST_PAN_MS));
+  const eased=u*u*(3-2*u);
+  camera.position.copy(t.eye).lerp(shot.eye,eased);
+  controls.target.copy(t.target).lerp(shot.target,eased);
+  camera.fov=t.fov+(shot.fov-t.fov)*eased;
+  if(u>=1)resetBroadcastTransition();
+ }else if(!cut&&!force){
+  const alpha=1-Math.exp(-Math.min(.05,dt)*12);
+  camera.position.lerp(shot.eye,alpha);
+  controls.target.lerp(shot.target,alpha);
+  camera.fov=shot.fov;
+ }
+ if(cut){lastBroadcastShotId=shot.broadcastShotId;broadcastLabelCutAt=time}
+ lastBroadcastFocusNumbers=shot.focusNumbers||[];
+ broadcastCameraLabel.textContent='📺 中継：'+shot.broadcastLabel;
+ camera.updateProjectionMatrix();
+ updateBroadcastDissolve(time);
+}
 const camera18Follow=document.querySelector('#cam18Follow');
 let camera18LatestAnchor=null,camera18FixedAnchor=null;
 const camera18Inputs={
@@ -5450,6 +5553,7 @@ function setView(which){
   syncCamera18Controls();
   broadcastCameraLabel.hidden=which!=='broadcast';
   lastBroadcastShotId=null;lastBroadcastFocusNumbers=[];
+  resetBroadcastTransition();
   if(which!=='broadcast'&&camera.fov!==43){
    camera.fov=43;camera.updateProjectionMatrix();
   }
@@ -6421,6 +6525,7 @@ function updateRaceRain(time){
 function animate(time){
  requestAnimationFrame(animate);
  if(graphicsContextLost){
+  if(isOfficialEighteenTest)resetBroadcastTransition();
   clock.getDelta(); // prevent a huge physics delta after the GPU resumes
   return;
  }
@@ -6464,28 +6569,20 @@ function animate(time){
   if(isOfficialPairTest&&installedDesign01&&activePlan&&pairTrackingView(view)){
    const shot=officialPairCameraShot(view);
    const onBroadcast=isOfficialEighteenTest&&view==='broadcast';
-   const cut=onBroadcast&&shot.broadcastShotId!==lastBroadcastShotId;
    if(onBroadcast){
-    lastBroadcastFocusNumbers=shot.focusNumbers||[];
-    broadcastCameraLabel.textContent='📺 中継：'+shot.broadcastLabel;
-    if(cut){
-     lastBroadcastShotId=shot.broadcastShotId;
-     broadcastLabelCutAt=time;
-     camera.fov=shot.fov;
-     camera.updateProjectionMatrix();
-    }
-   }else if(isOfficialEighteenTest&&camera.fov!==43){
-    camera.fov=43;camera.updateProjectionMatrix();
-   }
-   // Official-style camera switching uses hard cuts between stations,
-   // but smooth motor-like panning within each camera's own shot.
-   const alpha=1-Math.exp(-Math.min(.05,dt)*12);
-   if(cut||camera18CutPending){
-    camera.position.copy(shot.eye);
-    controls.target.copy(shot.target);
+    applyBroadcastCameraShot(shot,time,dt,camera18CutPending);
    }else{
-    camera.position.lerp(shot.eye,alpha);
-    controls.target.lerp(shot.target,alpha);
+    if(isOfficialEighteenTest&&camera.fov!==43){
+     camera.fov=43;camera.updateProjectionMatrix();
+    }
+    const alpha=1-Math.exp(-Math.min(.05,dt)*12);
+    if(camera18CutPending){
+     camera.position.copy(shot.eye);
+     controls.target.copy(shot.target);
+    }else{
+     camera.position.lerp(shot.eye,alpha);
+     controls.target.lerp(shot.target,alpha);
+    }
    }
    camera18CutPending=false;
    camera.lookAt(controls.target);
@@ -6511,6 +6608,7 @@ function animate(time){
  }
  renderLiveRaceMonitor(time);
  renderer.render(scene,camera);
+ if(isOfficialEighteenTest)captureBroadcastTransitionFrame();
  fpsCount++;
  if(time-lastTime>1200){
   fps=fpsCount*1000/(time-lastTime||1);fpsCount=0;lastTime=time;
