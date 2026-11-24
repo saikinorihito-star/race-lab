@@ -942,7 +942,7 @@ if(isOfficialEighteenTest){
  raceSpeedButtons.hidden=true;
  document.querySelector('#legacyRateLabel').hidden=true;
  // Keep the legacy selector for other modes; the race watcher has its own rates.
- rate.replaceChildren(...[1.5,2,3].map(v=>new Option(v+'倍',String(v))));
+ rate.replaceChildren(...[1,1.5,2,3].map(v=>new Option(v+'倍',String(v))));
  rate.value='1.5';
  watchPlaybackSpeed.hidden=false;
 }
@@ -4893,15 +4893,15 @@ const camera18Inputs={
 };
 function setRacePlaybackSpeed(speed){
  const next=Number(speed);
- if(![1.5,2,3].includes(next))return;
+ if(![1,1.5,2,3].includes(next))return;
  rate.value=String(next);
  watchPlaybackSpeed.textContent=next+'倍';
- const after=next===1.5?2:next===2?3:1.5;
+ const after=next===1?1.5:next===1.5?2:next===2?3:1;
  watchPlaybackSpeed.setAttribute('aria-label','再生速度'+next+'倍。押すと'+after+'倍');
 }
 function cycleRacePlaybackSpeed(){
  const current=Number(rate.value);
- setRacePlaybackSpeed(current===1.5?2:current===2?3:1.5);
+ setRacePlaybackSpeed(current===1?1.5:current===1.5?2:current===2?3:1);
 }
 if(isOfficialEighteenTest){
  watchPlaybackSpeed.addEventListener('click',cycleRacePlaybackSpeed);
