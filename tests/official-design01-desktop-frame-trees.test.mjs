@@ -108,7 +108,7 @@ test('watch playback starts at 1.5x and cycles 2x, 3x, 1.5x',()=>{
  ctx.setRacePlaybackSpeed(8);assert.equal(selector.value,'3');
  assert.match(html,/rate\.replaceChildren\(\.\.\.\[1\.5,2,3\]/);
  assert.match(html,/setRacePlaybackSpeed\(1\.5\)/);
- assert.match(html,/id="watchSeekBack"[^>]*>[^<]*<\/button>\s*<button id="watchPlaybackSpeed"/);
+ assert.match(html,/id="watchPlaybackSpeed"[^>]*>[^<]*<\/button>\s*<button id="watchSeekBack"/);
  assert.match(html,/watchPlaybackSpeed\.addEventListener\('click',cycleRacePlaybackSpeed\)/);
 });
 test('seeking preserves chosen playback speed; fixed simulation time follows the selected multiplier',()=>{
