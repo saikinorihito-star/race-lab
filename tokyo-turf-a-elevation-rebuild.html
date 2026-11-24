@@ -4530,7 +4530,14 @@ async function initializeOfficialPair(source,clip){
   const action=mixer.clipAction(clip);
   action.setLoop(THREE.LoopRepeat,Infinity);action.play();
   action.time=i*.07;
-  officialPair.push({group,mixer,headBone:model.getObjectByName('head'),
+  // Verified crown vertex of the approved 484459-vertex Horse_and_Jockey mesh.
+  // There is no separate jockey head bone in this quadruped rig.
+  let jockeyMesh=null;
+  if(isOfficialEighteenTest)model.traverse(node=>{
+   if(node.isSkinnedMesh&&node.geometry?.getAttribute('position')?.count===484459)
+    jockeyMesh=node;
+  });
+  officialPair.push({group,mixer,jockeyMesh,
    labelBounds:source.userData.raceLabelBounds});
   if(isOfficialEighteenTest&&(i+1)%3===0&&i+1<OFFICIAL_TEST_COUNT){
    document.querySelector('#officialPairStatus').textContent=
@@ -5160,6 +5167,16 @@ function runnerProjectedBodyRect(group,camera,width,height,bounds){
  }
  return left===Infinity?null:{left:left-4,right:right+4,top:top-4,bottom:bottom+4};
 }
+function runnerJockeyLabelAnchor(runner){
+ const mesh=runner.jockeyMesh;
+ if(!mesh)return null;
+ // Update the complete bone hierarchy and attached-mode inverse bind matrix
+ // before sampling the actual deformed vertex, not the horse's head bone.
+ runner.group.updateWorldMatrix(true,false);
+ runner.group.updateMatrixWorld(true);
+ const crown=mesh.getVertexPosition(232885,new THREE.Vector3());
+ return mesh.localToWorld(crown);
+}
 function updateRunnerNameLabels(time){
  if(!isOfficialEighteenTest||!installedDesign01||view!=='broadcast'||
     !activePlan||officialPair.length!==18||raceElapsed<5){
@@ -5201,14 +5218,9 @@ function updateRunnerNameLabels(time){
  for(const item of ranked){
   const runner=officialPair[item.index];
   if(!runner?.group?.visible)continue;
-  runner.group.updateWorldMatrix(true,false);
-  // The approved source mesh's highest vertex is y=0.663m.
-  // Anchor labels above the head, not over the visible torso.
-  // The approved GLB has a separate animated head bone, so the name
-  // follows the exact horse's head rather than hovering above the lane.
-  const labelAnchor=runner.headBone?
-   runner.headBone.getWorldPosition(new THREE.Vector3()):
-   runner.group.localToWorld(new THREE.Vector3(0,1.75,1.05));
+  // Name bubbles now point to the rider's helmet crown rather than the horse.
+  const labelAnchor=runnerJockeyLabelAnchor(runner);
+  if(!labelAnchor)continue;
   const projected=labelAnchor.project(camera);
   if(!Number.isFinite(projected.x+projected.y+projected.z)||
       projected.z<=-1||projected.z>=1)continue;
