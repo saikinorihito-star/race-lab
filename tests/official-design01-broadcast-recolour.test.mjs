@@ -224,9 +224,9 @@ test('TV editor alternates first-three close-up, third-place pack and wider fiel
   return camera({horses:current,lead:current[0],leadDistance,tailDistance,
    meanLane:7,gap:51});
  };
- const first=at(90),mid=at(300),tail=at(390),
-  third=at(520),frontPack=at(650),side=at(780),
-  sidePack=at(910),horseEye=at(1040),wide=at(1170);
+ const first=at(145),mid=at(220),tail=at(320),
+  third=at(520),frontPack=at(620),side=at(720),
+  sidePack=at(820),horseEye=at(920),wide=at(420);
  assert.match(first.broadcastShotId,/-lead$/);
  assert.match(mid.broadcastShotId,/-midPack$/);
  assert.match(tail.broadcastShotId,/-tailPack$/);
@@ -251,6 +251,24 @@ test('TV editor alternates first-three close-up, third-place pack and wider fiel
  assert.ok(dist(first)<dist(wide)*.75,'Leader closeup must be clearly closer than wide shot');
  assert.ok(dist(third)<dist(wide)*.75,'Third-place pack should be much closer than overview');
 });
+test('normal broadcast distributes nine cuts across front, middle and rear ranks',()=>{
+ const camera=makeShot(2400);
+ const groups=[];
+ for(let i=0;i<9;i++){
+  const progress=145+i*100;
+  const horses=Array.from({length:18},(_,j)=>({
+   number:j+1,distance:progress-j*2,lane:3+(j%4)*2,postDistance:0,speed:16
+  }));
+  const shot=camera({horses,lead:horses[0],leadDistance:progress,tailDistance:progress-34,gap:34,meanLane:6});
+  groups.push(shot.focusNumbers);
+ }
+ assert.deepEqual(groups.map(a=>a.join(',')),[
+  '1,2,3','5,6,7,8,9','13,14,15,16,17,18',
+  '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18',
+  '2,3,4,5','6,7,8,9,10','10,11,12,13,14',
+  '12,13,14,15,16,17,18','7,8,9'
+ ]);
+});
 test('reference front-pack and side-pack cameras use distinct low perspectives with real pack anchoring',()=>{
  const front=makeShot(1400),pack=Array.from({length:18},(_,i)=>({
   number:i+1,lane:2+(i%4)*2,distance:390-i*3,postDistance:0,speed:16
@@ -260,7 +278,7 @@ test('reference front-pack and side-pack cameras use distinct low perspectives w
   return front({horses,lead:horses[0],leadDistance:progress,
    tailDistance:progress-51,gap:51,meanLane:8});
  };
- const diagonal=shotAt(650),lateral=shotAt(910);
+ const diagonal=shotAt(620),lateral=shotAt(820);
  assert.match(diagonal.broadcastShotId,/-frontPack$/);
  assert.match(lateral.broadcastShotId,/-sidePack$/);
  assert.equal(diagonal.fov,39);
@@ -270,8 +288,8 @@ test('reference front-pack and side-pack cameras use distinct low perspectives w
  assert.notDeepEqual([diagonal.eye.x,diagonal.eye.y,diagonal.eye.z],
   [lateral.eye.x,lateral.eye.y,lateral.eye.z]);
  const source=fn('officialBroadcastCameraShot');
- assert.match(source,/focusType==='frontPack'\?ranked\.slice\(0,Math\.min\(5,ranked\.length\)\)/);
- assert.match(source,/focusType==='sidePack'\?ranked\.slice\(0,Math\.min\(7,ranked\.length\)\)/);
+ assert.match(source,/focusType==='frontPack'\?ranked\.slice\(Math\.min\(5,ranked\.length-1\),Math\.min\(10,ranked\.length\)\)/);
+ assert.match(source,/focusType==='sidePack'\?ranked\.slice\(Math\.max\(0,ranked\.length-7\)\)/);
  assert.match(source,/outside=14\.2;height=3\.45;ahead=22;fov=39/);
  assert.match(source,/outside=23\.5;height=4\.2;ahead=0;fov=43/);
  assert.match(html,/shot\.endsWith\('-sidePack'\)/);
@@ -288,7 +306,7 @@ test('opening sees all 18 and rear group cuts track actual last-place horses',()
   return shot({horses,lead:horses[0],leadDistance:progress,
    tailDistance:progress-68,gap:68,meanLane:8});
  };
- const opening=at(35),mid=at(280),rear=at(380),leader=at(145);
+ const opening=at(35),mid=at(220),rear=at(320),leader=at(145);
  assert.match(opening.broadcastShotId,/opening-wide$/);
  assert.match(mid.broadcastShotId,/-midPack$/);
  assert.match(rear.broadcastShotId,/-tailPack$/);
@@ -297,7 +315,7 @@ test('opening sees all 18 and rear group cuts track actual last-place horses',()
   opening.eye.y-opening.target.y,opening.eye.z-opening.target.z)<=88.001);
  assert.equal(opening.fov,55);
  const script=fn('officialBroadcastCameraShot');
- assert.match(script,/const selected=forming\?ranked/);
+ assert.match(script,/const selected=forming\|\|focusType==='wide'\?ranked/);
  assert.match(script,/focusType==='midPack'\?ranked\.slice\(Math\.min\(4,ranked\.length-1\),Math\.min\(9,ranked\.length\)\)/);
  assert.match(script,/focusType==='tailPack'\?ranked\.slice\(Math\.max\(0,ranked\.length-6\)\)/);
  assert.match(script,/outside=43;height=11\.5;ahead=20;fov=55/);
@@ -321,7 +339,7 @@ test('all TV shot types frame lower to reduce empty sky without losing horses',(
  const shot=makeShot(1400);
  const opening=shot(context(1400,35));
  const leader=shot(context(1400,145));
- const overview=shot(context(1400,1170));
+ const overview=shot(context(1400,420));
  assert.match(opening.broadcastShotId,/opening-wide$/);
  assert.match(leader.broadcastShotId,/-lead$/);
  assert.match(overview.broadcastShotId,/-wide$/);
