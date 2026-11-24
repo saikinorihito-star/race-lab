@@ -5163,14 +5163,14 @@ function officialBroadcastCameraShot(context){
  // repeatedly follow only the front runners.
  // Give low front-oblique tracking eight of twelve editorial slots.
  const cycle=Math.floor(Math.max(0,leadDistance-69)/100)%12;
- const forming=officialOpeningFormationWide(leadDistance,ranked);
- const focusType=forming?'opening':stageShot.id==='gate'?'gate':
-  remaining<=55?'lead':
+ const finalLeader=remaining<=400;
+ const forming=!finalLeader&&officialOpeningFormationWide(leadDistance,ranked);
+ const focusType=finalLeader?'lead':forming?'opening':stageShot.id==='gate'?'gate':
   ['lead','midPack','tailPack','wide','third','frontPack','side','sidePack','horseEye','midPack','frontPack','tailPack'][cycle];
  // Only two of the twelve normal slots prioritize the leaders.
  // Preserve all requested angles while assigning different groups to them.
  const selected=forming||focusType==='wide'?ranked:
-  focusType==='lead'?ranked.slice(0,Math.min(3,ranked.length)):
+  focusType==='lead'?(finalLeader?[leader]:ranked.slice(0,Math.min(3,ranked.length))):
   focusType==='midPack'?ranked.slice(Math.min(4,ranked.length-1),Math.min(9,ranked.length)):
   focusType==='tailPack'?ranked.slice(Math.max(0,ranked.length-6)):
   focusType==='frontPack'?ranked.slice(Math.min(5,ranked.length-1),Math.min(10,ranked.length)):
@@ -5243,7 +5243,7 @@ function officialBroadcastCameraShot(context){
  if(radius>maxDistance)eye.copy(target).addScaledVector(vector,maxDistance/radius);
  eye.y=Math.max(at.p.y+(focusType==='horseEye'?2.5:3.1),
   Math.min(eye.y,at.p.y+(forming?18:focusType==='wide'?13:focusType==='horseEye'?3.5:7.5)));
- const caption=forming?'スタート〜隊列形成・全18頭':
+ const caption=finalLeader?'残り400m〜ゴール・先頭馬追走':forming?'スタート〜隊列形成・全18頭':
   focusType==='gate'?'ゲート・発走':
   focusType==='lead'?'先頭集団・低い斜め前':
   focusType==='midPack'?'中団馬群・5〜9番手を追走':
@@ -5254,7 +5254,7 @@ function officialBroadcastCameraShot(context){
   focusType==='sidePack'?'後方馬群・低い真横の追走映像':
   focusType==='horseEye'?'中団・馬の目線':'馬群全景';
  return {eye,target,gap,focusedOnLead:focusType==='lead',focusNumbers:selected.map(h=>h.number),
-  fov,broadcastShotId:forming?'opening-wide':stageShot.id+'-'+focusType,
+  fov,broadcastShotId:finalLeader?'final-lead':forming?'opening-wide':stageShot.id+'-'+focusType,
   broadcastLabel:caption+'｜先頭 '+leader.number+'番 ／ 3番手 '+third.number+'番'};
 }
 let broadcastLabelCutAt=0,lastRunnerLabelPaint=-1;
