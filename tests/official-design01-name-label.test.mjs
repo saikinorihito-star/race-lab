@@ -19,7 +19,7 @@ test('中継は馬名の黒い吹き出しと三角形のしっぽで馬体を�
  assert.ok(html.includes("guide.line.setAttribute('fill','#07141b')"));
  assert.ok(!html.includes("const outline=runnerGuideNode('path',group)"));
  assert.ok(!html.includes("const dot=runnerGuideNode('circle',group)"));
- assert.ok(html.includes('RUNNER_BUBBLE_INTERVAL_MS=3000'));
+ assert.ok(html.includes('RUNNER_BUBBLE_INTERVAL_MS=4500'));
  assert.ok(html.includes("runner.headBone.getWorldPosition(new THREE.Vector3())"));
  assert.ok(!html.includes('runnerHorseBadges'));
  assert.ok(!html.includes('.runner-horse-badge'));
@@ -73,7 +73,7 @@ function guideHarness(){
   activePlan:{distance:1400},watchSelectedHorseIndex:null,raceElapsed:6,
   lastBroadcastShotId:'back-lead',lastBroadcastFocusNumbers:[],lastRunnerLabelPaint:-1,
   runnerBubbleShot:'',runnerBubbleLastTime:-1,runnerBubbleStep:0,
-  runnerBubbleTime:0,RUNNER_BUBBLE_INTERVAL_MS:3000,playing:true,
+  runnerBubbleTime:0,RUNNER_BUBBLE_INTERVAL_MS:4500,runnerBubbleHeld:[],runnerBubbleSelection:null,playing:true,
   stage:{clientWidth:400,clientHeight:500},
   camera:{updateMatrixWorld(){}},
   THREE:{Vector3:class {
@@ -124,24 +124,26 @@ test('近くの頭上以外に吹き出しを置かず、馬の頭の骨に追�
  h.update(1000);
  assert.ok(moved,'The horse-specific head bone should drive the label');
  assert.ok(Math.abs(Number(h.labels[0].style.left.replace('px',''))-200)<1);
- assert.match(extract('updateRunnerNameLabels'),/for\(const rise of \[10,12,14\]\)/);
- assert.match(extract('updateRunnerNameLabels'),/for\(const offset of \[0,-6,6\]\)/);
- assert.match(extract('updateRunnerNameLabels'),/Math\.hypot\(position\.left-x,tipY-position\.bottom\)>16/);
+ assert.match(extract('updateRunnerNameLabels'),/for\(const rise of \[15,17,20\]\)/);
+ assert.match(extract('updateRunnerNameLabels'),/for\(const offset of \[0,-6,6,-10,10\]\)/);
+ assert.match(extract('updateRunnerNameLabels'),/Math\.hypot\(position\.left-x,tipY-position\.bottom\)>20/);
 });
 test('中継では1頭ずつ順位順に切り替え、広角では2頭ずつ切り替える',()=>{
  const h=guideHarness();
  h.update(1000);
  assert.deepEqual(h.active(),['試験馬1']);
- for(let t=1100;t<=4100;t+=100)h.update(t);
- assert.deepEqual(h.active(),['試験馬2']);
- for(let t=4200;t<=7200;t+=100)h.update(t);
+ for(let t=1100;t<=5400;t+=100)h.update(t);
+ assert.deepEqual(h.active(),['試験馬1'],'Retain the name for 4.5 seconds');
+ h.update(5500);assert.deepEqual(h.active(),['試験馬2']);
+ for(let t=5600;t<=10000;t+=100)h.update(t);
  assert.deepEqual(h.active(),['試験馬3']);
  h.ctx.lastBroadcastShotId='back-wide';
- h.update(7300);
- assert.deepEqual(h.active(),['試験馬1','試験馬2']);
- for(let t=7400;t<=10700;t+=100)h.update(t);
+ h.update(10100);
+ assert.ok(h.active().includes('試験馬3'),'Retain the previous visible horse across the cut');
+ assert.equal(h.active().length,2);
+ for(let t=10200;t<=14600;t+=100)h.update(t);
  assert.deepEqual(h.active(),['試験馬3','試験馬5'],'Overlapping 4th runner is skipped');
- h.ctx.view='side';h.update(10800);
+ h.ctx.view='side';h.update(14700);
  assert.equal(h.active().length,0);
  assert.ok(h.guides.every(g=>g.group.style.display==='none'));
 });
@@ -149,14 +151,14 @@ test('選択した馬を常時優先し、他の馬名だけ順位順に切り�
  const h=guideHarness();
  h.ctx.watchSelectedHorseIndex=17;h.update(1000);
  assert.deepEqual(h.active(),['試験馬18','試験馬1']);
- for(let t=1100;t<=4100;t+=100)h.update(t);
+ for(let t=1100;t<=5500;t+=100)h.update(t);
  assert.deepEqual(h.active(),['試験馬18','試験馬2']);
  // The user may pause to inspect a named horse; do not rotate while paused.
  h.ctx.playing=false;
- for(let t=4200;t<=7000;t+=100)h.update(t);
+ for(let t=5600;t<=10000;t+=100)h.update(t);
  assert.deepEqual(h.active(),['試験馬18','試験馬2']);
  h.ctx.playing=true;
- for(let t=7100;t<=10100;t+=100)h.update(t);
+ for(let t=10100;t<=14500;t+=100)h.update(t);
  assert.equal(h.active()[0],'試験馬18');
  assert.notEqual(h.active()[1],'試験馬2','Next eligible nonoverlapping runner rotates');
 });
@@ -170,7 +172,7 @@ test('選択した18番を優先、密集時は違う馬と取り違えず、実
  assert.equal(h.labels[0].dataset.rank,'18');
  assert.equal(h.labels[0].dataset.selected,'true');
  assert.ok(Number(h.labels[0].style.top.replace('px',''))<250,'Horse name is above its torso');
- assert.ok(h.guides[0].line.values.d.includes('60.0 249.0'));
+ assert.ok(h.guides[0].line.values.d.includes('60.0 245.0'));
  assert.equal(h.guides[0].group.style.display,'');
 });
 
@@ -207,9 +209,9 @@ test('吹き出しは頭上に離れ、三角しっぽも馬体に入らない',
  assert.deepEqual(h.active(),['試験馬1']);
  const label=h.labels[0];
  const bottom=Number(label.style.top.replace('px',''));
- assert.ok(bottom>=236&&bottom<=240,'Bubble bottom stays within 14 px of the head');
+ assert.ok(bottom>=230&&bottom<=235,'Bubble stays close with a small clearance above the horse');
  const tail=h.guides[0].line.values.d;
- assert.ok(tail.includes('60.0 249.0'),'Tail stops 1 px short of the head anchor');
+ assert.ok(tail.includes('60.0 245.0'),'Tail stops 5 px short of the head anchor');
 });
 test('しっぽは短い単一三角形で、折り返しや二重パスがない',()=>{
  const h=guideHarness();h.update(1000);
@@ -219,9 +221,9 @@ test('しっぽは短い単一三角形で、折り返しや二重パスがな�
  assert.equal(Object.keys(h.guides[0]).sort().join(','),'group,line');
  const coords=d.match(/-?\d+\.\d+/g).map(Number);
  assert.equal(coords[2],60);
- assert.equal(coords[3],249);
+ assert.equal(coords[3],245);
  assert.equal(coords[1],coords[5]);
- assert.ok(coords[3]>coords[1]&&coords[3]-coords[1]<=14);
+ assert.ok(coords[3]>coords[1]&&coords[3]-coords[1]<=16);
 });
 test('後方カットの名前は撮影対象の馬を優先する',()=>{
  const h=guideHarness();
@@ -243,6 +245,20 @@ test('WebGLキャンバスと吹き出しは同じ表示領域でリサイズす
  });
  resize();resize();
  assert.deepEqual(calls,[[390,340,false]],'A portrait stage resize updates the framebuffer once');
+});
+test('馬の順位が入れ替わっても表示中の名前は保持される',()=>{
+ const h=guideHarness();
+ h.update(1000);
+ const before=h.ctx.rankedOfficialRunners;
+ h.ctx.rankedOfficialRunners=()=>{const a=before();return [a[1],a[0],...a.slice(2)]};
+ h.update(1100);h.update(1200);h.update(1300);
+ assert.deepEqual(h.active(),['試験馬1']);
+ assert.equal(h.labels[0].dataset.rank,'2');
+});
+test('BGMの初期音量は10％で手動変更可能',()=>{
+ assert.match(html,/id="raceBgmVolume" type="range" min="0" max="100" step="5" value="10"/);
+ assert.match(html,/id="raceBgmVolumeValue">10%<\/output>/);
+ assert.match(html,/Number\(raceBgmVolume\.value\)\/100\*fade/);
 });
 function rosterHarness(){
  const horses=Array.from({length:18},(_,i)=>({
