@@ -328,3 +328,31 @@ test('JRA風中継のカメラとモデルには手を加えない',()=>{
  assert.ok(html.includes('updateRunnerNameLabels(time)'));
  assert.ok(html.includes('const model=cloneSkeleton(source)'));
 });
+
+test('camera focus changes do not rotate an already visible name before 4.5 seconds',()=>{
+ const h=guideHarness();
+ h.ctx.lastBroadcastFocusNumbers=[1,2];
+ h.update(1000);assert.deepEqual(h.active(),['試験馬1']);
+ h.ctx.lastBroadcastFocusNumbers=[2,3];
+ for(let t=1100;t<=5400;t+=100){h.update(t);assert.deepEqual(h.active(),['試験馬1']);}
+ h.update(5500);assert.notEqual(h.active()[0],'試験馬1');
+});
+test('brief offscreen or overlapping horse reserves its slot until scheduled rotation',()=>{
+ const h=guideHarness();h.update(1000);
+ h.projected[0]=3;
+ for(let t=1100;t<=2500;t+=100){h.update(t);assert.deepEqual(h.active(),[]);}
+ h.projected[0]=-.7;h.update(2600);assert.deepEqual(h.active(),['試験馬1']);
+ const original=h.ctx.runnerProjectedBodyRect;
+ h.ctx.runnerProjectedBodyRect=()=>({left:0,right:400,top:100,bottom:240});
+ for(let t=2700;t<=4000;t+=100){h.update(t);assert.deepEqual(h.active(),[]);}
+ h.ctx.runnerProjectedBodyRect=original;h.update(4100);assert.deepEqual(h.active(),['試験馬1']);
+ h.update(5500);assert.deepEqual(h.active(),['試験馬2']);
+});
+test('name cadence uses wall clock rather than FPS or playback speed',()=>{
+ for(const interval of [17,25,50,100,500]){
+  const h=guideHarness();h.update(1000);
+  for(let t=1000+interval;t<5500;t+=interval){h.update(t);assert.deepEqual(h.active(),['試験馬1']);}
+  const next=1000+Math.ceil(4500/interval)*interval;
+  h.update(next);assert.deepEqual(h.active(),['試験馬2']);
+ }
+});
