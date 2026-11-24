@@ -136,7 +136,7 @@ test('near camera moves are eased and distant views dissolve without flying acro
  assert.equal(mode(eye,target,{eye:new V(5,6,0),target:new V(5,2,20)}),'pan');
  assert.equal(mode(eye,target,{eye:new V(60,6,0),target:new V(60,2,20)}),'dissolve');
  assert.equal(mode(eye,target,{eye:new V(0,6,25),target:new V(0,2,5)}),'dissolve');
- assert.match(html,/const BROADCAST_PAN_MS=420,BROADCAST_DISSOLVE_MS=200/);
+ assert.match(html,/const BROADCAST_PAN_MS=680,BROADCAST_DISSOLVE_MS=320/);
  assert.match(html,/applyBroadcastCameraShot\(shot,time,dt,camera18CutPending\)/);
  assert.match(html,/renderer\.render\(scene,camera\);\s*if\(isOfficialEighteenTest\)captureBroadcastTransitionFrame\(\)/);
  assert.match(fn('officialEighteenCameraShot'),/which==='broadcast'/);
@@ -147,11 +147,11 @@ function transitionHarness(){
  const ctx={camera:{position:new V(0,6,0),fov:40,updateProjectionMatrix(){}},
   controls:{target:new V(0,2,20)},lastBroadcastShotId:'lead',lastBroadcastFocusNumbers:[1],
   broadcastLabelCutAt:0,broadcastCameraLabel:{textContent:''},
-  broadcastTransition:null,broadcastTransitionCanvas:null,
-  BROADCAST_PAN_MS:420,BROADCAST_DISSOLVE_MS:200,
+  broadcastTransition:null,broadcastTransitionCanvas:null,broadcastTracking:null,
+  BROADCAST_PAN_MS:680,BROADCAST_DISSOLVE_MS:320,
   document:{createElement:()=>canvas},stage:{appendChild(){}},
   renderer:{domElement:{width:800,height:600}}};
- for(const name of ['broadcastTransitionMode','resetBroadcastTransition',
+ for(const name of ['smoothBroadcastVector','newBroadcastTracking','broadcastTransitionMode','resetBroadcastTransition',
   'captureBroadcastTransitionFrame','updateBroadcastDissolve','applyBroadcastCameraShot'])
   ctx[name]=runInNewContext('('+fn(name)+')',ctx);
  return {ctx,canvas,apply:ctx.applyBroadcastCameraShot};
@@ -161,10 +161,10 @@ test('near cut interpolates position, target and FOV and finishes exactly',()=>{
  h.apply(shot,1000,.016,false);
  assert.equal(h.ctx.camera.position.x,0);
  assert.equal(h.ctx.camera.fov,40);
- h.apply(shot,1210,.016,false);
+ h.apply(shot,1340,.016,false);
  assert.equal(h.ctx.camera.position.x,3);
  assert.equal(h.ctx.camera.fov,45);
- h.apply(shot,1420,.016,false);
+ h.apply(shot,1680,.016,false);
  assert.equal(h.ctx.camera.position.x,6);
  assert.equal(h.ctx.camera.fov,50);
  assert.equal(h.ctx.broadcastTransition,null);
@@ -179,12 +179,12 @@ test('distant cut captures once, jumps safely, fades out and resets on manual se
  h.apply(shot,1016,.016,false);
  assert.equal(h.ctx.camera.position.x,60);
  assert.equal(h.canvas.hidden,false);
- h.apply(shot,1116,.016,false);
+ h.apply(shot,1176,.016,false);
  assert.equal(h.canvas.style.opacity,'0.5');
- h.apply(shot,1216,.016,false);
+ h.apply(shot,1336,.016,false);
  assert.equal(h.canvas.hidden,true);
  assert.equal(h.ctx.broadcastTransition,null);
- h.apply({...shot,eye:new V(120,6,0),target:new V(120,2,20),broadcastShotId:'wide'},1300,.016,true);
+ h.apply({...shot,eye:new V(120,6,0),target:new V(120,2,20),broadcastShotId:'wide'},1400,.016,true);
  assert.equal(h.ctx.camera.position.x,120);
  assert.equal(h.ctx.broadcastTransition,null);
 });
@@ -564,4 +564,49 @@ test('final 400m locks broadcast on current leader and follows overtakes without
    assert.equal(shot.fov,40);
   }
  }
+});
+
+test('critically damped tracking remains monotonic and frame-rate independent for stationary targets',()=>{
+ const smooth=runInNewContext('('+fn('smoothBroadcastVector')+')',{});
+ const outputs=[];
+ for(const fps of [20,30,60,120]){
+  const pos=new V(0,0,0),dest=new V(12,-6,4),vel={x:0,y:0,z:0};
+  let last=0;
+  for(let i=0;i<fps;i++){
+   smooth(pos,dest,vel,1/fps);
+   assert.ok(pos.x>=last&&pos.x<=12&&pos.y>=-6&&pos.z<=4);
+   last=pos.x;
+  }
+  outputs.push(pos.x);
+  assert.ok(Math.abs(pos.x-12)<.001);
+ }
+ assert.ok(Math.max(...outputs)-Math.min(...outputs)<1e-8);
+});
+test('moving pan decays its relative offset and completes without another camera cut',()=>{
+ const h=transitionHarness();
+ const shotAt=t=>({eye:new V(6+t*20,6,0),target:new V(6+t*20,2,20),fov:45,broadcastShotId:'mid',focusNumbers:[5],broadcastLabel:'中団'});
+ h.apply(shotAt(0),1000,.016,false);
+ let prev=h.ctx.camera.position.x;
+ for(let i=1;i<=34;i++){
+  h.apply(shotAt(i*.02),1000+i*20,.02,false);
+  assert.ok(h.ctx.camera.position.x>=prev);
+  assert.ok(Math.abs(h.ctx.camera.position.x-h.ctx.controls.target.x)<1e-8);
+  prev=h.ctx.camera.position.x;
+ }
+ assert.equal(h.ctx.broadcastTransition,null);
+ assert.ok(Math.abs(h.ctx.camera.position.x-shotAt(.68).eye.x)<1e-8);
+ h.apply(shotAt(.70),1700,.02,false);
+ assert.ok(h.ctx.camera.position.x>=prev&&h.ctx.camera.position.x<=shotAt(.70).eye.x+.1);
+});
+test('same-shot leader switch is damped and seek clears stale camera velocity',()=>{
+ const h=transitionHarness(),shot={eye:new V(0,6,0),target:new V(0,2,20),fov:40,broadcastShotId:'final-lead',focusNumbers:[1],broadcastLabel:'先頭'};
+ h.apply(shot,1000,.016,true);
+ const next={...shot,eye:new V(8,6,0),target:new V(8,2,20),focusNumbers:[6]};
+ h.apply(next,1016,.016,false);
+ assert.ok(h.ctx.camera.position.x>0&&h.ctx.camera.position.x<1);
+ for(let i=1;i<=60;i++)h.apply(next,1016+i*16,.016,false);
+ assert.ok(Math.abs(h.ctx.camera.position.x-8)<.001);
+ h.apply(shot,2100,.016,true);
+ assert.equal(h.ctx.camera.position.x,0);
+ assert.equal(h.ctx.broadcastTracking,null);
 });
