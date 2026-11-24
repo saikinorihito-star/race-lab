@@ -15,17 +15,19 @@ function sim(distance,variant='actual'){
  const width=html.match(/function widthAt\(s\)\{[^\n]*\}/)?.[0];
  assert.ok(p4&&p8&&p18&&width);
  const names=['pairRailLane','fourHorseInnerLane','eightStartLane','eighteenStartLane',
-  'officialReviewLane','fourHorseSafeStep','eightHorseSafeStep','eighteenHorseSafeStep','stepOfficialPair'];
+  'officialReviewLane','fourHorseSafeStep','eightHorseSafeStep','cornerDataAt','cornerPacePenalty','cornerPathFactor','eighteenHorseSafeStep','stepOfficialPair'];
  const source=[
-  "const THREE={MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(b,v))}};",
+  "const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));const THREE={MathUtils:{clamp,lerp:(a,b,t)=>a+(b-a)*t,smoothstep:(v,a,b)=>{const t=clamp((v-a)/(b-a),0,1);return t*t*(3-2*t)}}};",
   "const PAIR_RAIL_CENTER_CLEARANCE=3.7,PAIR_LANE_SPACING=3.35,FOUR_RAIL_CENTER_CLEARANCE=2.8,FOUR_START_OUTSIDE_OFFSET=8,FOUR_INWARD_SETTLE_DISTANCE=160,FOUR_MIN_LONGITUDINAL=4.8,FOUR_LATERAL_SHARED=3.05,FOUR_INWARD_RATE=4.4,FOUR_MAX_LATERAL_PER_FORWARD=.30,EIGHT_MERGE_LONGITUDINAL_BUFFER=4.0,EIGHTEEN_MERGE_LONGITUDINAL_BUFFER=6.0,EIGHTEEN_SPACING_FROM=300,EIGHTEEN_MIN_ROLL_BASE=10.4,EIGHTEEN_MIN_ROLL_STAGGER=.01;",
   "const isOfficialEighteenTest=true,isOfficialEightTest=false,isOfficialFourTest=false,isOfficialMultiTest=true,OFFICIAL_TEST_COUNT=18;",
   width,p4,p8,p18,...names.map(fn),
+  // Flat synthetic track profile: this fixture tests lane/pace mechanics, not real 3D course geometry.
+  "const eighteenCornerProfile=[],EIGHTEEN_CORNER_STEP=5,DISPLAY_RELIEF=1;const balanceWeights={distance:1,going:1,hill:1,start:1,traffic:1,composure:1};const GOING_SEVERITY={good:0},raceGoingAtStart='good',raceFlowAtStart={mode:'standard'};function captureRaceAnalysis(){}",
   "const LAP=2083.1,FINISH_DISTANCE=525.9,startStation=((FINISH_DISTANCE-distance)%LAP+LAP)%LAP;",
   "const activePlan={distance};",
-  "const fieldCenterAt=(_p,d)=>({width:variant==='actual'?widthAt(startStation+d):variant==='pocket24'?(d<250?24:d<310?24+12*(d-250)/60:36):(d<250?28:d<310?28+8*(d-250)/60:36)});",
+  "const fieldCenterAt=(_p,d)=>({p:{y:0},width:variant==='actual'?widthAt(startStation+d):variant==='pocket24'?(d<250?24:d<310?24+12*(d-250)/60:36):(d<250?28:d<310?28+8*(d-250)/60:36)});",
   "let raceElapsed=0,raceFinished=[];const firstWidth=fieldCenterAt(activePlan,0).width;",
-  "const raceHorses=Array.from({length:18},(_,i)=>({idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,slot:i,lane:eighteenStartLane(firstWidth,i)}));",
+  "const raceHorses=Array.from({length:18},(_,i)=>({idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,slot:i,lane:eighteenStartLane(firstWidth,i),energy:1,passGoal:null,passUntil:0,passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,blockedFor:0,last600StartTime:null}));",
   "let rail=Infinity,outer=Infinity,minSep=Infinity,stops=0,postStops=0,sideOnly=0,stacked=0;",
   "const marks={};",
   "for(let tick=0;tick<32000&&raceFinished.length<18;tick++){",
@@ -41,7 +43,7 @@ function sim(distance,variant='actual'){
   "if(b.f&&raceFinished.length<18&&h.postDistance-b.p<.01)postStops++;",
   "if(h.finished)continue;",
   "const w=fieldCenterAt(activePlan,h.distance).width;rail=Math.min(rail,w/2-h.lane);outer=Math.min(outer,w/2+h.lane);",
-  "const dx=h.distance-b.d,side=Math.max(0,h.lane-b.l);",
+  "const dx=h.distance-b.d,side=Math.max(0,h.lane-b.l-(fieldCenterAt(activePlan,h.distance).width-fieldCenterAt(activePlan,b.d).width)*.5);",
   "if(h.distance>30&&(h.speed<8||dx<.03))stops++;",
   "if(side>dx*.30001+.000001)sideOnly++;",
   "}",
@@ -116,8 +118,8 @@ test('18-runners camera and automatic resolution retain the source model',()=>{
  assert.match(fn('officialPairCameraShot'),/isOfficialEighteenTest\?\(1-blend\)\*47/);
  assert.match(html,/renderQuality\.value='auto'/);
  assert.match(html,/autoTune18HorseResolution\(fps\)/);
- assert.match(html,/const initialDpr=isOfficialPairTest\?\(renderQuality\.value==='auto'\?1\.65/);
- assert.match(html,/let auto18Dpr=1\.65,auto18ObservedFps=0/);
+ assert.match(html,/const initialDpr=isOfficialPairTest\?\(renderQuality\.value==='auto'\?2\.25/);
+ assert.match(html,/let auto18Dpr=2\.25,auto18ObservedFps=0/);
  const tuner=fn('autoTune18HorseResolution');
  assert.ok(!tuner.includes('renderer.setPixelRatio('),'No framebuffer reallocation while FPS changes');
  assert.ok(!tuner.includes('renderer.setSize('),'No canvas resize triggered by FPS changes');
