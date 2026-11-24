@@ -5420,7 +5420,12 @@ function updateRunnerNameLabels(time){
   const bodyRect=runnerProjectedBodyRect(runner.group,camera,width,height,runner.labelBounds);
   visible.push({...item,x,y,bodyRect});
  }
- if(!visible.length)return;
+ if(!visible.length){
+  // An entirely offscreen field is also an interruption. Require stable
+  // visibility before restoring any held bubble on the following frames.
+  runnerBubbleHeld=runnerBubbleHeld.map(h=>({...h,missed:h.missed??time,clearSince:null}));
+  return;
+ }
  const selected=Number.isInteger(watchSelectedHorseIndex)?
   visible.find(h=>h.index===watchSelectedHorseIndex):null;
  const otherVisible=selected?visible.filter(h=>h.index!==selected.index):visible;
@@ -5451,7 +5456,9 @@ function updateRunnerNameLabels(time){
  for(const item of candidates){
   if(slot>=limit)break;
   const previous=runnerBubbleHeld.find(h=>h.index===item.index);
-  const reserve=()=>{if(previous){nextHeld.push({index:item.index,missed:previous.missed??time});slot++;}};
+  const reserve=(clearSince=null)=>{
+   if(previous){nextHeld.push({index:item.index,missed:previous.missed??time,clearSince});slot++;}
+  };
   if(item.reserved){reserve();continue}
   const {x,y}=item;
   if(occupiedTorso.some(p=>Math.hypot(p.x-x,p.y-y)<26)){reserve();continue}
@@ -5494,15 +5501,24 @@ function updateRunnerNameLabels(time){
    reserve();
    continue;
   }
+  // A blocked bubble is hidden immediately for silhouette safety. It is
+  // restored only after 350 ms of continuously valid screen geometry,
+  // rather than flashing on every animation-frame boundary.
+  const tipY=y-5;
+  if(Math.hypot(position.left-x,tipY-position.bottom)>20){
+   label.hidden=true;reserve();continue;
+  }
+  if(previous?.missed!=null){
+   const clearSince=previous.clearSince??time;
+   if(time-clearSince<350){
+    label.hidden=true;reserve(clearSince);continue;
+   }
+  }
   occupied.push(position.rect);
   occupiedTorso.push({x,y});
   label.style.left=position.left+'px';
   label.style.top=position.bottom+'px';
   // Keep the filled pointer short and outside the horse silhouette.
-  const tipY=y-5;
-  if(Math.hypot(position.left-x,tipY-position.bottom)>20){
-   label.hidden=true;reserve();continue;
-  }
   drawRunnerGuidePath(guide,position.left,position.bottom,x,tipY,
    frame.name==='黒'?'#f5f5f5':frame.hex);
   nextHeld.push({index:item.index,missed:null});slot++;
