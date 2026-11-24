@@ -71,7 +71,7 @@ function guideHarness(){
  const ctx={
   isOfficialEighteenTest:true,installedDesign01:true,view:'broadcast',
   activePlan:{distance:1400},watchSelectedHorseIndex:null,raceElapsed:6,
-  lastBroadcastShotId:'back-lead',lastRunnerLabelPaint:-1,
+  lastBroadcastShotId:'back-lead',lastBroadcastFocusNumbers:[],lastRunnerLabelPaint:-1,
   runnerBubbleShot:'',runnerBubbleLastTime:-1,runnerBubbleStep:0,
   runnerBubbleTime:0,RUNNER_BUBBLE_INTERVAL_MS:3000,playing:true,
   stage:{clientWidth:400,clientHeight:500},
@@ -124,9 +124,9 @@ test('近くの頭上以外に吹き出しを置かず、馬の頭の骨に追�
  h.update(1000);
  assert.ok(moved,'The horse-specific head bone should drive the label');
  assert.ok(Math.abs(Number(h.labels[0].style.left.replace('px',''))-200)<1);
- assert.match(extract('updateRunnerNameLabels'),/for\(const rise of \[3,5,7\]\)/);
- assert.match(extract('updateRunnerNameLabels'),/for\(const offset of \[0,-4,4\]\)/);
- assert.match(extract('updateRunnerNameLabels'),/Math\.hypot\(position\.left-x,tipY-position\.bottom\)>8/);
+ assert.match(extract('updateRunnerNameLabels'),/for\(const rise of \[10,12,14\]\)/);
+ assert.match(extract('updateRunnerNameLabels'),/for\(const offset of \[0,-6,6\]\)/);
+ assert.match(extract('updateRunnerNameLabels'),/Math\.hypot\(position\.left-x,tipY-position\.bottom\)>16/);
 });
 test('中継では1頭ずつ順位順に切り替え、広角では2頭ずつ切り替える',()=>{
  const h=guideHarness();
@@ -207,7 +207,7 @@ test('吹き出しは頭上に離れ、三角しっぽも馬体に入らない',
  assert.deepEqual(h.active(),['試験馬1']);
  const label=h.labels[0];
  const bottom=Number(label.style.top.replace('px',''));
- assert.ok(bottom>=243&&bottom<=247,'Bubble bottom stays within 7 px of the head');
+ assert.ok(bottom>=236&&bottom<=240,'Bubble bottom stays within 14 px of the head');
  const tail=h.guides[0].line.values.d;
  assert.ok(tail.includes('60.0 249.0'),'Tail stops 1 px short of the head anchor');
 });
@@ -221,7 +221,28 @@ test('しっぽは短い単一三角形で、折り返しや二重パスがな�
  assert.equal(coords[2],60);
  assert.equal(coords[3],249);
  assert.equal(coords[1],coords[5]);
- assert.ok(coords[3]>coords[1]&&coords[3]-coords[1]<=7);
+ assert.ok(coords[3]>coords[1]&&coords[3]-coords[1]<=14);
+});
+test('後方カットの名前は撮影対象の馬を優先する',()=>{
+ const h=guideHarness();
+ h.ctx.lastBroadcastShotId='back-tailPack';
+ h.ctx.lastBroadcastFocusNumbers=[18,5];
+ h.update(1000);
+ assert.deepEqual(h.active(),['試験馬5','試験馬18']);
+});
+test('WebGLキャンバスと吹き出しは同じ表示領域でリサイズする',()=>{
+ assert.match(html,/#stage > canvas\.race-webgl-canvas\{position:absolute;inset:0;width:100%;height:100%;display:block\}/);
+ assert.match(html,/renderer\.domElement\.classList\.add\('race-webgl-canvas'\)/);
+ assert.doesNotMatch(html,/renderer\.setSize\(stage\.clientWidth,stage\.clientHeight\);/);
+ assert.match(html,/raceStageObserver\?\.observe\(stage\)/);
+ const calls=[];
+ const resize=runInNewContext('('+extract('resize')+')',{
+  stage:{clientWidth:390,clientHeight:340},lastStageWidth:390,lastStageHeight:520,
+  camera:{aspect:1,updateProjectionMatrix(){}},
+  renderer:{setSize(...args){calls.push(args)}},view:'broadcast',drawElevationProfile(){}
+ });
+ resize();resize();
+ assert.deepEqual(calls,[[390,340,false]],'A portrait stage resize updates the framebuffer once');
 });
 function rosterHarness(){
  const horses=Array.from({length:18},(_,i)=>({
