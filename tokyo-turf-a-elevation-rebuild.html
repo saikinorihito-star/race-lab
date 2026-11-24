@@ -522,6 +522,23 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  <span>馬体・テクスチャは元のデザインを共有し、骨格とギャロップは馬ごとに独立。既存の18頭試作は変更しません。</span>
  <span id="officialPairStatus" role="status">1頭テストで保存したGLBを読み込みます。</span>
 </div>
+<details id="cloudSyncPanel" hidden style="margin:8px 12px;padding:12px;border:1px solid #527c79;border-radius:8px">
+ <summary>☁ iPhone・Mac データ共有</summary>
+ <p id="cloudSyncStatus" role="status" aria-live="polite">端末に保存しています</p>
+ <div id="cloudAuth" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+  <label>メール <input id="cloudEmail" type="email" autocomplete="email" placeholder="メールアドレス"/></label>
+  <label>パスワード <input id="cloudPassword" type="password" autocomplete="current-password" minlength="8"/></label>
+  <button id="cloudSignup" type="button">初回アカウント登録</button>
+  <button id="cloudLogin" type="button">ログイン</button>
+ </div>
+ <div id="cloudActions" hidden>
+  <button id="cloudSend" hidden type="button">この端末をクラウドに保存</button>
+  <button id="cloudReceive" hidden type="button">クラウドから受信</button>
+  <button id="cloudRefresh" type="button">今すぐ同期</button>
+  <button id="cloudLogout" type="button">ログアウト</button>
+ </div>
+ <p>初回は登録済みのiPhoneを先に保存してください。同じアカウントでMacにログインして受信すると、以後は自動同期します。登録内容は本人のみアクセス可能です。音源ファイル・画質は端末別です。</p>
+</details>
 <details id="horseLibraryPanel" hidden>
  <summary>🐴 馬の登録・出走選択（最大100頭）</summary>
  <div class="libraryForm">
@@ -541,7 +558,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  </div>
 </details>
 <details id="raceNameEditor" hidden>
- <summary>18頭の馬名を編集（端末に保存）</summary>
+ <summary>18頭の馬名を編集（端末・同期設定時はクラウドに保存）</summary>
  <div id="raceNameInputs"></div>
  <div id="raceGateSwap">
   <strong>枠順を変更（馬名と能力を一緒に移動）</strong>
@@ -6727,5 +6744,82 @@ function animate(time){
 }
 setupRaceWatchUI();
 animate(0);
+// Optional cloud sync is isolated from the existing physics/render loop.
+if(isOfficialEighteenTest){
+ const SHARED_SETTINGS='race-lab-shared-settings-v1';
+ function captureSharedSettings(){
+  return {distance:Number(raceSelector.value),weather:raceWeatherSelect.value,
+   going:raceGoingSelect.value,flowMode:raceFlowModeInput.value,
+   flowSeed:validFlowSeed(raceFlowSeedInput.value),playback:Number(rate.value),
+   bgmVolume:Number(raceBgmVolume.value),bgmEnabled:raceBgmEnabled,
+   hoofVolume:Number(hoofSoundVolume.value),hoofEnabled:hoofSoundEnabled,
+   balance:Object.fromEntries(HORSE_ABILITY_KEYS.map(k=>[k,balanceWeights[k]]))};
+ }
+ function captureSharedPayload(){
+  return {version:1,library:{version:1,nextId:nextHorseLibraryId,lineup:horseIdentityBySlot.slice(),
+   horses:horseLibrary.map(h=>({id:h.id,name:h.name,ability:normalizeHorseAbility(horseAbilities[h.id]||h.ability,h.id)}))},
+   settings:captureSharedSettings()};
+ }
+ function loadSharedSettings(s){
+  if(!s||typeof s!=='object')return;
+  if([1400,1600,1800,2000,2300,2400,2500,2600,3400].includes(s.distance))raceSelector.value=String(s.distance);
+  if(['sunny','cloudy','rain'].includes(s.weather))setRaceCondition('weather',s.weather);
+  if(['good','slightlyHeavy','heavy','bad'].includes(s.going))setRaceCondition('going',s.going);
+  if(['standard','varied'].includes(s.flowMode))raceFlowModeInput.value=s.flowMode;
+  if(Number.isFinite(s.flowSeed))raceFlowSeedInput.value=String(validFlowSeed(s.flowSeed));
+  if([1,1.5,2,3].includes(s.playback))setRacePlaybackSpeed(s.playback);
+  if(Number.isFinite(s.bgmVolume))raceBgmVolume.value=String(THREE.MathUtils.clamp(s.bgmVolume,0,100));
+  if(Number.isFinite(s.hoofVolume))hoofSoundVolume.value=String(THREE.MathUtils.clamp(s.hoofVolume,0,100));
+  if(typeof s.bgmEnabled==='boolean')raceBgmEnabled=s.bgmEnabled;
+  if(typeof s.hoofEnabled==='boolean')hoofSoundEnabled=s.hoofEnabled;
+  if(s.balance&&typeof s.balance==='object'){
+   const next=defaultBalanceWeights();
+   for(const k of HORSE_ABILITY_KEYS)if(Number.isFinite(s.balance[k]))
+    next[k]=THREE.MathUtils.clamp(s.balance[k],.55,1.15);
+   storeBalanceWeights(next);
+  }
+  refreshFlowStatus();syncRaceBgmControls();syncHoofSoundControls();selectRace();
+ }
+ try{loadSharedSettings(JSON.parse(localStorage.getItem(SHARED_SETTINGS)||'null'))}catch(e){console.warn('共有設定の読込に失敗',e)}
+ const saveSharedSettings=()=>{
+  try{
+   const current=JSON.stringify(captureSharedSettings());
+   if(localStorage.getItem(SHARED_SETTINGS)!==current)localStorage.setItem(SHARED_SETTINGS,current);
+  }catch(e){console.warn('共有設定の保存に失敗',e)}
+ };
+ document.addEventListener('change',()=>setTimeout(saveSharedSettings,0));
+ document.addEventListener('click',()=>setTimeout(saveSharedSettings,0));
+ window.addEventListener('pagehide',saveSharedSettings);
+ function safeCloudReceive(){
+  const active=document.activeElement;
+  const editing=active?.matches('input:not([type=button]):not([type=checkbox]),textarea,select');
+  return !playing&&raceElapsed===0&&!balanceAuditBusy&&!editing&&
+   !document.querySelector('#abilityStatus')?.textContent.startsWith('未保存')&&
+   !document.querySelector('#libraryName')?.value.trim();
+ }
+ function restoreCloudPayload(payload,bind){
+  if(!safeCloudReceive())throw Error('編集中です。保存してから同期してください。');
+  const oldLibrary=localStorage.getItem(RUNNER_LIBRARY_KEY),oldSettings=localStorage.getItem(SHARED_SETTINGS);
+  const set=(key,value)=>value===null?localStorage.removeItem(key):localStorage.setItem(key,value);
+  try{
+   const library={...payload.library,horses:payload.library.horses.map(h=>({
+    id:h.id,name:h.name.trim(),ability:normalizeHorseAbility(h.ability,h.id)}))};
+   localStorage.setItem(SHARED_SETTINGS,JSON.stringify(payload.settings));
+   localStorage.setItem(RUNNER_LIBRARY_KEY,JSON.stringify(library));
+   bind();
+  }catch(e){set(RUNNER_LIBRARY_KEY,oldLibrary);set(SHARED_SETTINGS,oldSettings);throw e}
+  // pagehide's local settings listener must not overwrite the freshly received state.
+  window.removeEventListener('pagehide',saveSharedSettings);
+  location.reload();
+ }
+ const byId=id=>document.getElementById(id);
+ const panel=byId('cloudSyncPanel');panel.hidden=false;
+ import('./race-cloud-sync.mjs').then(({startPrivateSync})=>startPrivateSync({
+  capture:captureSharedPayload,restore:restoreCloudPayload,safe:safeCloudReceive,status:byId('cloudSyncStatus'),
+  ui:{auth:byId('cloudAuth'),actions:byId('cloudActions'),email:byId('cloudEmail'),
+   password:byId('cloudPassword'),signup:byId('cloudSignup'),login:byId('cloudLogin'),
+   logout:byId('cloudLogout'),send:byId('cloudSend'),receive:byId('cloudReceive'),refresh:byId('cloudRefresh')}
+ })).catch(e=>{byId('cloudSyncStatus').textContent='同期機能を読み込めません。端末保存は継続します。';console.warn(e)});
+}
 </script>
 </body></html>
