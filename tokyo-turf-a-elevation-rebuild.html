@@ -455,6 +455,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 <button data-view="field">18頭を追走</button>
 </div>
 <div class="tools" id="raceStarts">
+<label>競馬場 <select id="raceCourseVenue" aria-label="競馬場"><option value="tokyo">東京（レース）</option><option value="nakayama">中山（コース検証版）</option></select></label>
 <label>レースの距離（S）
 <select id="raceDistance">
 <option value="1400">芝1400m</option>
@@ -5823,6 +5824,13 @@ function selectRace(){
   setView(fieldMode.value!=='single'?'start':(isDesign01Review?'side':'all'));
 }
 raceSelector.addEventListener('change',selectRace);
+document.querySelector('#raceCourseVenue').addEventListener('change',event=>{
+ if(event.target.value!=='nakayama')return;
+ event.target.value='tokyo';
+ if(playing||document.querySelector('#abilityStatus')?.textContent.startsWith('未保存')||document.querySelector('#libraryName')?.value.trim()||document.querySelector('#racePresetName')?.value.trim()){alert('レースを停止し、編集中の馬・レースを保存してから切り替えてください。');return;}
+ if(raceElapsed>0&&!confirm('進行中のレースを終了して中山のコース検証画面を開きますか？'))return;
+ location.href='./nakayama-course-preview.html';
+});
 fieldMode.addEventListener('change',()=>{selectRace();updateDesign01Panel();if(fieldMode.value!=='single')setView('start')});
 document.querySelector('#startView').addEventListener('click',()=>setView('start'));
 function resetDemo(){
