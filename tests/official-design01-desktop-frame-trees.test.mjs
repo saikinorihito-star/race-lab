@@ -94,26 +94,40 @@ test('tree placements favor turns and back straight, not home straight or the st
  assert.ok(siteList[2][0]>1551);
 });
 
-test('only 2x and 4x are exposed; selected speed toggles back to normal 1x',()=>{
- const rate=html.match(/<select id="rate">([\s\S]*?)<\/select>/)?.[1];
- assert.ok(rate);
- assert.deepEqual([...rate.matchAll(/<option value="([^"]+)"/g)].map(m=>m[1]),['1','2','4']);
- const buttons=[2,4].map(value=>({
-  dataset:{raceSpeed:String(value)},attrs:{},chosen:false,
-  classList:{toggle(){}},setAttribute(name,value){this.attrs[name]=value}
- }));
- const selector={value:'1'};
- const toolbar={querySelectorAll:()=>buttons};
- const setter=runInNewContext('('+extract('setRacePlaybackSpeed')+')',{
-  rate:selector,raceSpeedButtons:toolbar
- });
- setter(2);assert.equal(selector.value,'2');assert.equal(buttons[0].attrs['aria-pressed'],'true');
- setter(4);assert.equal(selector.value,'4');assert.equal(buttons[1].attrs['aria-pressed'],'true');
- setter(1);assert.equal(selector.value,'1');assert.ok(buttons.every(b=>b.attrs['aria-pressed']==='false'));
- setter(8);assert.equal(selector.value,'1','No unsupported speed option');
- assert.match(html,/Number\(rate\.value\)===requested\?1:requested/);
+test('watch playback starts at 1.5x and cycles 2x, 3x, 1.5x',()=>{
+ const selector={value:'1.5'},button={textContent:'',attrs:{},setAttribute(k,v){this.attrs[k]=v}};
+ const ctx={rate:selector,watchPlaybackSpeed:button};
+ ctx.setRacePlaybackSpeed=runInNewContext('('+extract('setRacePlaybackSpeed')+')',ctx);
+ const cycle=runInNewContext('('+extract('cycleRacePlaybackSpeed')+')',ctx);
+ ctx.setRacePlaybackSpeed(1.5);
+ assert.equal(button.textContent,'1.5倍');
+ assert.match(button.attrs['aria-label'],/押すと2倍/);
+ for(const v of [2,3,1.5,2,3]){
+  cycle();assert.equal(selector.value,String(v));assert.equal(button.textContent,v+'倍');
+ }
+ ctx.setRacePlaybackSpeed(8);assert.equal(selector.value,'3');
+ assert.match(html,/rate\.replaceChildren\(\.\.\.\[1\.5,2,3\]/);
+ assert.match(html,/setRacePlaybackSpeed\(1\.5\)/);
+ assert.match(html,/id="watchSeekBack"[^>]*>[^<]*<\/button>\s*<button id="watchPlaybackSpeed"/);
+ assert.match(html,/watchPlaybackSpeed\.addEventListener\('click',cycleRacePlaybackSpeed\)/);
 });
-
+test('seeking preserves chosen playback speed; fixed simulation time follows the selected multiplier',()=>{
+ const seek=extract('seekRaceSeconds');
+ assert.doesNotMatch(seek,/rate\.value\s*=/);
+ assert.match(seek,/raceElapsed\+delta/);
+ assert.match(seek,/playing=resumeAfterSeek&&!completed/);
+ assert.match(seek,/seekRaceBgm\(true\)/);
+ const ctx={raceAccumulator:0,rate:{value:'1.5'},RACE_TICK:1/60,
+  isOfficialPairTest:true,isOfficialEighteenTest:true,OFFICIAL_TEST_COUNT:18,
+  raceHorses:[{distance:0}],raceFinished:[],travel:0,
+  stepOfficialPair(dt){ctx.raceHorses[0].distance+=dt},saveRaceSeekState(){}};
+ const update=runInNewContext('('+extract('updateRace')+')',ctx);
+ for(const rate of [1.5,2,3]){
+  ctx.rate.value=String(rate);ctx.raceAccumulator=0;ctx.raceHorses[0].distance=0;
+  for(let i=0;i<60;i++)update(1/60);
+  assert.ok(Math.abs(ctx.raceHorses[0].distance-rate)<1e-8);
+ }
+});
 test('Mac mouse gestures and shortcuts are separate from the approved iPhone controls',()=>{
  assert.match(html,/event\.pointerType==='mouse'&&event\.button!==0&&/);
  assert.match(html,/event\.button===2\|\|event\.shiftKey/);
