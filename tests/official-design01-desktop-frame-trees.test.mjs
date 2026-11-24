@@ -94,7 +94,7 @@ test('tree placements favor turns and back straight, not home straight or the st
  assert.ok(siteList[2][0]>1551);
 });
 
-test('watch playback starts at 1.5x and cycles 2x, 3x, 1.5x',()=>{
+test('watch playback starts at 1.5x and cycles 2x, 3x, 1x, 1.5x',()=>{
  const selector={value:'1.5'},button={textContent:'',attrs:{},setAttribute(k,v){this.attrs[k]=v}};
  const ctx={rate:selector,watchPlaybackSpeed:button};
  ctx.setRacePlaybackSpeed=runInNewContext('('+extract('setRacePlaybackSpeed')+')',ctx);
@@ -102,11 +102,12 @@ test('watch playback starts at 1.5x and cycles 2x, 3x, 1.5x',()=>{
  ctx.setRacePlaybackSpeed(1.5);
  assert.equal(button.textContent,'1.5倍');
  assert.match(button.attrs['aria-label'],/押すと2倍/);
- for(const v of [2,3,1.5,2,3]){
+ for(const v of [2,3,1,1.5,2,3]){
   cycle();assert.equal(selector.value,String(v));assert.equal(button.textContent,v+'倍');
+  assert.equal(button.attrs['aria-label'],'再生速度'+v+'倍。押すと'+({1:1.5,1.5:2,2:3,3:1}[v])+'倍');
  }
  ctx.setRacePlaybackSpeed(8);assert.equal(selector.value,'3');
- assert.match(html,/rate\.replaceChildren\(\.\.\.\[1\.5,2,3\]/);
+ assert.match(html,/rate\.replaceChildren\(\.\.\.\[1,1\.5,2,3\]/);
  assert.match(html,/setRacePlaybackSpeed\(1\.5\)/);
  assert.match(html,/id="watchPlaybackSpeed"[^>]*>[^<]*<\/button>\s*<button id="watchSeekBack"/);
  assert.match(html,/watchPlaybackSpeed\.addEventListener\('click',cycleRacePlaybackSpeed\)/);
@@ -122,7 +123,7 @@ test('seeking preserves chosen playback speed; fixed simulation time follows the
   raceHorses:[{distance:0}],raceFinished:[],travel:0,
   stepOfficialPair(dt){ctx.raceHorses[0].distance+=dt},saveRaceSeekState(){}};
  const update=runInNewContext('('+extract('updateRace')+')',ctx);
- for(const rate of [1.5,2,3]){
+ for(const rate of [1,1.5,2,3]){
   ctx.rate.value=String(rate);ctx.raceAccumulator=0;ctx.raceHorses[0].distance=0;
   for(let i=0;i<60;i++)update(1/60);
   assert.ok(Math.abs(ctx.raceHorses[0].distance-rate)<1e-8);
