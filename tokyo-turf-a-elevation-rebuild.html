@@ -5827,7 +5827,8 @@ raceSelector.addEventListener('change',selectRace);
 document.querySelector('#raceCourseVenue').addEventListener('change',event=>{
  if(event.target.value!=='nakayama')return;
  event.target.value='tokyo';
- if(playing){alert('レースを停止してから競馬場を切り替えてください。');return;}
+ if(playing||document.querySelector('#abilityStatus')?.textContent.startsWith('未保存')||document.querySelector('#libraryName')?.value.trim()||document.querySelector('#racePresetName')?.value.trim()){alert('レースを停止し、編集中の馬・レースを保存してから切り替えてください。');return;}
+ if(raceElapsed>0&&!confirm('進行中のレースを終了して中山のコース検証画面を開きますか？'))return;
  location.href='./nakayama-course-preview.html';
 });
 fieldMode.addEventListener('change',()=>{selectRace();updateDesign01Panel();if(fieldMode.value!=='single')setView('start')});
