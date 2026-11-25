@@ -710,6 +710,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createRaceVisionSystem} from './turf-vision-race.mjs?v=4';
+import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
@@ -3609,8 +3610,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   for(const other of snapshot){
    if(other.idx===h.idx||other.finished)continue;
    const ahead=other.distance-h.distance,sideGap=Math.abs(other.lane-h.lane);
-   if(sideGap<3.3&&ahead<8&&ahead>-.5&&(ahead>.002||h.idx>other.idx)){
-    const pace=other.speed+THREE.MathUtils.clamp((ahead-4.9)*.5,-1.3,.8);
+   if(sideGap<2.45&&ahead<7&&ahead>-.5&&(ahead>.002||h.idx>other.idx)){
+    const pace=other.speed+THREE.MathUtils.clamp((ahead-4.0)*.5,-1.3,.8);
     desiredSpeed=Math.min(desiredSpeed,pace);
    }
   }
@@ -3620,8 +3621,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  for(const other of snapshot){
   if(other.idx===h.idx||other.finished)continue;
   const ahead=other.distance-h.distance;
-  if(ahead>0&&ahead<18&&Math.abs(other.lane-h.lane)<2.50){
-   desiredSpeed=Math.min(desiredSpeed,other.speed+Math.max(-1.25,(ahead-4.6)*.72));
+  if(ahead>0&&ahead<18&&Math.abs(other.lane-h.lane)<2.10){
+   desiredSpeed=Math.min(desiredSpeed,other.speed+Math.max(-1.25,(ahead-3.9)*.72));
   }
  }
  // All gates release together; delayed horses enter this step later.
@@ -3672,13 +3673,13 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // On a bend, a trapped runner checks an inside gap first. If it is not
  // open, it uses the existing outside passing option. A tight corridor is
  // never crossed instantaneously, even when it is the shorter path.
- if(h.distance>105&&h.distance<activePlan.distance-90&&
+ if(h.distance>105&&h.distance<activePlan.distance-35&&
     h.blockedFor>THREE.MathUtils.clamp(
      .9-((h.raceProfile?.trafficAbility??5)-5)*.10*balanceWeights.traffic+
       (h.raceFlow?.trafficPatience??0),.50,1.45)&&
     h.passUntil<=h.distance&&h.passCooldown<=h.distance&&
     !holdingOutside&&
-    h.passAttempts<(activePlan.distance>=2600?3:2)){
+    h.passAttempts<8){
   const bend=cornerDataAt(h.distance);
   // Compare safe inside/outside choices and 0.65s predicted congestion.
   // The path-length advantage of the inside lane matters most on bends.
@@ -3690,13 +3691,13 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   // Require sustained obstruction by a specific slower horse directly ahead.
   // Merely detecting congestion somewhere in the pack is insufficient.
   const blockingHorse=snapshot.filter(o=>o.idx!==h.idx&&!o.finished&&
-   o.distance-h.distance>1.5&&o.distance-h.distance<10.5&&
-   Math.abs(o.lane-h.lane)<1.85&&
-   targetSpeed>o.speed+.60&&h.speed>o.speed-.65)
+   o.distance-h.distance>1.5&&o.distance-h.distance<15&&
+   Math.abs(o.lane-h.lane)<2.15&&
+   targetSpeed/cornerPathFactor(h.distance,h.lane)>o.speed+.24&&h.speed>o.speed-1.1)
    .sort((a,b)=>a.distance-b.distance)[0];
   const outsideAllowed=Boolean(blockingHorse)&&h.blockedFor>=THREE.MathUtils.clamp(
     1.65-((h.raceProfile?.trafficAbility??5)-5)*.07*balanceWeights.traffic,1.3,2.0)&&
-   h.distance>140&&h.distance<activePlan.distance-110;
+   h.distance>140&&h.distance<activePlan.distance-35;
   const congestionAt=destination=>snapshot.reduce((total,o)=>{
    if(o.idx===h.idx||o.finished)return total;
    const gap=o.distance+o.speed*.65-(h.distance+Math.max(h.speed,13)*.65);
@@ -3711,8 +3712,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
    const unsafe=snapshot.some(o=>{
     if(o.idx===h.idx||o.finished)return false;
     const longitudinal=o.distance+o.speed*dt-distance;
-    return Math.abs(longitudinal)<9&&
-     Math.abs(o.lane-destination)<2.70;
+    return Math.abs(longitudinal)<5.5&&
+     Math.abs(o.lane-destination)<2.1;
    });
    if(unsafe)return null;
    const congestion=congestionAt(destination);
@@ -3721,7 +3722,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
    const benefit=currentCongestion-congestion;
    if(benefit<.30)return null;
    const isInside=destination>railHoldingLane;
-   if(!isInside&&(!outsideAllowed||benefit<.65))return null;
+   if(!isInside&&(!outsideAllowed||benefit<.32))return null;
    const bendPreference=THREE.MathUtils.clamp(bend.kappa*105,0,1);
    const score=benefit+
     (isInside?.24:0)+(isInside?.70:-.12)*bendPreference-
@@ -3734,7 +3735,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   if(chosen){
    const {destination}=chosen;
    h.passGoal=destination;h.passUntil=h.distance+42;
-   h.passCooldown=h.distance+(activePlan.distance>=2600?180:205);
+   h.passCooldown=h.distance+(activePlan.distance-h.distance<850?35:85);
    h.blockedFor=0;h.passAttempts++;
    if(destination>railHoldingLane){
     h.insidePassAttempts++;
@@ -3762,8 +3763,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   const clear=snapshot.every(o=>{
    if(o.idx===h.idx||o.finished)return true;
    const longitudinal=o.distance+o.speed*dt-distance;
-   return Math.abs(longitudinal)>7.5||
-    o.lane<low-1.6||o.lane>high+1.6;
+   return Math.abs(longitudinal)>4.5||
+    o.lane<low-1.35||o.lane>high+1.35;
   });
   if(clear){
    const sign=Math.sign(h.passGoal-railHoldingLane);
@@ -3832,6 +3833,7 @@ function stepOfficialPair(tick){
   idx:h.idx,distance:h.distance,lane:h.lane,speed:h.speed,finished:h.finished,
   passGoal:h.passGoal,passUntil:h.passUntil
  }));
+ const tactics=isOfficialEighteenTest?raceTacticalContext(previous,raceHorses.slice(0,OFFICIAL_TEST_COUNT),raceFlowAtStart):null;
  raceElapsed+=tick;
  for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
   const h=raceHorses[i];
@@ -3877,14 +3879,8 @@ function stepOfficialPair(tick){
     const remaining=Math.max(0,activePlan.distance-h.distance);
     const progress18=h.distance/Math.max(1,activePlan.distance);
     const energy=h.energy??1;
-    const closing=THREE.MathUtils.smoothstep(455-remaining,0,370);
-    const earlyBonus=profile.role==='逃げ'?.20:
-     profile.role==='先行'?.10:profile.role==='追込'?-.15:0;
-    const fit=1-Math.min(1,Math.abs(activePlan.distance-profile.preferredDistance)/1900);
-    targetSpeed=profile.early+earlyBonus*Math.max(0,1-progress18*2.2)+
-     profile.kick*profile.finishStrength*closing*(.38+.62*energy)-
-     (1-energy)*(1.30-profile.endurance)*.82+
-     (fit-.5)*.70+(profile.courseBonus??0);
+    const tactical=tacticalRaceTarget(h,profile,tactics,activePlan.distance),closing=tactical.closing,fit=tactical.fit;
+    targetSpeed=tactical.target;
     // Resilience across distances beyond the runner's inherited preference.
     targetSpeed+=((profile.distanceAbility??5)-5)*.095*balanceWeights.distance*(1-fit);
      // Stamina affects fatigue; acceleration supplies the closing burst.
@@ -3913,22 +3909,10 @@ function stepOfficialPair(tick){
      targetSpeed+=h.raceFlow.early*early+h.raceFlow.middle*mid+
       h.raceFlow.late*lateRun+raceFlowAtStart.tempo*pressure*early;
     }
-    // A fast horse explicitly assigned a closing role must not simply run
-    // wire-to-wire. Bank energy in the first half, then release the pace cap
-    // smoothly so the last 600m can produce a visible, actual position gain.
-    // All default 50-point profiles remain unchanged.
-    if(profile.customized&&['追込','差し','中団'].includes(profile.role)){
-     const chase=profile.role==='追込';
-     const cap=profile.baseEarly+(chase?-.13:profile.role==='差し'?.05:.15);
-     const startRelease=chase?Math.max(650,activePlan.distance*.31):
-      profile.role==='差し'?Math.max(540,activePlan.distance*.26):
-      Math.max(480,activePlan.distance*.23);
-     const release=THREE.MathUtils.smoothstep(startRelease-remaining,0,330);
-     targetSpeed=THREE.MathUtils.lerp(Math.min(targetSpeed,cap),targetSpeed,release);
-    }
+    // Settling and release now apply to every role, preserving the registered speed ability.
     const blocked=previous.some(o=>o.idx!==h.idx&&!o.finished&&
      o.distance>h.distance&&o.distance-h.distance<13&&
-     Math.abs(o.lane-h.lane)<2.5&&o.speed+.25<targetSpeed);
+     Math.abs(o.lane-h.lane)<2.5&&o.speed+.25<targetSpeed/cornerPathFactor(h.distance,h.lane));
     h.blockedFor=blocked?(h.blockedFor||0)+tick:
      Math.max(0,(h.blockedFor||0)-tick*1.6);
     if(blocked)h.trafficSeconds=(h.trafficSeconds||0)+tick;
@@ -3952,13 +3936,11 @@ function stepOfficialPair(tick){
     h.pathExtraMeters=h.pathDistance-result.distance;
     if(Math.abs(cornerDataAt(midDistance).kappa)>.0015)
      h.curveTravel=(h.curveTravel||0)+physicalStep;
-    const effort=THREE.MathUtils.clamp((result.speed-14.4)/2.6,0,1.6);
-    const load=Math.sqrt(activePlan.distance/1800);
+    // Effort uses physical path speed rather than centreline progress.
     const earlyShare=Math.max(0,1-(h.distance/activePlan.distance)/.70);
     const composure=1-((profile.composureAbility??5)-5)*.06*balanceWeights.composure*earlyShare;
-    const cost=physicalStep/Math.max(1,activePlan.distance)*
-     (.37+.29*effort)*load/Math.max(.72,profile.endurance)*composure;
-    h.energy=THREE.MathUtils.clamp((h.energy??1)-cost,.07,1);
+    const cost=tacticalEnergyCost({h,profile,context:tactics,snapshot:previous,distance:activePlan.distance,physicalStep,forward,tick,composure});
+    h.energy=THREE.MathUtils.clamp((h.energy??1)-cost,.02,1);
    }
    // Compare the old and new widths BEFORE committing the new distance.
    // A shift of the lane coordinate origin is not a real steering motion.
