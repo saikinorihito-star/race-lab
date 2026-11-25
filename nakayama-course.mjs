@@ -37,10 +37,10 @@ const SY=(low+high)/2;
 const pre=metric(rawPre,SY),innerBranch=metric(rawInner,SY),post=metric(rawPost,SY);
 // Tangent-aligned approaches: the mile starts from a straight pocket and
 // the 2500m start lies on the straight approach to the shared right turn.
-const outerEntry=[278,275],outerExit=[780,359-(967-780)*31/33];
+const outerEntry=[277,276+2/3],outerExit=[780,359-(967-780)*31/33];
 function outerTrace(depth){return metric(join(
  straight(split,outerEntry),
- cubic(outerEntry,[362,135],[380,80+depth],[470,80+depth]),
+ cubic(outerEntry,[361,136+2/3],[380,80+depth],[470,80+depth]),
  cubic([470,80+depth],[620,80+depth],[710,outerExit[1]-70*31/33],outerExit),
  straight(outerExit,merge)),SY)}
 const preLen=arc(pre).length,postLen=arc(post).length;
@@ -53,7 +53,8 @@ export const SECTIONS=Object.freeze({split:preLen,mergeInner:preLen+innerLen,
  homeOuter:SPEC.outerLap-SPEC.straight,sharedFinish:postLen,firstTurn:72.1,
  outerTurn2:preLen+arc(metric(straight(split,outerEntry),SY)).length,
  outerStraightToMerge:arc(metric(straight(outerExit,merge),SY)).length,
- innerTurn3:preLen+arc(metric(join(cubic(split,[255.8,312],[311,289],[390,289]),straight([390,289],[835,289])),SY)).length});
+ innerTurn3:preLen+arc(metric(join(cubic(split,[255.8,312],[311,289],[390,289]),straight([390,289],[835,289])),SY)).length,
+ turn4Offset:arc(metric(cubic(merge,[1000,390],[1018,430],[1018,478]),SY)).length});
 const mod=(x,m)=>(x%m+m)%m;
 // Profile knots digitized approximately from provided JRA elevation diagrams.
 // Shared segments use identical elevations. The 180–70m slope uses a piecewise
@@ -185,11 +186,11 @@ export function courseLandmarks(distance,rail='A'){
   if(leg.kind==='pocket'||leg.kind==='chute'){traveled+=leg.length;continue}
   const lap=spec[leg.kind+'Lap'];
   const points=leg.kind==='inner'?
-   [[s.firstTurn,'1コーナー入口'],[s.split,'2コーナー・分岐目安'],[s.innerTurn3,'3コーナー入口目安'],[s.mergeInner,'3〜4コーナー共通区間']]:
-   [[s.firstTurn,'1コーナー入口'],[s.outerTurn2,'2コーナー入口'],[railStation('outer',894.7,rail),'3コーナー入口目安'],[s.mergeOuter,'内外合流・4コーナー方面']];
-  for(const [station,name] of points){
+   [[s.firstTurn,'1コーナー入口'],[s.split,'2コーナー・分岐目安'],[s.innerTurn3,'3コーナー入口目安'],[s.mergeInner,'3〜4コーナー共通区間'],[railStation('inner',SECTIONS.mergeInner+SECTIONS.turn4Offset,rail),'4コーナー中間目安']]:
+   [[s.firstTurn,'1コーナー入口'],[s.outerTurn2,'2コーナー入口'],[railStation('outer',894.7,rail),'3コーナー入口目安','1200mのJRA-VAN参考距離（250m強）から設定'],[s.mergeOuter,'内外合流・4コーナー方面'],[railStation('outer',SECTIONS.mergeOuter+SECTIONS.turn4Offset,rail),'4コーナー中間目安']];
+  for(const [station,name,source] of points){
    if(station>=leg.start&&station<leg.start+leg.length)
-    marks.push({name,distance:traveled+station-leg.start,source:'モデル境界（近似）'});
+    marks.push({name,distance:traveled+station-leg.start,source:source||'モデル境界（近似）'});
   }
   traveled+=leg.length;
  }
