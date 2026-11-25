@@ -17,10 +17,15 @@ const ROLES=['逃げ','先行','中団','差し','追込'];
 const GOINGS=['good','slightlyHeavy','heavy','bad'];
 const WEATHERS=['sunny','cloudy','rain'];
 function validStartRisk(a){return !a||!Object.hasOwn(a,'startRisk')||(Number.isInteger(a.startRisk)&&a.startRisk>=1&&a.startRisk<=10)}
+function validAppearance(a){
+ return a===undefined||a===null||(typeof a==='object'&&!Array.isArray(a)&&
+  ['original','bay','darkBay','brown','black','chestnut','darkChestnut','gray','white'].includes(a.coat)&&
+  ['small','standard','large'].includes(a.size)&&Number.isInteger(a.gear)&&a.gear>=0&&a.gear<=7);
+}
 function validRaceHorse(h){
  const a=h?.ability;
  return Number.isSafeInteger(h?.id)&&h.id>=0&&h.id<10000&&typeof h.name==='string'&&
-  h.name.trim().length>0&&h.name.length<=24&&a&&
+  h.name.trim().length>0&&h.name.length<=24&&a&&validAppearance(h.appearance)&&
   validStartRisk(a)&&RACE_KEYS.every(k=>Number.isInteger(a[k])&&a[k]>=1&&a[k]<=10)&&ROLES.includes(a.role)&&
   Number.isInteger(a.preferredDistance)&&a.preferredDistance>=1000&&a.preferredDistance<=4000&&a.preferredDistance%50===0;
 }
@@ -43,7 +48,7 @@ export function makeRacePreset(id,name,payload){
  const r={id,name:String(name).trim(),horses:l.lineup.map(id=>{
   const h=l.horses.find(h=>h.id===id);
   if(!h)throw Error('出走馬のデータがありません');
-  return {id:h.id,name:h.name,ability:structuredClone(h.ability)};
+  return {id:h.id,name:h.name,ability:structuredClone(h.ability),...(h.appearance?{appearance:structuredClone(h.appearance)}:{})};
  }),conditions:{distance:s.distance,weather:s.weather,going:s.going,flowMode:s.flowMode,flowSeed:s.flowSeed}};
  if(!validRacePreset(r))throw Error('レース名または出走馬・条件を確認してください');
  return r;
@@ -61,7 +66,7 @@ export function restoreRacePreset(library,preset){
  if(!validRacePreset(preset))throw Error('保存済みレースの形式が正しくありません');
  // Preserve reserves and stable registry IDs. Restore only the 18 race entries.
  const horses=new Map(library.horses.map(h=>[h.id,structuredClone(h)]));
- for(const h of preset.horses)horses.set(h.id,structuredClone(h));
+ for(const h of preset.horses){const previous=horses.get(h.id);horses.set(h.id,{...(previous?.appearance?{appearance:structuredClone(previous.appearance)}:{}),...structuredClone(h)});}
  if(horses.size>100)throw Error('登録馬が100頭を超えるため呼び出せません。控え馬を整理してください。');
  return {version:1,horses:[...horses.values()],lineup:preset.horses.map(h=>h.id),
   nextId:Math.max(library.nextId,...preset.horses.map(h=>h.id+1))};
@@ -77,7 +82,7 @@ export function validPayload(p){
  const ids=l.horses.map(h=>h?.id);
  return new Set(ids).size===ids.length&&l.horses.every(h=>Number.isSafeInteger(h?.id)&&h.id>=0&&h.id<10000&&h.id<l.nextId&&
   typeof h.name==='string'&&h.name.trim().length>0&&h.name.length<=24&&
-  (h.ability===null||typeof h.ability==='object'&&!Array.isArray(h.ability)&&validStartRisk(h.ability)))&&l.lineup.every(i=>ids.includes(i));
+  validAppearance(h.appearance)&&(h.ability===null||typeof h.ability==='object'&&!Array.isArray(h.ability)&&validStartRisk(h.ability)))&&l.lineup.every(i=>ids.includes(i));
 }
 export function syncDecision(binding,uid,local,remote){
  if(!binding||binding.uid!==uid||!Number.isSafeInteger(binding.revision)||typeof binding.base!=='string')return 'setup';
