@@ -12,10 +12,10 @@ test('published A course lengths, straight, right turn and common segments',()=>
   assert.ok(signed>0,'right turn in plan coordinates');
   near(Math.max(...samples.map(p=>altitude(kind,lap-p.s)))-Math.min(...samples.map(p=>altitude(kind,lap-p.s))),5.3,.025);
  }
- for(const s of [0,100,300,517.1]){
+ for(const s of [0,100,300,SECTIONS.split]){
   const a=at('inner',s),b=at('outer',s);near(a.x,b.x);near(a.z,b.z);near(a.y,b.y);near(widthAt('inner',s),widthAt('outer',s));
  }
- for(const r of [0,70,180,310,600]){
+ for(const r of [0,70,180,310,600,SECTIONS.sharedFinish]){
   const a=at('inner',SPEC.innerLap-r),b=at('outer',SPEC.outerLap-r);near(a.x,b.x);near(a.z,b.z);near(a.y,b.y);near(widthAt('inner',a.station),widthAt('outer',b.station));
  }
 });
@@ -40,4 +40,22 @@ test('width stays in published ranges and preview does not alter Tokyo physics',
  assert.doesNotThrow(()=>new Function(code));
  const tokyo=readFileSync(new URL('../tokyo-turf-a-elevation-rebuild.html',import.meta.url),'utf8');
  assert.match(tokyo,/raceCourseVenue/);assert.match(tokyo,/nakayama-course-preview\.html/);assert.match(tokyo,/const LAP=2083\.1/);
+});
+
+test('traced plan retains broad oval and asymmetrical outer branch without pinched turns',()=>{
+ const bounds=kind=>{
+  const p=LOOPS[kind].samples,x=p.map(q=>q.x),z=p.map(q=>q.z);
+  return {w:Math.max(...x)-Math.min(...x),h:Math.max(...z)-Math.min(...z),top:Math.min(...z)};
+ };
+ const i=bounds('inner'),o=bounds('outer');
+ assert.ok(i.w/i.h>2&&i.w/i.h<2.4);
+ assert.ok(o.w/o.h>1.3&&o.w/o.h<1.6);
+ assert.ok(i.top-o.top>120);
+ assert.ok(Math.abs(i.w-o.w)<1);
+ const start=routeAt(makeRoute(2500),0);
+ assert.equal(start.kind,'outer');assert.ok(start.x>0&&start.z<i.top);
+ const split=SECTIONS.split;
+ for(const s of [split-.01,split,split+.01]){
+  assert.ok(Math.abs(widthAt('inner',s)-widthAt('outer',s))<.01);
+ }
 });
