@@ -83,7 +83,7 @@ test('invalid archives and accidental overwrites are rejected; old cloud payload
  assert.ok(!validRaceArchive({version:1,races:[a,a],activeId:'a'}));
 });
 test('30 races fit the existing cloud payload limit even with 100 registered horses and long Japanese names',()=>{
- const p=raceSample();p.library.horses=Array.from({length:100},(_,id)=>({id,name:'馬'.repeat(24),ability:raceAbility(10)}));
+ const p=raceSample();p.library.horses=Array.from({length:100},(_,id)=>({id,name:'馬'.repeat(24),ability:{...raceAbility(10),startRisk:10}}));
  p.library.nextId=100;let archive=emptyArchive();
  for(let i=0;i<RACE_ARCHIVE_LIMIT;i++)archive=saveRacePreset(archive,makeRacePreset('r'+i,'競馬'.repeat(30),p));
  assert.throws(()=>saveRacePreset(archive,makeRacePreset('extra','追加',p)));
@@ -98,4 +98,20 @@ test('race archive is transmitted, persisted, and guarded on recall',()=>{
  assert.match(code,/localStorage.setItem\(RACE_PRESET_BACKUP/);
  assert.match(code,/api.restoreRacePreset/);
  assert.match(code,/restoringSnapshot=true/);
+});
+
+test('start risk persists in race snapshots and cloud payload, with legacy compatibility',()=>{
+ const p=raceSample();
+ assert.ok(validPayload(p));
+ p.library.horses[0].ability.startRisk=8;
+ const a=makeRacePreset('risk','出遅れ検証',p);
+ p.library.horses[0].ability.startRisk=2;
+ assert.equal(a.horses[0].ability.startRisk,8);
+ const restored=restoreRacePreset(p.library,a);
+ assert.equal(restored.horses[0].ability.startRisk,8);
+ p.settings.raceArchive=saveRacePreset(emptyArchive(),a);
+ assert.ok(validPayload(p));p.library.horses[0].ability.startRisk=11;
+ assert.ok(!validPayload(p));p.library.horses[0].ability.startRisk=1;
+ p.settings.raceArchive.races[0].horses[0].ability.startRisk=0;
+ assert.ok(!validPayload(p));
 });

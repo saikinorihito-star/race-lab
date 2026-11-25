@@ -29,12 +29,13 @@ function sim(distance,variant='actual',overrides={}){
   "const activePlan={distance};",
   "const fieldCenterAt=(_p,d)=>({p:{y:0},width:variant==='actual'?widthAt(startStation+d):variant==='pocket24'?(d<250?24:d<310?24+12*(d-250)/60:36):(d<250?28:d<310?28+8*(d-250)/60:36)});",
   "let raceElapsed=0,raceFinished=[];const firstWidth=fieldCenterAt(activePlan,0).width;",
-  "const raceHorses=Array.from({length:18},(_,i)=>({idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,slot:i,lane:eighteenStartLane(firstWidth,i),energy:1,passGoal:null,passUntil:0,passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,blockedFor:0,last600StartTime:null,raceProfile:overrides[i]?effectiveEighteenProfile(i,{...defaultHorseAbility(i),...overrides[i]}):undefined}));",
+  "const raceHorses=Array.from({length:18},(_,i)=>({idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,slot:i,lane:eighteenStartLane(firstWidth,i),energy:1,startDelay:overrides[i]?.startDelay??0,passGoal:null,passUntil:0,passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,blockedFor:0,last600StartTime:null,raceProfile:overrides[i]?effectiveEighteenProfile(i,{...defaultHorseAbility(i),...overrides[i]}):undefined}));",
   "let rail=Infinity,outer=Infinity,minSep=Infinity,stops=0,postStops=0,sideOnly=0,stacked=0,maxSteeringError=0;",
-  "const marks={};",
+  "const marks={},release=Array(18).fill(null),initialLanes=raceHorses.map(h=>h.lane);let delayedDrift=0;",
   "for(let tick=0;tick<32000&&raceFinished.length<18;tick++){",
   "const before=raceHorses.map(h=>({d:h.distance,l:h.lane,p:h.postDistance||0,f:h.finished,steering:h.smoothedSideSpeed??0}));",
   "stepOfficialPair(1/60);",
+  "for(const h of raceHorses){if(h.distance>0&&release[h.idx]===null)release[h.idx]=raceElapsed-1/60;if(raceElapsed<=h.startDelay+1e-9)delayedDrift=Math.max(delayedDrift,Math.abs(h.lane-initialLanes[h.idx]),h.distance);}",
   "const lead=Math.max(...raceHorses.map(h=>h.distance));",
   "for(const m of [45,100,200,300])if(!marks[m]&&lead>=m){",
   "const inside=fourHorseInnerLane(fieldCenterAt(activePlan,lead).width);",
@@ -56,7 +57,7 @@ function sim(distance,variant='actual',overrides={}){
   "if(dy<2.35&&dx>4.8&&dx<20)stacked++;",
   "}",
   "}",
-  "return {done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks,maxSteeringError,results:raceHorses.map(h=>({time:h.finishTime,energy:h.energy}))};"
+  "return {release,delayedDrift,done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks,maxSteeringError,results:raceHorses.map(h=>({time:h.finishTime,energy:h.energy}))};"
  ].join('\n');
  return new Function('distance','variant','overrides',source)(distance,variant,overrides);
 }
@@ -159,4 +160,18 @@ test('stamina and distance setting affect actual simulated race rather than just
  assert.ok(high.energy>low.energy,'stamina preserves energy');
  assert.ok(high.time<low.time,'stamina improves race time');
  assert.ok(high.time<wrong.time,'matching preferred distance improves race time');
+});
+
+test('delayed horses stay in their stalls then complete the real race engine',()=>{
+ for(const [distance,variant] of [[1400,'actual'],[2400,'pocket24']]){
+  const r=sim(distance,variant,{0:{startDelay:1.5},4:{startDelay:.5},17:{startDelay:1}});
+  assert.equal(r.done,18);assert.equal(r.delayedDrift,0);
+  for(const [i,d] of [[0,1.5],[4,.5],[17,1],[1,0]])assert.ok(Math.abs(r.release[i]-d)<1e-8);
+  assert.equal(r.stops,0);assert.equal(r.sideOnly,0);assert.ok(r.minSep>=1.08);
+ }
+});
+test('all delayed horses still release and complete without a stuck gate',()=>{
+ const r=sim(1400,'actual',Object.fromEntries(Array.from({length:18},(_,i)=>[i,{startDelay:.5}])));
+ assert.equal(r.done,18);assert.equal(r.delayedDrift,0);assert.ok(r.release.every(d=>Math.abs(d-.5)<1e-8));
+ assert.equal(r.stops,0);assert.equal(r.sideOnly,0);
 });

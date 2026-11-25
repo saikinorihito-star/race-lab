@@ -50,7 +50,7 @@ test('real starting gate is shown in 18 mode, doors open and the far-away gate i
  assert.match(html,/gateRoot\.visible=fieldMode\.value!=='single'&&\s*\(!isOfficialPairTest\|\|isOfficialEighteenTest\)/);
  assert.match(html,/if\(isOfficialEighteenTest\)gateRoot\.visible=travel<105/);
  assert.match(html,/drawFieldGate\(activePlan\)/);
- assert.match(html,/gateOpening=travel>0\?Math\.min\(1,gateOpening\+dt\*\(isOfficialEighteenTest\?15:4\)\):0/);
+ assert.match(html,/gateOpening=\(isOfficialEighteenTest\?raceElapsed>0:travel>0\)\?Math\.min\(1,gateOpening\+dt\*\(isOfficialEighteenTest\?15:4\)\):0/);
  assert.match(block('updateGateDoors'),/door\.rotation\.y=side\*gateOpening\*1\.17/);
  assert.match(block('resetDemo'),/if\(isOfficialEighteenTest\)gateRoot\.visible=true/);
  assert.match(html,/travel=0;gateOpening=0;initRaceHorses\(\);updateGateDoors\(\);positionFieldHorses\(\);\s*if\(isOfficialEighteenTest\)gateRoot\.visible=true/);
