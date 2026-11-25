@@ -709,6 +709,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {createRaceVisionSystem} from './turf-vision-race.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
@@ -1668,88 +1669,8 @@ label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+11,dirtLabelPos
  label3D('芝 Aコース｜左回り',-5,35,0,16,'#1c665c');
 // 黄色い進行方向の矢印は表示しない。
 // 大型モニター用の自主制作テスト映像。実在のレース動画・放映画面ではない。
-function makeRaceMonitorTexture(){
- const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=176;
- const ctx=canvas.getContext('2d');
- const bg=ctx.createLinearGradient(0,0,0,176);
- bg.addColorStop(0,'#203f54');bg.addColorStop(1,'#071725');
- ctx.fillStyle=bg;ctx.fillRect(0,0,1024,176);
- // 模擬映像と中継オーバーレイを別領域に分け、画面らしい奥行きを持たせる。
- const field=ctx.createLinearGradient(0,25,0,160);
- field.addColorStop(0,'#508a61');field.addColorStop(1,'#244e35');
- ctx.fillStyle=field;ctx.fillRect(8,19,661,137);
- ctx.fillStyle='#8ab36d';ctx.fillRect(8,119,661,37);
- ctx.strokeStyle='#e5e8db';ctx.lineWidth=3;
- ctx.beginPath();ctx.moveTo(8,122);ctx.lineTo(669,122);ctx.stroke();
- for(const [x,y] of [[110,96],[240,107],[356,97],[482,111],[590,101]]){
-  ctx.fillStyle='#25262b';ctx.beginPath();ctx.ellipse(x,y,22,10,-.15,0,Math.PI*2);ctx.fill();
-  ctx.fillRect(x+13,y-18,6,19);
-  ctx.beginPath();ctx.arc(x+16,y-21,6,0,Math.PI*2);ctx.fill();
-  ctx.lineWidth=4;ctx.strokeStyle='#28292e';
-  for(const offset of [-13,-3,7,17]){
-   ctx.beginPath();ctx.moveTo(x+offset,y+5);ctx.lineTo(x+offset-5,y+17);ctx.stroke();
-  }
-  ctx.fillStyle='#f5dfba';ctx.fillRect(x-5,y-20,9,10);
- }
- ctx.fillStyle='#102b40';ctx.fillRect(8,6,661,21);
- ctx.fillStyle='#f5fbff';ctx.font='bold 16px Arial,sans-serif';
- ctx.fillText('TOKYO RACECOURSE  /  TURF  /  DIRT',18,22);
- ctx.fillStyle='#101e31';ctx.fillRect(683,8,334,148);
- ctx.fillStyle='#6be1d1';ctx.font='bold 22px Arial,sans-serif';ctx.fillText('RACE LAB',699,38);
- ctx.fillStyle='#f4f7f0';ctx.font='bold 30px Arial,sans-serif';ctx.fillText('TOKYO',699,77);
- ctx.fillStyle='#b9cede';ctx.font='16px Arial,sans-serif';ctx.fillText('DEMO MONITOR',699,106);
- for(let n=0;n<4;n++){
-  ctx.fillStyle=n%2?'#295569':'#20485d';
-  ctx.fillRect(699,121+n*8,290-n*24,5);
- }
- ctx.fillStyle='#06121f';ctx.fillRect(0,157,1024,19);
- ctx.fillStyle='#b1ccd8';ctx.font='12px Arial,sans-serif';
- ctx.fillText('3D COURSE PREVIEW - NOT A LIVE BROADCAST',17,171);
- const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
- return texture;
-}
-const raceMonitorTexture=makeRaceMonitorTexture();
-// Sharper slanted-screen lettering without additional geometry or draw calls.
-raceMonitorTexture.anisotropy=Math.min(16,renderer.capabilities.getMaxAnisotropy());
-// The existing Tokyo-style turf visions use LIVE in-simulation coverage in
-// 18-horse mode. Non-18 modes retain the original static preview texture.
-// A separate camera and small offscreen buffer avoid recursion or a second canvas.
-const liveRaceMonitorTarget=isOfficialEighteenTest?
- new THREE.WebGLRenderTarget(1024,176,{depthBuffer:true,stencilBuffer:false}):null;
-const liveRaceMonitorCamera=isOfficialEighteenTest?
- new THREE.PerspectiveCamera(30,1024/176,.3,2600):null;
-if(liveRaceMonitorTarget){
- liveRaceMonitorTarget.texture.colorSpace=THREE.SRGBColorSpace;
- liveRaceMonitorTarget.texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
-}
-let lastLiveMonitorPaint=-Infinity,lastLiveMonitorRaceTime=-Infinity;
-// コース近景で遮蔽物となる大型ビジョンを、カメラモードに応じて切り替える。
-const turfVisionGroups=[];
-function turfVision(x,z,caption){
- const baseY=2.5;
- const group=new THREE.Group();scene.add(group);turfVisionGroups.push(group);
- group.position.set(x,baseY,z);
- // Image faces the grandstand at +Z; intentionally enlarged for visibility.
- group.scale.set(isOfficialEighteenTest?1.34:1,isOfficialEighteenTest?1.34:1,1);
- // 幅66.4m×高さ11.2mはJRAの公表値。支柱などの寸法は近似.
- addBox(group,0,13,-.05,68.1,13.1,1.42,0x1a252f,.28);
- addBox(group,0,6.35,-2.5,67.8,1.35,3.7,0x5a7179,.15);
- for(const px of [-28,-14,0,14,28]){
-  addBox(group,px,5.35,-2.6,1.10,10.5,1.5,0x65757b,.28);
-  addBox(group,px,11.5,-1.4,.43,2.25,1.25,0x9eafb5,.23);
- }
- addBox(group,0,13,.72,67.1,12.05,.20,0x60757c,.19);
- const screen=new THREE.Mesh(new THREE.PlaneGeometry(66.4,11.2),
-  new THREE.MeshBasicMaterial({map:liveRaceMonitorTarget?
-   liveRaceMonitorTarget.texture:raceMonitorTexture,side:THREE.FrontSide,toneMapped:false}));
- screen.position.set(0,13,.91);group.add(screen);
- // Stand-facing image is in front of its housing, not obscured by the slab.
- for(const px of [-11.05,11.05])addBox(group,px,13,.96,.09,11.2,.09,0x1c2833,.24);
- addBox(group,0,19.9,-.1,69,.65,1.9,0x778d94,.2);
- addBox(group,0,6.1,.4,68.0,.55,1.0,0x647883,.18);
-}
-turfVision(-225,9,'西側ターフビジョン');
-turfVision(210,22,'東側ターフビジョン');
+const raceVision=createRaceVisionSystem(THREE,{scene,renderer,venue:'tokyo',mobile:matchMedia('(pointer:coarse)').matches,live:isOfficialEighteenTest});
+const turfVisionGroups=raceVision.groups;
 
 // カメラが模型の内部に入った場合の閉塞を防ぐため、スタンド外形を登録。
 const stadiumGroups=[];
@@ -6244,49 +6165,21 @@ function setupRaceWatchUI(){
 }
 
 function renderLiveRaceMonitor(time){
- if(!liveRaceMonitorTarget||!liveRaceMonitorCamera||
-    !installedDesign01||!activePlan||raceHorses.length<18)return;
- // Refresh roughly 6 fps while moving; refresh immediately after a paused seek.
- const pausedSeekChanged=!playing&&Math.abs(raceElapsed-lastLiveMonitorRaceTime)>.01;
- if(!pausedSeekChanged&&time-lastLiveMonitorPaint<160)return;
- if(!playing&&!pausedSeekChanged&&Number.isFinite(lastLiveMonitorRaceTime))return;
- camera.updateMatrixWorld();
- const frustum=new THREE.Frustum().setFromProjectionMatrix(
-  new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
- const screenVisible=turfVisionGroups.some(group=>{
-  if(!group.visible)return false;
-  const center=group.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0,20,0));
-  return frustum.intersectsSphere(new THREE.Sphere(center,51));
+ if(!activePlan)return;
+ const horses=isOfficialEighteenTest?raceHorses.slice(0,18).map(h=>({...h,name:officialRunnerNames[h.idx]||'試験馬'+h.number})):[];
+ const ready=isOfficialEighteenTest&&installedDesign01&&horses.length===18;
+ const elapsed=ready?raceElapsed:0,phase=ready&&horses.every(h=>h.finished)?'finish':elapsed>0?'race':'before';
+ raceVision.update(time,camera,{ready,phase,playing:ready&&playing,elapsed,distance:activePlan.distance,
+  remaining:Math.max(0,activePlan.distance-travel),horses:ready?horses:[],fps:auto18ObservedFps},feedCamera=>{
+  const pool=horses.filter(h=>!h.finished);const byProgress=[...(pool.length?pool:horses)].sort((a,b)=>b.distance-a.distance||a.number-b.number);
+  const leader=byProgress[0];if(!leader)return;
+  const nearFront=byProgress.filter(h=>leader.distance-h.distance<22);
+  const medianLane=nearFront.reduce((v,h)=>v+h.lane,0)/nearFront.length;
+  const a=fieldCenterAt(activePlan,Math.max(0,Math.min(activePlan.distance,leader.distance-7)));
+  const side=new THREE.Vector3(a.t.z,0,-a.t.x),focus=a.p.clone().addScaledVector(side,medianLane);
+  feedCamera.position.copy(focus).addScaledVector(side,-36).addScaledVector(a.t,17).add(new THREE.Vector3(0,10,0));
+  feedCamera.lookAt(focus.clone().add(new THREE.Vector3(0,1.4,0)));
  });
- if(!screenVisible)return;
- const runners=raceHorses.slice(0,18).filter(h=>!h.finished);
- const pool=runners.length?runners:raceHorses.slice(0,18);
- const byProgress=[...pool].sort((a,b)=>b.distance-a.distance||a.number-b.number);
- const leader=byProgress[0];
- if(!leader)return;
- // Pick up the front group with a real second camera following the same
- // physics state as the main broadcast; do not loop a prerecorded image.
- const nearFront=byProgress.filter(h=>leader.distance-h.distance<22);
- const medianLane=nearFront.reduce((v,h)=>v+h.lane,0)/nearFront.length;
- const focusDistance=Math.max(0,Math.min(activePlan.distance,leader.distance-7));
- const a=fieldCenterAt(activePlan,focusDistance);
- const side=new THREE.Vector3(a.t.z,0,-a.t.x);
- const focus=a.p.clone().addScaledVector(side,medianLane);
- liveRaceMonitorCamera.position.copy(focus).addScaledVector(side,-36)
-  .addScaledVector(a.t,17).add(new THREE.Vector3(0,13,0));
- liveRaceMonitorCamera.lookAt(focus.clone().add(new THREE.Vector3(0,2,0)));
- const oldTarget=renderer.getRenderTarget();
- const oldVisible=turfVisionGroups.map(g=>g.visible);
- for(const group of turfVisionGroups)group.visible=false;
- try{
-  renderer.setRenderTarget(liveRaceMonitorTarget);
-  renderer.clear();
-  renderer.render(scene,liveRaceMonitorCamera);
- }finally{
-  renderer.setRenderTarget(oldTarget);
-  turfVisionGroups.forEach((group,i)=>{group.visible=oldVisible[i]});
- }
- lastLiveMonitorPaint=time;lastLiveMonitorRaceTime=raceElapsed;
 }
 // One fixed-buffer particle system for subtle kicked-up grass from 18 horses.
 // No per-particle meshes, material allocations, textures or draw calls.
