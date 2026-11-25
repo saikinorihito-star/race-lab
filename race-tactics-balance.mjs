@@ -31,7 +31,9 @@ export function tacticalRaceTarget(h,profile,context,distance){
  const paceBias=context.tempo*(1-release)*(.62+.38*(role==='逃げ'?1:0));
  const fatigue=(1-e)*(.40+Math.max(0,1-profile.endurance)*.55)+2.05*smooth(.29-e,0,.27);
  const saved=clamp((e-.08)/.58,0,1);
- const surge=(.58+2.65*saved)*release*(.82+.24*(profile.finishStrength??1));
+ // Extra effort is available only to a runner with remaining energy and a real gap to close.
+ const urgency=clamp((gap-3)*.035,0,.80)*release*saved;
+ const surge=(.58+2.65*saved)*release*(.82+.24*(profile.finishStrength??1))+urgency;
  return {target:profile.early+style.early*(1-settle)+paceBias+correction+surge-fatigue+(fit-.5)*.70+(profile.courseBonus??0),closing:release,fit,energy:e};
 }
 export function tacticalEnergyCost({h,profile,context,snapshot,distance,physicalStep,forward,tick,composure}){
