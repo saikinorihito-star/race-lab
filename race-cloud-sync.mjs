@@ -94,6 +94,43 @@ export function syncDecision(binding,uid,local,remote){
  if(stable(remote.payload)===stable(local))return 'ack';
  return localChanged?'conflict':'download';
 }
+// Older snapshots omit appearance; omission is not a request to reset it.
+export function preserveMissingAppearance(local,remote){
+ const next=structuredClone(local);
+ const previous=new Map((remote?.library?.horses||[]).map(h=>[h.id,h]));
+ for(const h of next.library.horses){
+  const old=previous.get(h.id);
+  if(!h.appearance&&old?.appearance&&h.name===old.name)h.appearance=structuredClone(old.appearance);
+ }
+ return next;
+}
+function withoutAppearance(payload){
+ const p=structuredClone(payload);
+ for(const h of p.library.horses)delete h.appearance;
+ return p;
+}
+// Three-way merge only when the non-appearance data is compatible.
+// A simultaneous conflicting change to the same horse still requires user choice.
+export function mergeAppearanceConflict(binding,local,remote){
+ let base;try{base=JSON.parse(binding?.base||'null')}catch{return null}
+ if(!validPayload(base)||!validPayload(local)||!validPayload(remote))return null;
+ const bCore=stable(withoutAppearance(base)),lCore=stable(withoutAppearance(local)),rCore=stable(withoutAppearance(remote));
+ if(lCore!==bCore&&rCore!==bCore&&lCore!==rCore)return null;
+ const next=structuredClone(lCore===bCore?remote:local);
+ const bm=new Map(base.library.horses.map(h=>[h.id,h])),lm=new Map(local.library.horses.map(h=>[h.id,h])),rm=new Map(remote.library.horses.map(h=>[h.id,h]));
+ for(const h of next.library.horses){
+  const b=bm.get(h.id),l=lm.get(h.id),r=rm.get(h.id);
+  if(!l||!r)continue;
+  if(!b&&l.name!==r.name)return null;
+  const bv=b?.appearance||null,lv=l.appearance||bv,rv=r.appearance||bv;
+  const lc=stable(lv)!==stable(bv),rc=stable(rv)!==stable(bv);
+  if(lc&&rc&&stable(lv)!==stable(rv))return null;
+  const value=lc?lv:rv;
+  if(value)h.appearance=structuredClone(value);else delete h.appearance;
+ }
+ return validPayload(next)?next:null;
+}
+function appearanceCount(payload){return (payload?.library?.horses||[]).filter(h=>h.appearance).length}
 function readBinding(){try{return JSON.parse(localStorage.getItem(BIND)||'null')}catch{return null}}
 export async function startPrivateSync({capture,restore,safe,status,ui}){
  let client=null,busy=false,user=null,latest=null;
@@ -127,7 +164,8 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
   const {data,error}=await request.select('revision,payload,updated_at').maybeSingle();
   if(error||!data){latest=await read();show(true,true);throw Error('同期先が変更されたか、保存に失敗しました。端末データは保持されています。')}
   bind(data);latest=data;show(true,false);
-  say('同期済み（クラウドに保存）');
+  say('同期済み（クラウドに保存・外見設定 '+appearanceCount(data.payload)+'頭）');
+  return data;
  }
  function receive(local,remote){
   if(!remote||!safe())throw Error('発馬機に戻り、入力・編集中の項目を保存してから同期してください。');
@@ -149,16 +187,28 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
    if(!validPayload(local))throw Error('端末のデータ形式を確認できません。');
    // Never replace or upload an unseen local edit while a request was in flight.
    if(stable(capture())!==stable(local)){say('編集中：次回の同期で反映します');return}
-   const decision=syncDecision(readBinding(),user.id,local,remote);
+   const binding=readBinding(),decision=syncDecision(binding,user.id,local,remote);
    if(mode==='send'){
     if(!safe())throw Error('発馬機に戻り、編集中の項目を保存してから同期してください。');
     if(remote&&!confirm('クラウドの内容をこの端末の登録馬・設定で置き換えますか？'))return;
-    await upload(local,remote);return;
+    const next=preserveMissingAppearance(local,remote?.payload);
+    const saved=await upload(next,remote);
+    if(stable(next)!==stable(local))receive(local,saved);
+    return;
    }
    if(mode==='receive'){
     if(!remote)return;
     if(!confirm('この端末の内容をバックアップし、クラウドの内容に切り替えますか？'))return;
     receive(local,remote);return;
+   }
+   if(decision==='conflict'&&safe()){
+    const merged=mergeAppearanceConflict(binding,local,remote?.payload);
+    if(merged){
+     if(stable(merged)===stable(remote.payload)){receive(local,remote);return}
+     const saved=await upload(merged,remote);
+     if(stable(merged)!==stable(local))receive(local,saved);
+     return;
+    }
    }
    if(decision==='setup'||decision==='conflict'){
     show(true,true);
@@ -168,11 +218,14 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
     return;
    }
    show(true,false);
-   if(decision==='equal'){say('同期済み');return}
-   if(decision==='ack'){bind(remote);say('同期済み');return}
+   if(decision==='equal'){say('同期済み（外見設定 '+appearanceCount(local)+'頭）');return}
+   if(decision==='ack'){bind(remote);say('同期済み（外見設定 '+appearanceCount(local)+'頭）');return}
    if(!safe()){say('同期保留：レース・編集終了後に反映します');return}
    if(decision==='download'){receive(local,remote);return}
-   if(decision==='upload')await upload(local,remote);
+   if(decision==='upload'){
+    const next=preserveMissingAppearance(local,remote?.payload),saved=await upload(next,remote);
+    if(stable(next)!==stable(local))receive(local,saved);
+   }
   }catch(e){say('同期できません：'+String(e?.message||e)+'（端末保存は継続）')}
   finally{busy=false}
  }
@@ -197,8 +250,10 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
   try{await ready();const {error}=await client.auth.signOut({scope:'local'});if(error)throw error;show(false,false);say('ログアウトしました。端末データは残っています。')}
   catch(e){say('ログアウトできません：'+String(e?.message||e))}finally{busy=false}
  });
- ui.send.addEventListener('click',()=>tick('send'));ui.receive.addEventListener('click',()=>tick('receive'));
- ui.refresh.addEventListener('click',()=>tick());
+ const manual=mode=>{document.activeElement?.blur?.();return tick(mode)};
+ ui.send.addEventListener('click',()=>manual('send'));ui.receive.addEventListener('click',()=>manual('receive'));
+ ui.refresh.addEventListener('click',()=>manual('auto'));
+ document.addEventListener('race-lab:appearance-saved',()=>manual('auto'));
  window.addEventListener('online',()=>tick());
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')tick()});
  // Do not make a network request on every animation frame.
