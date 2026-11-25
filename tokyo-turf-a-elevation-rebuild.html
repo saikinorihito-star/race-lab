@@ -6166,7 +6166,7 @@ function setupRaceWatchUI(){
 
 function renderLiveRaceMonitor(time){
  if(!activePlan)return;
- const horses=isOfficialEighteenTest?raceHorses.slice(0,18):[];
+ const horses=isOfficialEighteenTest?raceHorses.slice(0,18).map(h=>({...h,name:officialRunnerNames[h.idx]||'試験馬'+h.number})):[];
  const ready=isOfficialEighteenTest&&installedDesign01&&horses.length===18;
  const elapsed=ready?raceElapsed:0,phase=ready&&horses.every(h=>h.finished)?'finish':elapsed>0?'race':'before';
  raceVision.update(time,camera,{ready,phase,playing:ready&&playing,elapsed,distance:activePlan.distance,
