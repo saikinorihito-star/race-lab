@@ -2,16 +2,30 @@
 // Coordinate convention: meters, +Y up, +Z faces grandstand.
 // All non-display dimensions are visual estimates, not surveyed measurements.
 export const VISION_SPECS=Object.freeze({
- 'tokyo-west':Object.freeze({venue:'東京',label:'西側',width:66.4,height:11.2,pixelsX:5312,pixelsY:896,year:2022}),
- 'tokyo-east':Object.freeze({venue:'東京',label:'東側',width:26.4,height:11.2,pixelsX:2112,pixelsY:896,year:2022}),
+ 'sapporo-main':Object.freeze({"venueId":"sapporo","venue":"札幌","label":"メイン","width":18,"height":8,"pixelsX":null,"pixelsY":null,"year":null,"status":"provisional","source":null}),
+ 'hakodate-main':Object.freeze({"venueId":"hakodate","venue":"函館","label":"メイン","width":17.28,"height":7.04,"pixelsX":null,"pixelsY":null,"year":2010,"status":"delivery","source":"https://www.mitsubishielectric.co.jp/ja/pr/2022/pdf/1006.pdf"}),
+ 'fukushima-main':Object.freeze({"venueId":"fukushima","venue":"福島","label":"メイン","width":18,"height":8,"pixelsX":null,"pixelsY":null,"year":null,"status":"provisional","source":null}),
+ 'niigata-main':Object.freeze({"venueId":"niigata","venue":"新潟","label":"メイン","width":18,"height":8,"pixelsX":null,"pixelsY":null,"year":null,"status":"provisional","source":null}),
+ 'tokyo-west':Object.freeze({"venueId":"tokyo","venue":"東京","label":"西側","width":66.4,"height":11.2,"pixelsX":5312,"pixelsY":896,"year":2022,"status":"delivery","source":"https://www.mitsubishielectric.co.jp/ja/pr/2022/pdf/1006.pdf"}),
+ 'tokyo-east':Object.freeze({"venueId":"tokyo","venue":"東京","label":"東側","width":26.4,"height":11.2,"pixelsX":2112,"pixelsY":896,"year":2022,"status":"delivery","source":"https://www.mitsubishielectric.co.jp/ja/pr/2022/pdf/1006.pdf"}),
+ 'nakayama-main':Object.freeze({"venueId":"nakayama","venue":"中山","label":"ゴール側","width":40.8,"height":9.6,"pixelsX":4080,"pixelsY":960,"year":2009,"status":"delivery","source":"https://www.mitsubishielectric.co.jp/ja/pr/2022/pdf/1006.pdf"}),
+ 'nakayama-sub':Object.freeze({"venueId":"nakayama","venue":"中山","label":"小型","width":14.4,"height":8,"pixelsX":1440,"pixelsY":800,"year":2009,"status":"delivery","source":"https://www.mitsubishielectric.co.jp/ja/pr/2022/pdf/1006.pdf"}),
+ 'chukyo-main':Object.freeze({"venueId":"chukyo","venue":"中京","label":"メイン","width":17.2,"height":9.6,"pixelsX":null,"pixelsY":null,"year":2014,"status":"delivery","source":"https://www.mitsubishielectric.co.jp/ja/pr/2022/pdf/1006.pdf"}),
+ 'kyoto-main':Object.freeze({"venueId":"kyoto","venue":"京都","label":"メイン","width":64,"height":10.8,"pixelsX":null,"pixelsY":null,"year":null,"status":"official","source":"https://www.jra.go.jp/facilities/race/kyoto/rcmap/"}),
+ 'hanshin-main':Object.freeze({"venueId":"hanshin","venue":"阪神","label":"メイン","width":46.4,"height":11.2,"pixelsX":null,"pixelsY":null,"year":null,"status":"official","source":"https://www.jra.go.jp/facilities/race/hanshin/rcmap/"}),
+ 'kokura-main':Object.freeze({"venueId":"kokura","venue":"小倉","label":"メイン","width":13.44,"height":7.68,"pixelsX":1344,"pixelsY":768,"year":null,"status":"delivery","source":"https://www.teic.jp/product/senyou-casestudies.htm"}),
 });
 export const VISION_SOURCE='https://www.mitsubishielectric.co.jp/ja/pr/2022/pdf/1006.pdf';
-export function visionDimensions(key='tokyo-west'){
+export function visionKeysForVenue(venueId){return Object.keys(VISION_SPECS).filter(k=>VISION_SPECS[k].venueId===venueId)}
+export function visionDimensions(key='tokyo-west',override={}){
  const spec=VISION_SPECS[key];if(!spec)throw Error('未対応のターフビジョン');
+ const width=override.width??spec.width,height=override.height??spec.height;
+ if(!Number.isFinite(width)||width<5||width>100||!Number.isFinite(height)||height<5||height>20)throw Error('画面幅5〜100m・高さ5〜20mの範囲で設定してください');
+ const custom=width!==spec.width||height!==spec.height;
  const side=.52,bottom=1.14,top=.43,depth=2.45;
- return {...spec,outerWidth:spec.width+2*side,outerHeight:bottom+spec.height+top,
-  depth,screenBottom:bottom,screenY:bottom+spec.height/2,screenZ:depth/2+.022,
-  rearY:(bottom+spec.height+top+.38)/2,rearH:bottom+spec.height+top-.38};
+ return {...spec,width,height,custom,outerWidth:width+2*side,outerHeight:bottom+height+top,
+  depth,screenBottom:bottom,screenY:bottom+height/2,screenZ:depth/2+.022,
+  rearY:(bottom+height+top+.38)/2,rearH:bottom+height+top-.38};
 }
 const PALETTE=Object.freeze({
  concrete:{color:0x9c9d97,roughness:.92},base:{color:0x626969,roughness:.87},
@@ -21,8 +35,8 @@ const PALETTE=Object.freeze({
  rubber:{color:0x151d20,roughness:.96},door:{color:0x59676d,metalness:.38,roughness:.62}
 });
 // Low-slung enclosed housing, no fictitious tall exposed support columns.
-export function visionParts(key='tokyo-west'){
- const d=visionDimensions(key),w=d.outerWidth,h=d.outerHeight,z=d.depth/2,parts=[];
+export function visionParts(key='tokyo-west',override={}){
+ const d=visionDimensions(key,override),w=d.outerWidth,h=d.outerHeight,z=d.depth/2,parts=[];
  const add=(id,mat,x,y,zz,sx,sy,sz)=>parts.push({id,mat,center:[x,y,zz],size:[sx,sy,sz]});
  add('foundation','concrete',0,.17,0,w+.72,.34,d.depth+.72);
  add('low-plinth','base',0,.55,0,w,.42,d.depth+.12);
@@ -57,10 +71,10 @@ export function visionParts(key='tokyo-west'){
  add('rear-top-trim','edge',0,h-.035,-z-.058,w,.075,.065);
  return parts;
 }
-export function createTurfVision(THREE,{key='tokyo-west',screenTexture=null,rearTexture=null}={}){
- const d=visionDimensions(key),root=new THREE.Group();root.name=key+'-vision';
+export function createTurfVision(THREE,{key='tokyo-west',screenTexture=null,rearTexture=null,override={}}={}){
+ const d=visionDimensions(key,override),root=new THREE.Group();root.name=key+'-vision';
  const geom=new THREE.BoxGeometry(1,1,1),owned=[geom],mats=[];
- const parts=visionParts(key),dummy=new THREE.Object3D();
+ const parts=visionParts(key,override),dummy=new THREE.Object3D();
  for(const [name,params] of Object.entries(PALETTE)){
   const list=parts.filter(p=>p.mat===name);if(!list.length)continue;
   const mat=new THREE.MeshStandardMaterial(params);mats.push(mat);
