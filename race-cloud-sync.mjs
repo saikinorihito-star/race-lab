@@ -16,11 +16,12 @@ const DISTANCES=[1400,1600,1800,2000,2300,2400,2500,2600,3400];
 const ROLES=['逃げ','先行','中団','差し','追込'];
 const GOINGS=['good','slightlyHeavy','heavy','bad'];
 const WEATHERS=['sunny','cloudy','rain'];
+function validStartRisk(a){return !a||!Object.hasOwn(a,'startRisk')||(Number.isInteger(a.startRisk)&&a.startRisk>=1&&a.startRisk<=10)}
 function validRaceHorse(h){
  const a=h?.ability;
  return Number.isSafeInteger(h?.id)&&h.id>=0&&h.id<10000&&typeof h.name==='string'&&
   h.name.trim().length>0&&h.name.length<=24&&a&&
-  RACE_KEYS.every(k=>Number.isInteger(a[k])&&a[k]>=1&&a[k]<=10)&&ROLES.includes(a.role)&&
+  validStartRisk(a)&&RACE_KEYS.every(k=>Number.isInteger(a[k])&&a[k]>=1&&a[k]<=10)&&ROLES.includes(a.role)&&
   Number.isInteger(a.preferredDistance)&&a.preferredDistance>=1000&&a.preferredDistance<=4000&&a.preferredDistance%50===0;
 }
 export function validRacePreset(r){
@@ -76,7 +77,7 @@ export function validPayload(p){
  const ids=l.horses.map(h=>h?.id);
  return new Set(ids).size===ids.length&&l.horses.every(h=>Number.isSafeInteger(h?.id)&&h.id>=0&&h.id<10000&&h.id<l.nextId&&
   typeof h.name==='string'&&h.name.trim().length>0&&h.name.length<=24&&
-  (h.ability===null||typeof h.ability==='object'&&!Array.isArray(h.ability)))&&l.lineup.every(i=>ids.includes(i));
+  (h.ability===null||typeof h.ability==='object'&&!Array.isArray(h.ability)&&validStartRisk(h.ability)))&&l.lineup.every(i=>ids.includes(i));
 }
 export function syncDecision(binding,uid,local,remote){
  if(!binding||binding.uid!==uid||!Number.isSafeInteger(binding.revision)||typeof binding.base!=='string')return 'setup';
