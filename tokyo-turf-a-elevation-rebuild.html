@@ -6179,13 +6179,13 @@ function renderLiveRaceMonitor(time){
    feedCamera.lookAt(focus.clone().add(new THREE.Vector3(0,1.35,0)));
   });
  }
- // One fixed-buffer particle system for subtle kicked-up grass from 18 horses.
+ // One fixed-buffer particle system for more visible kicked-up grass from 18 horses.
 // No per-particle meshes, material allocations, textures or draw calls.
-const TURF_SPRAY_CAPACITY=256;
+const TURF_SPRAY_CAPACITY=640;
 const turfSprayPositions=new Float32Array(TURF_SPRAY_CAPACITY*3);
 const turfSprayColors=new Float32Array(TURF_SPRAY_CAPACITY*3);
 const turfSprayState=Array.from({length:TURF_SPRAY_CAPACITY},()=>({
- life:0,maxLife:0,vx:0,vy:0,vz:0
+ life:0,maxLife:0,vx:0,vy:0,vz:0,groundY:0
 }));
 for(let i=0;i<TURF_SPRAY_CAPACITY;i++)turfSprayPositions[i*3+1]=-10000;
 const turfSprayGeometry=new THREE.BufferGeometry();
@@ -6196,8 +6196,8 @@ turfSprayColorAttribute.setUsage(THREE.DynamicDrawUsage);
 turfSprayGeometry.setAttribute('position',turfSprayPositionAttribute);
 turfSprayGeometry.setAttribute('color',turfSprayColorAttribute);
 const turfSprayMaterial=new THREE.PointsMaterial({
- size:.32,sizeAttenuation:true,vertexColors:true,
- transparent:true,opacity:.82,depthWrite:false
+ size:.40,sizeAttenuation:true,vertexColors:true,
+ transparent:true,opacity:.9,depthWrite:false
 });
 const turfSprayMesh=new THREE.Points(turfSprayGeometry,turfSprayMaterial);
 turfSprayMesh.frustumCulled=false; // Active particles move every frame.
@@ -6219,19 +6219,20 @@ function spawnTurfClipping(position,tangent,side,lateralOffset,going){
  const i=turfSprayCursor;
  turfSprayCursor=(turfSprayCursor+1)%TURF_SPRAY_CAPACITY;
  const state=turfSprayState[i],j=i*3;
- const scatter=(Math.random()-.5)*.7;
- const behind=1.05+Math.random()*.35;
+ const scatter=(Math.random()-.5)*1.65;
+ const behind=1.05+Math.random()*.48;
+ state.groundY=position.y;
  turfSprayPositions[j]=position.x-tangent.x*behind+side.x*lateralOffset;
  turfSprayPositions[j+1]=position.y+.11+Math.random()*.07;
  turfSprayPositions[j+2]=position.z-tangent.z*behind+side.z*lateralOffset;
- const backward=1.4+Math.random()*1.0;
+ const backward=2.0+Math.random()*1.65;
  state.vx=-tangent.x*backward+side.x*scatter;
- state.vy=.8+Math.random()*.85;
+ state.vy=1.45+Math.random()*1.45;
  state.vz=-tangent.z*backward+side.z*scatter;
- state.life=state.maxLife=.32+Math.random()*.24;
+ state.life=state.maxLife=.48+Math.random()*.30;
  const shades=going>.4?
-  [[.42,.40,.27],[.47,.44,.32],[.36,.42,.24]]:
-  [[.40,.55,.26],[.53,.61,.35],[.49,.47,.26]];
+  [[.46,.43,.28],[.52,.49,.34],[.39,.48,.25]]:
+  [[.46,.65,.29],[.59,.70,.36],[.53,.51,.28]];
  const shade=shades[(Math.random()*shades.length)|0];
  turfSprayColors[j]=shade[0];turfSprayColors[j+1]=shade[1];turfSprayColors[j+2]=shade[2];
 }
@@ -6253,7 +6254,7 @@ function updateTurfSpray(dt){
  for(let i=0;i<18;i++){
   const horse=raceHorses[i];
   if(!horse||horse.finished||horse.speed<11||horse.distance<4)continue;
-  const interval=going>.4?2.35:3.1;
+  const interval=going>.4?1.95:2.55;
   if(turfSprayLastDistances[i]>=0&&
    horse.distance-turfSprayLastDistances[i]<interval)continue;
   turfSprayLastDistances[i]=horse.distance;
@@ -6261,10 +6262,11 @@ function updateTurfSpray(dt){
   if(!pose)continue;
   const at=raceHorsePosition(pose);
   const side=new THREE.Vector3(at.t.z,0,-at.t.x);
-  // Two back hooves. More turf on wet courses; good turf stays subtle.
+  // Burst from both hind hooves with a smaller central clipping; wetter turf throws more.
   spawnTurfClipping(at.p,at.t,side,-.24,going);
   spawnTurfClipping(at.p,at.t,side,.24,going);
-  if(going>.6)spawnTurfClipping(at.p,at.t,side,0,going);
+  spawnTurfClipping(at.p,at.t,side,(Math.random()-.5)*.58,going);
+  if(going>.4)spawnTurfClipping(at.p,at.t,side,(Math.random()-.5)*.8,going);
   emitted=true;
  }
  let moved=emitted;
@@ -6280,7 +6282,8 @@ function updateTurfSpray(dt){
   turfSprayPositions[j]+=p.vx*dt;
   turfSprayPositions[j+1]+=p.vy*dt;
   turfSprayPositions[j+2]+=p.vz*dt;
-  p.vy-=6.0*dt;
+  p.vy-=6.8*dt;
+  if(p.vy<0&&turfSprayPositions[j+1]<p.groundY+.04){p.life=0;turfSprayPositions[j+1]=-10000;continue;}
   const fade=THREE.MathUtils.clamp(p.life/p.maxLife,0,1);
   turfSprayColors[j]*=1-.55*dt*(1-fade);
   turfSprayColors[j+1]*=1-.55*dt*(1-fade);
