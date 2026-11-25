@@ -64,11 +64,14 @@ export function visionParts(key='tokyo-west',override={}){
   const x=-w/2+i*w/cols;
   add('top-joint-'+i,'seam',x,h-.215,z+.018,.018,.41,.012);
   add('bottom-joint-'+i,'seam',x,.95,z+.018,.018,.34,.012);
-  add('roof-joint-'+i,'seam',x,h+.002,0,.023,.008,d.depth);
+  // Do not layer millimetre-thin seams over the roof: they alias at race-camera distances.
  }
- add('rear-panel-frame','frame',0,d.rearY,-z-.008,w,d.rearH,.055);
- add('rear-bottom-trim','edge',0,.41,-z-.058,w,.075,.065);
- add('rear-top-trim','edge',0,h-.035,-z-.058,w,.075,.065);
+ // Rear mural and frame occupy disjoint rectangles; no stacked near-coplanar rear plates.
+ const trim=.12,rearZ=-z-.19;
+ for(const side of [-1,1]){
+  add('rear-vertical-trim-'+side,'frame',side*(w-trim)/2,d.rearY,rearZ,trim,d.rearH,.16);
+  add('rear-horizontal-trim-'+side,'edge',0,d.rearY+side*(d.rearH-trim)/2,rearZ,w-2*trim,trim,.16);
+ }
  return parts;
 }
 export function createTurfVision(THREE,{key='tokyo-west',screenTexture=null,rearTexture=null,override={}}={}){
@@ -86,9 +89,9 @@ export function createTurfVision(THREE,{key='tokyo-west',screenTexture=null,rear
  const screenMat=new THREE.MeshBasicMaterial({color:screenTexture?0xffffff:0x11171c,map:screenTexture,side:THREE.FrontSide,toneMapped:false});mats.push(screenMat);
  const screen=new THREE.Mesh(screenGeo,screenMat);screen.name='active-led-screen';screen.position.set(0,d.screenY,d.screenZ);root.add(screen);
  // Rear art is separate; production can use a verified/licensed texture.
- const rearGeo=new THREE.PlaneGeometry(d.outerWidth-.12,d.rearH-.12);owned.push(rearGeo);
- const rearMat=new THREE.MeshStandardMaterial({color:rearTexture?0xffffff:0x687c84,map:rearTexture,roughness:.96,side:THREE.FrontSide});mats.push(rearMat);
- const rear=new THREE.Mesh(rearGeo,rearMat);rear.name='rear-artwork';rear.position.set(0,d.rearY,-d.depth/2-.065);rear.rotation.y=Math.PI;root.add(rear);
+ const rearGeo=new THREE.PlaneGeometry(d.outerWidth-.24,d.rearH-.24);owned.push(rearGeo);
+ const rearMat=new THREE.MeshStandardMaterial({color:rearTexture?0xffffff:0x687c84,map:rearTexture,roughness:1,metalness:0,side:THREE.FrontSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2});mats.push(rearMat);
+ const rear=new THREE.Mesh(rearGeo,rearMat);rear.name='rear-artwork';rear.position.set(0,d.rearY,-d.depth/2-.27);rear.rotation.y=Math.PI;root.add(rear);
  function setScreenTexture(texture){screenMat.map=texture;screenMat.color.setHex(texture?0xffffff:0x11171c);screenMat.needsUpdate=true}
  function setRearTexture(texture){rearMat.map=texture;rearMat.color.setHex(texture?0xffffff:0x687c84);rearMat.needsUpdate=true}
  function dispose(){owned.forEach(g=>g.dispose());mats.forEach(m=>m.dispose())}
