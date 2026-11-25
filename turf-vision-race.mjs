@@ -49,11 +49,14 @@ export function createRaceVisionSystem(THREE,{scene,renderer,venue,mobile=false,
   mesh.position.set(-d.width/2+v.x+v.w/2,d.screenBottom+v.y+v.h/2,d.screenZ+.016);mesh.visible=false;group.add(mesh);
   boards.push({p,d,layout,c,background,art,model,mesh});
  }
- let lastPaint=-Infinity,lastKey='',lastVisible=false;
+ let lastPaint=-Infinity,lastKey='',lastVisible=false,feedFailed=false;
  const frustum=new THREE.Frustum(),matrix=new THREE.Matrix4(),center=new THREE.Vector3(),sphere=new THREE.Sphere();
  function visible(camera){
   camera.updateMatrixWorld();frustum.setFromProjectionMatrix(matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
-  return boards.some(b=>{if(!b.model.root.visible)return false;center.copy(b.model.root.position);center.y+=b.d.screenY;
+  return boards.some(b=>{if(!b.model.root.visible)return false;
+   const g=b.model.root,dx=camera.position.x-g.position.x,dz=camera.position.z-g.position.z;
+   if(dx*Math.sin(g.rotation.y)+dz*Math.cos(g.rotation.y)<=b.d.screenZ)return false;
+   center.copy(g.position);center.y+=b.d.screenY;
    sphere.center.copy(center);sphere.radius=Math.hypot(b.d.outerWidth/2,b.d.outerHeight/2,b.d.depth/2);return frustum.intersectsSphere(sphere)});
  }
  function paint(b,state,rank,hasFeed){
@@ -63,7 +66,7 @@ export function createRaceVisionSystem(THREE,{scene,renderer,venue,mobile=false,
   x.fillStyle='#254957';x.fillRect(0,0,W,hh);x.fillStyle='#eaf2ee';x.textAlign='left';x.textBaseline='middle';
   x.font='bold '+Math.max(10,Math.min(hh*.58,W*.046))+'px sans-serif';x.fillText(d.venue+'競馬場  芝 '+(state.distance||'—')+'m',W*.025,hh*.52,W*.95);
   x.fillStyle='#213c36';x.fillRect(vx,vy,vw,vh);
-  if(!hasFeed){x.fillStyle='#c7dcd4';x.textAlign='center';x.font='bold '+Math.min(vh*.17,vw*.12)+'px sans-serif';x.fillText(state.ready?'発走待機':'モデル読込待ち',vx+vw/2,vy+vh/2,vw*.92);x.textAlign='left'}
+  if(!hasFeed){x.fillStyle='#c7dcd4';x.textAlign='center';x.font='bold '+Math.min(vh*.17,vw*.12)+'px sans-serif';x.fillText(state.ready?(state.phase==='before'?'発走待機':'映像停止'):'モデル読込待ち',vx+vw/2,vy+vh/2,vw*.92);x.textAlign='left'}
   const dataX=layout.dataX*S,dataW=W-dataX-W*.02,bodyH=H-hh-fh,rows=Math.min(5,rank.length),rowH=bodyH/(rows+1);
   x.fillStyle='#14232d';x.fillRect(dataX,hh,dataW,bodyH);x.fillStyle='#ebd58c';
   x.font='bold '+Math.min(rowH*.64,dataW*.22)+'px sans-serif';x.fillText(state.phase==='finish'?'着順':state.phase==='before'?'出走馬':'順位',dataX+dataW*.05,hh+rowH*.5,dataW*.9);
@@ -80,14 +83,15 @@ export function createRaceVisionSystem(THREE,{scene,renderer,venue,mobile=false,
  function update(time,camera,state,aim){
   const inView=visible(camera);
   if(!inView){lastVisible=false;return false}
-  const rank=monitorRank(state.horses||[]),key=[state.distance,state.phase,monitorTime(state.elapsed),state.ready,rank.map(h=>h.number).join(',')].join('|');
+  const rank=monitorRank(state.horses||[]),key=[state.distance,state.phase,monitorTime(state.elapsed),state.ready,rank.map(h=>h.number+':'+(h.name||'')).join(',')].join('|');
   const changed=key!==lastKey;
   if(lastVisible&&(!changed&&!state.playing||time-lastPaint<monitorInterval(state.fps,mobile)&&state.playing))return false;
-  const canFeed=!!target&&state.ready&&typeof aim==='function';
+  const canFeed=!!target&&!feedFailed&&state.ready&&typeof aim==='function';
   let hasFeed=false;
   if(canFeed){
    const oldTarget=renderer.getRenderTarget(),oldVisible=groups.map(g=>g.visible);
    try{aim(feedCamera);groups.forEach(g=>g.visible=false);renderer.setRenderTarget(target);renderer.clear();renderer.render(scene,feedCamera);hasFeed=true}
+   catch(e){feedFailed=true;console.warn('ターフビジョン映像の描画失敗：順位・時刻表示へ切替',e)}
    finally{renderer.setRenderTarget(oldTarget);groups.forEach((g,i)=>g.visible=oldVisible[i])}
   }
   for(const b of boards){b.mesh.visible=hasFeed;paint(b,state,rank,hasFeed)}
@@ -95,5 +99,7 @@ export function createRaceVisionSystem(THREE,{scene,renderer,venue,mobile=false,
  }
  // Initialize boards without a stale/black render target.
  for(const b of boards)paint(b,{phase:'before',elapsed:0,ready:false},[],false);
- return {boards,groups,update};
+ function invalidate(){lastPaint=-Infinity;lastKey='';lastVisible=false;feedFailed=false}
+ renderer.domElement?.addEventListener('webglcontextrestored',invalidate);
+ return {boards,groups,update,invalidate};
 }
