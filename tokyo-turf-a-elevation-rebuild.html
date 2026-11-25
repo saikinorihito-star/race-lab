@@ -6179,29 +6179,68 @@ function renderLiveRaceMonitor(time){
    feedCamera.lookAt(focus.clone().add(new THREE.Vector3(0,1.35,0)));
   });
  }
- // One fixed-buffer particle system for more visible kicked-up grass from 18 horses.
-// No per-particle meshes, material allocations, textures or draw calls.
-const TURF_SPRAY_CAPACITY=640;
+ // Grass clippings: tapered, bent 3D leaf fragments instead of round screen dots.
+// A single fixed-capacity instanced mesh keeps the draw-call count constant.
+const TURF_SPRAY_CAPACITY=768;
 const turfSprayPositions=new Float32Array(TURF_SPRAY_CAPACITY*3);
-const turfSprayColors=new Float32Array(TURF_SPRAY_CAPACITY*3);
 const turfSprayState=Array.from({length:TURF_SPRAY_CAPACITY},()=>({
- life:0,maxLife:0,vx:0,vy:0,vz:0,groundY:0
+ life:0,maxLife:0,vx:0,vy:0,vz:0,groundY:0,rx:0,ry:0,rz:0,spinX:0,spinY:0,spinZ:0,size:1
 }));
-for(let i=0;i<TURF_SPRAY_CAPACITY;i++)turfSprayPositions[i*3+1]=-10000;
 const turfSprayGeometry=new THREE.BufferGeometry();
-const turfSprayPositionAttribute=new THREE.BufferAttribute(turfSprayPositions,3);
-turfSprayPositionAttribute.setUsage(THREE.DynamicDrawUsage);
-const turfSprayColorAttribute=new THREE.BufferAttribute(turfSprayColors,3);
-turfSprayColorAttribute.setUsage(THREE.DynamicDrawUsage);
-turfSprayGeometry.setAttribute('position',turfSprayPositionAttribute);
-turfSprayGeometry.setAttribute('color',turfSprayColorAttribute);
-const turfSprayMaterial=new THREE.PointsMaterial({
- size:.40,sizeAttenuation:true,vertexColors:true,
- transparent:true,opacity:.9,depthWrite:false
+const turfBladeVertices=[],turfBladeColors=[];
+function turfBladeTriangle(a,b,c,shade){
+ for(const v of [a,b,c]){
+  turfBladeVertices.push(...v);
+  turfBladeColors.push(shade,shade,shade*.94);
+ }
+}
+// Three asymmetric, tapered ribbons: long central leaf and two shorter blades.
+// A bent midrib catches the changing viewing angle without relying on textures.
+function addTurfBlade(angle,length,width,lean){
+ const cs=Math.cos(angle),sn=Math.sin(angle);
+ const point=(x,y,z)=>[x*cs+z*sn,y,-x*sn+z*cs];
+ const root=point(0,-.04,0),l=point(-width*.5,length*.28,lean*.14),
+  rr=point(width*.5,length*.28,lean*.14),ridge=point(0,length*.30,lean*.14+.018),
+  ml=point(-width*.30,length*.61,lean*.54),mr=point(width*.30,length*.61,lean*.54),
+  mid=point(0,length*.65,lean*.54+.012),tip=point(width*.13,length,lean);
+ turfBladeTriangle(root,l,ridge,.67);turfBladeTriangle(root,ridge,rr,.92);
+ turfBladeTriangle(l,ml,mid,.76);turfBladeTriangle(l,mid,ridge,.76);
+ turfBladeTriangle(ridge,mid,mr,.98);turfBladeTriangle(ridge,mr,rr,.98);
+ turfBladeTriangle(ml,tip,mid,.84);turfBladeTriangle(mid,tip,mr,1);
+}
+addTurfBlade(.12,.34,.085,.105);
+addTurfBlade(2.13,.24,.067,.135);
+addTurfBlade(4.37,.17,.060,.09);
+turfSprayGeometry.setAttribute('position',new THREE.Float32BufferAttribute(turfBladeVertices,3));
+turfSprayGeometry.setAttribute('color',new THREE.Float32BufferAttribute(turfBladeColors,3));
+const turfSprayMaterial=new THREE.MeshBasicMaterial({
+ vertexColors:true,side:THREE.DoubleSide
 });
-const turfSprayMesh=new THREE.Points(turfSprayGeometry,turfSprayMaterial);
-turfSprayMesh.frustumCulled=false; // Active particles move every frame.
+const turfSprayMesh=new THREE.InstancedMesh(turfSprayGeometry,turfSprayMaterial,TURF_SPRAY_CAPACITY);
+turfSprayMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+turfSprayMesh.frustumCulled=false;
 turfSprayMesh.visible=isOfficialEighteenTest;
+const turfSprayDummy=new THREE.Object3D(),turfSprayTint=new THREE.Color();
+function writeTurfInstance(i){
+ const p=turfSprayState[i],j=i*3;
+ if(p.life<=0){
+  turfSprayDummy.position.set(0,-10000,0);
+  turfSprayDummy.scale.setScalar(0);
+ }else{
+  const shrink=Math.min(1,p.life/.12);
+  turfSprayDummy.position.set(turfSprayPositions[j],turfSprayPositions[j+1],turfSprayPositions[j+2]);
+  turfSprayDummy.rotation.set(p.rx,p.ry,p.rz);
+  turfSprayDummy.scale.setScalar(p.size*shrink);
+ }
+ turfSprayDummy.updateMatrix();
+ turfSprayMesh.setMatrixAt(i,turfSprayDummy.matrix);
+}
+for(let i=0;i<TURF_SPRAY_CAPACITY;i++){
+ writeTurfInstance(i);
+ turfSprayMesh.setColorAt(i,turfSprayTint.setRGB(.32,.49,.12));
+}
+turfSprayMesh.instanceMatrix.needsUpdate=true;
+if(turfSprayMesh.instanceColor)turfSprayMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
 scene.add(turfSprayMesh);
 let turfSprayCursor=0,turfSprayLastRaceTime=-1,turfSprayWasPlaying=false;
 const turfSprayLastDistances=new Float64Array(18);
@@ -6209,10 +6248,10 @@ turfSprayLastDistances.fill(-1);
 function clearTurfSpray(){
  for(let i=0;i<TURF_SPRAY_CAPACITY;i++){
   turfSprayState[i].life=0;
-  turfSprayPositions[i*3+1]=-10000;
+  writeTurfInstance(i);
  }
  turfSprayLastDistances.fill(-1);
- turfSprayPositionAttribute.needsUpdate=true;
+ turfSprayMesh.instanceMatrix.needsUpdate=true;
  turfSprayCursor=0;
 }
 function spawnTurfClipping(position,tangent,side,lateralOffset,going){
@@ -6227,14 +6266,17 @@ function spawnTurfClipping(position,tangent,side,lateralOffset,going){
  turfSprayPositions[j+2]=position.z-tangent.z*behind+side.z*lateralOffset;
  const backward=2.0+Math.random()*1.65;
  state.vx=-tangent.x*backward+side.x*scatter;
- state.vy=1.45+Math.random()*1.45;
+ state.vy=2.05+Math.random()*1.85;
  state.vz=-tangent.z*backward+side.z*scatter;
- state.life=state.maxLife=.48+Math.random()*.30;
+ state.life=state.maxLife=.68+Math.random()*.37;
+ state.rx=Math.random()*Math.PI*2;state.ry=Math.random()*Math.PI*2;state.rz=Math.random()*Math.PI*2;
+ state.spinX=(Math.random()-.5)*9;state.spinY=(Math.random()-.5)*10;state.spinZ=(Math.random()-.5)*9;
+ state.size=.62+Math.random()*.70;
  const shades=going>.4?
-  [[.46,.43,.28],[.52,.49,.34],[.39,.48,.25]]:
-  [[.46,.65,.29],[.59,.70,.36],[.53,.51,.28]];
+  [[.31,.40,.13],[.39,.48,.19],[.31,.28,.12],[.40,.37,.17]]:
+  [[.29,.54,.10],[.43,.62,.15],[.36,.47,.09],[.51,.60,.19]];
  const shade=shades[(Math.random()*shades.length)|0];
- turfSprayColors[j]=shade[0];turfSprayColors[j+1]=shade[1];turfSprayColors[j+2]=shade[2];
+ turfSprayMesh.setColorAt(i,turfSprayTint.setRGB(shade[0],shade[1],shade[2]));
 }
 function updateTurfSpray(dt){
  if(!isOfficialEighteenTest||!installedDesign01||!activePlan)return;
@@ -6243,8 +6285,6 @@ function updateTurfSpray(dt){
   turfSprayWasPlaying=false;turfSprayLastRaceTime=raceElapsed;
   return;
  }
- // Jumping ±10s or starting a fresh run must not leave particles
- // suspended around the horse's previous location.
  if(turfSprayLastRaceTime<0||
   raceElapsed<turfSprayLastRaceTime-.03||
   raceElapsed-turfSprayLastRaceTime>.45)clearTurfSpray();
@@ -6262,7 +6302,6 @@ function updateTurfSpray(dt){
   if(!pose)continue;
   const at=raceHorsePosition(pose);
   const side=new THREE.Vector3(at.t.z,0,-at.t.x);
-  // Burst from both hind hooves with a smaller central clipping; wetter turf throws more.
   spawnTurfClipping(at.p,at.t,side,-.24,going);
   spawnTurfClipping(at.p,at.t,side,.24,going);
   spawnTurfClipping(at.p,at.t,side,(Math.random()-.5)*.58,going);
@@ -6270,29 +6309,25 @@ function updateTurfSpray(dt){
   emitted=true;
  }
  let moved=emitted;
+ const delta=Math.min(.06,Math.max(0,dt));
  for(let i=0;i<TURF_SPRAY_CAPACITY;i++){
   const p=turfSprayState[i];
   if(p.life<=0)continue;
-  moved=true;p.life-=dt;
+  moved=true;p.life-=delta;
   const j=i*3;
-  if(p.life<=0){
-   turfSprayPositions[j+1]=-10000;
-   continue;
+  if(p.life>0){
+   turfSprayPositions[j]+=p.vx*delta;
+   turfSprayPositions[j+1]+=p.vy*delta;
+   turfSprayPositions[j+2]+=p.vz*delta;
+   p.vy-=6.2*delta;
+   p.vx*=Math.exp(-.85*delta);p.vz*=Math.exp(-.85*delta);
+   p.rx+=p.spinX*delta;p.ry+=p.spinY*delta;p.rz+=p.spinZ*delta;
+   if(p.vy<0&&turfSprayPositions[j+1]<p.groundY+.04)p.life=0;
   }
-  turfSprayPositions[j]+=p.vx*dt;
-  turfSprayPositions[j+1]+=p.vy*dt;
-  turfSprayPositions[j+2]+=p.vz*dt;
-  p.vy-=6.8*dt;
-  if(p.vy<0&&turfSprayPositions[j+1]<p.groundY+.04){p.life=0;turfSprayPositions[j+1]=-10000;continue;}
-  const fade=THREE.MathUtils.clamp(p.life/p.maxLife,0,1);
-  turfSprayColors[j]*=1-.55*dt*(1-fade);
-  turfSprayColors[j+1]*=1-.55*dt*(1-fade);
-  turfSprayColors[j+2]*=1-.55*dt*(1-fade);
+  writeTurfInstance(i);
  }
- if(moved){
-  turfSprayPositionAttribute.needsUpdate=true;
-  turfSprayColorAttribute.needsUpdate=true;
- }
+ if(moved)turfSprayMesh.instanceMatrix.needsUpdate=true;
+ if(emitted&&turfSprayMesh.instanceColor)turfSprayMesh.instanceColor.needsUpdate=true;
 }
 // Original built-in fusion BGM; optional custom track remains device-local.
 const raceBgmToggle=document.querySelector('#raceBgmToggle');
