@@ -1,5 +1,24 @@
 import {createGateVenueController} from './jss50-gate.mjs?v=3';
 export const APPROVED_PITCH=.98;
+// Keep the front-door plane and the horse's race origin fixed. Only extend
+// the existing gate along its depth when the actual normalized horse needs it.
+export const GATE_HINGE_Z=1.42,TAIL_CLEARANCE=.18;
+export function gateDepthFit(horseMinZ){
+ const rear=Number.isFinite(horseMinZ)?Math.min(-GATE_HINGE_Z,horseMinZ-TAIL_CLEARANCE):-GATE_HINGE_Z;
+ const scaleZ=(GATE_HINGE_Z-rear)/(2*GATE_HINGE_Z);
+ return {scaleZ,offsetZ:GATE_HINGE_Z*(1-scaleZ),rear};
+}
+// The horse is detached, already normalized and in the exact release pose.
+// Measure once per load, never per frame or per horse.
+export function measureGateHorseRear(THREE,model,mixer,restMinZ){
+ mixer.setTime(0);
+ model.updateMatrixWorld(true);
+ model.traverse(o=>{if(o.isSkinnedMesh)o.skeleton.update()});
+ const box=new THREE.Box3().setFromObject(model,true);
+ const values=[restMinZ,box.min.z].filter(Number.isFinite);
+ return values.length?Math.min(...values):null;
+}
+
 export function stallCenter(count,index,pitch=APPROVED_PITCH){return (index-(count-1)/2)*pitch}
 export function stallNumber(count,index,insideRight){return insideRight?count-index:index+1}
 export function extensionSlabs(count){
@@ -92,6 +111,7 @@ export function createRaceGate(THREE,source,{count=18,pitch=APPROVED_PITCH,venue
  venueController.setVenue(venue);
  root.scale.x=pitch/APPROVED_PITCH;
  function setDoors(front=0,rear=0){for(const p of doors){const f=p.name.startsWith('front'),left=p.name.endsWith('_L');p.rotation.y=(left?-1:1)*(f?1:-1)*Math.PI*.48*Math.max(0,Math.min(1,f?front:rear))}}
+ function fitHorseRear(minZ){const {scaleZ,offsetZ}=gateDepthFit(minZ);root.scale.z=scaleZ;root.position.z=offsetZ;}
  function dispose(){venueController.dispose();ownedGeometries.forEach(g=>g.dispose());ownedMaterials.forEach(m=>m.dispose());ownedTextures.forEach(t=>t.dispose())}
- return {root,doors,setDoors,setVenue:venueController.setVenue,dispose,count,pitch};
+ return {root,doors,setDoors,setVenue:venueController.setVenue,fitHorseRear,dispose,count,pitch};
 }
