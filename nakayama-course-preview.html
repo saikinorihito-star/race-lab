@@ -4,22 +4,28 @@
 :root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#101f26;color:#eef6f4}*{box-sizing:border-box}body{margin:0}main{max-width:1280px;margin:auto;padding:12px}header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}h1{font-size:21px;margin:0}p{line-height:1.6;font-size:13px;color:#b4c9c6}a{color:#b9e8de}button,select,input{font:inherit}button,select{color:#f2ffff;background:#274653;border:1px solid #71959b;border-radius:8px;min-height:44px;padding:8px 12px}button.primary{background:#bde975;color:#14251b;font-weight:bold}button:disabled{opacity:.5}.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.stage{position:relative;height:min(62vh,680px);min-height:310px;border:1px solid #537c80;border-radius:12px;overflow:hidden;background:#9ac4dd}.stage canvas{width:100%;height:100%;display:block;touch-action:none}.stage .hud{position:absolute;left:10px;top:10px;background:#10232fe8;color:white;border-radius:8px;padding:8px;font-size:13px;pointer-events:none}.stage .error{position:absolute;inset:15px;background:#142c37;padding:15px;border-radius:8px} .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}.metric{border:1px solid #36535a;border-radius:9px;background:#172c36;padding:10px}.metric span{display:block;font-size:11px;color:#b2cac7}.metric strong{display:block;font-size:18px;margin-top:5px;font-variant-numeric:tabular-nums}#profile{width:100%;height:160px;background:#142b35;border-radius:8px;margin-top:10px}#progress{width:100%;min-height:34px}small{color:#b4c9c6}details{margin-top:12px;border:1px solid #36535a;border-radius:9px;padding:12px}summary{cursor:pointer} @media(max-width:500px){main{padding:8px}.stage{height:48vh;min-height:300px}h1{font-size:18px}.controls{gap:5px}button,select{padding:8px}}
 </style><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script></head>
 <body><main><header><h1 id="venueTitle">中山競馬場｜芝Aコース</h1><a href="./tokyo-turf-a-elevation-rebuild.html?relief=3&amp;model=design01&amp;group=18">東京・既存レースへ戻る</a></header>
-<p>芝コース精密化版：発走直線・内外接続・仮柵A/B/Cに対応。馬の能力計算や18頭の競走はまだ接続していません。</p>
-<div class="controls"><label>仮柵 <select id="rail"><option value="A">A（基準）</option><option value="B">B（3m外）</option><option value="C">C（6m外）</option></select></label><label>距離 <select id="distance"></select></label><button id="overhead">全体・上空</button><button id="angle">斜め全景</button><button id="follow">走路追尾</button><label>坂の表示 <select id="relief"><option value="1" selected>実寸</option><option value="3">3倍（確認用）</option></select></label></div>
+<p>正式Design01・1頭走行検証版。芝A/B/C・全10距離に対応。競走相手や全能力の計算はまだ接続していません。</p>
+<div class="controls"><label>仮柵 <select id="rail"><option value="A">A（基準）</option><option value="B">B（3m外）</option><option value="C">C（6m外）</option></select></label><label>距離 <select id="distance"></select></label><button id="overhead">全体・上空</button><button id="angle">斜め全景</button><button id="follow">真横（外側）</button><button id="front">斜め前（外側）</button><button id="rear">後方追尾</button><label>坂の表示 <select id="relief"><option value="1" selected>実寸</option><option value="3">3倍（確認用）</option></select></label></div>
 <div id="stage" class="stage"><div class="hud" id="hud">読み込み中</div></div>
-<div class="controls"><button id="play" class="primary">走路確認スタート</button><button id="reset">発走地点へ</button><label>速度 <select id="speed"><option value="1">1倍</option><option value="2">2倍</option><option value="4" selected>4倍</option><option value="8">8倍</option></select></label><small>青い点は走路確認用の位置マーカーです。</small></div>
-<div class="controls"><label>走行ライン <select id="lane"><option value="0">基準線（内ラチから1m）</option><option value="2">基準線の2m外</option><option value="5">基準線の5m外</option><option value="center">コース中央</option></select></label><small>残り距離は基準線、走行距離は選択したラインで計算</small></div><label>走行位置 <input id="progress" type="range" min="0" max="2500" value="0" step="1"></label>
-<div class="metrics"><div class="metric"><span>コース</span><strong id="type">—</strong></div><div class="metric"><span>残り距離</span><strong id="remain">—</strong></div><div class="metric"><span>相対高度（近似）</span><strong id="alt">—</strong></div><div class="metric"><span>勾配（近似）</span><strong id="grade">—</strong></div></div>
+<div class="controls"><button id="play" class="primary" disabled>モデル読込中</button><button id="reset">発走地点へ</button><label>速度 <select id="speed"><option value="1" selected>1倍</option><option value="2">2倍</option><option value="4">4倍</option></select></label><button id="back10">−10秒</button><button id="forward10">＋10秒</button></div>
+<div class="controls"><label>走行ライン <select id="lane"><option value="0">基準線（内ラチから1m）</option><option value="2" selected>基準線の2m外</option><option value="5">基準線の5m外</option><option value="center">コース中央</option></select></label><small>残り距離は基準線、走行距離は選択したラインで計算</small></div><div class="controls"><label>出遅れやすさ <select id="risk"></select></label><label>展開番号 <input id="seed" type="number" value="1" min="1" max="999999" step="1" style="width:100px"></label></div>
+<p id="modelStatus" role="status">東京版と共通の正式馬モデルを確認中…</p><label id="modelFileLabel" hidden>正式Design01 GLB <input id="modelFile" type="file" accept=".glb,model/gltf-binary"></label>
+<label>走行位置 <input id="progress" type="range" min="0" max="2500" value="0" step="1"></label>
+<div class="metrics"><div class="metric"><span>経過時間</span><strong id="elapsed">0.00秒</strong></div><div class="metric"><span>走行速度</span><strong id="velocity">0.0 km/h</strong></div><div class="metric"><span>出遅れ</span><strong id="delay">—</strong></div><div class="metric"><span>コース</span><strong id="type">—</strong></div><div class="metric"><span>残り距離</span><strong id="remain">—</strong></div><div class="metric"><span>相対高度（近似）</span><strong id="alt">—</strong></div><div class="metric"><span>勾配（近似）</span><strong id="grade">—</strong></div></div>
 <div class="metrics" style="margin-top:8px"><div class="metric"><span>ライン全長（水平距離）</span><strong id="laneLength">—</strong></div><div class="metric"><span>基準線との差</span><strong id="laneExtra">—</strong></div><div class="metric"><span>累積上昇量</span><strong id="ascent">—</strong></div></div><p id="landmarks"></p><canvas id="profile" aria-label="距離別高低断面図"></canvas>
 <details><summary>コースの仕様・出典</summary><p>右回り、内1667.1m／外1839.7m、直線310m、全体高低差5.3m、残り180〜70mの急坂2.2m・最大勾配2.24%。平面座標、分岐点の距離、幅員分布、各坂の細部は公式図から推定した再構築値。発走用の直線延長とポケットは公式図に基づく近似です。1200mの約4.4mの下りは4コーナー出口までと解釈して校正。ダートは1周1493m・直線308m・高低差4.5m・幅員20〜25mに校正した景観用モデルです。B/Cは内柵を3/6m外へ移動し、公式の周回距離で距離目盛を校正。各仮柵での発走位置・コーナー境界はモデル上の近似です。ダート・障害競走は対象外です。</p><p><a href="https://www.jra.go.jp/facilities/race/nakayama/course/" target="_blank" rel="noopener">JRA公式 中山競馬場コース紹介</a></p></details>
 </main><script type="module">
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {buildPath,buildRun,runAt,timeAtDistance,START_RISK} from './nakayama-single-run.mjs?v=1';
 import {SPEC,DISTANCES,ROUTE_LABELS,LOOPS,SECTIONS,at,widthAt,makeRoute,routeAt,gradeAt,laneAt,measureRoute,courseLandmarks,DIRT_SPEC,dirtAt,railSpec,railSections} from './nakayama-course.mjs?v=4';
 const $=id=>document.getElementById(id),stage=$('stage');
 for(const d of DISTANCES)$('distance').add(new Option(d+'m（'+ROUTE_LABELS[d]+'）',d));
 $('distance').value='2500';
-let railChoice='A',route=makeRoute(2500,railChoice),travel=0,playing=false,mode='overhead',relief=1,lane=0;
+let railChoice='A',route=makeRoute(2500,railChoice),travel=0,playing=false,mode='follow',relief=1,lane=2;
+let run=null,elapsed=0,loadedHorse=null,mixer=null,modelReady=false,cameraSnap=true,routeLine=null;
+for(let i=1;i<=10;i++)$('risk').add(new Option(i+'（'+Math.round(START_RISK[i]*100)+'%）',i));
 const scene=new THREE.Scene();scene.background=new THREE.Color(0xa6cddd);scene.fog=new THREE.Fog(0xa6cddd,1200,2700);
 const camera=new THREE.PerspectiveCamera(48,1,.5,4000);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.7));stage.prepend(renderer.domElement);
@@ -29,7 +35,50 @@ scene.add(new THREE.HemisphereLight(0xe7f7ff,0x5b744a,2.2));const sun=new THREE.
 const ground=new THREE.Mesh(new THREE.PlaneGeometry(2400,1800),new THREE.MeshStandardMaterial({color:0x59854b}));ground.rotation.x=-Math.PI/2;ground.position.set(30,-15,-120);scene.add(ground);
 const course=new THREE.Group(),marks=new THREE.Group();scene.add(course,marks);
 const grass=new THREE.MeshStandardMaterial({color:0x237f29,roughness:.95,side:THREE.DoubleSide}),outerGrass=new THREE.MeshStandardMaterial({color:0x27862c,roughness:.95,side:THREE.DoubleSide}),rail=new THREE.LineBasicMaterial({color:0xffffff}),routeMat=new THREE.LineBasicMaterial({color:0xffdb42}),baseMat=new THREE.MeshStandardMaterial({color:0x929a9c,side:THREE.DoubleSide}),dirtMat=new THREE.MeshStandardMaterial({color:0xc7a472,roughness:1,side:THREE.DoubleSide}),bankMat=new THREE.MeshStandardMaterial({color:0x496842,roughness:1,side:THREE.DoubleSide});
-const marker=new THREE.Mesh(new THREE.SphereGeometry(3.1,14,10),new THREE.MeshStandardMaterial({color:0x2398f4,emissive:0x0b3860}));scene.add(marker);
+const horseRoot=new THREE.Group();scene.add(horseRoot);
+const DESIGN01_CACHE_KEY='official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119';
+const CACHE_DB='race-lab-3d-model-local-cache';
+function openHorseCache(){
+ return new Promise((resolve,reject)=>{
+  const req=indexedDB.open(CACHE_DB,1);
+  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+  req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('glb'))req.result.createObjectStore('glb')};
+ });
+}
+async function readCachedHorse(){
+ const db=await openHorseCache();
+ try{return await new Promise((resolve,reject)=>{const req=db.transaction('glb','readonly').objectStore('glb').get(DESIGN01_CACHE_KEY);req.onsuccess=()=>resolve(req.result?.blob);req.onerror=()=>reject(req.error)})}finally{db.close()}
+}
+async function loadApprovedHorse(buffer){
+ if(!buffer||buffer.byteLength<200||new DataView(buffer).getUint32(0,true)!==0x46546c67)throw Error('有効なGLBではありません');
+ const gltf=await new Promise((resolve,reject)=>new GLTFLoader().parse(buffer,'',resolve,reject));
+ const clip=gltf.animations?.find(a=>a.name==='Design01_RightLead_TransverseGallop_v2');
+ let exact=false;gltf.scene?.traverse(o=>{if(o.isSkinnedMesh&&o.geometry?.getAttribute('position')?.count===484459&&o.geometry?.getIndex()?.count===2733876)exact=true});
+ if(!clip||!exact)throw Error('東京版と同じ正式Design01 OriginalLook GallopV2を選択してください');
+ const model=gltf.scene,bounds=new THREE.Box3().setFromObject(model),size=new THREE.Vector3();bounds.getSize(size);
+ if(size.y<.2||size.y>10)throw Error('馬体の縮尺を確認できません');
+ const scale=2.45/size.y;model.scale.setScalar(scale);
+ model.position.set(-(bounds.min.x+bounds.max.x)*scale/2,-bounds.min.y*scale,-(bounds.min.z+bounds.max.z)*scale/2);
+ const anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+ model.traverse(o=>{if(!o.isMesh)return;for(const mat of Array.isArray(o.material)?o.material:[o.material])for(const key of ['map','normalMap','metalnessMap','roughnessMap']){const tex=mat?.[key];if(tex?.isTexture){tex.anisotropy=Math.max(tex.anisotropy,anisotropy);tex.needsUpdate=true}}});
+ if(loadedHorse){mixer?.stopAllAction();horseRoot.remove(loadedHorse)}
+ loadedHorse=model;horseRoot.add(model);mixer=new THREE.AnimationMixer(model);
+ const action=mixer.clipAction(clip);action.setLoop(THREE.LoopRepeat,Infinity);action.play();
+ modelReady=true;$('play').disabled=false;$('modelFileLabel').hidden=true;
+ $('modelStatus').textContent='正式Design01の読み込み完了。1頭走行できます。';
+ reset();
+}
+async function loadCached(){
+ try{const blob=await readCachedHorse();if(!blob)throw Error('未保存');await loadApprovedHorse(await blob.arrayBuffer())}
+ catch(e){$('modelStatus').textContent='この端末で正式モデルを読み込めません。東京版で読み込んだGLBを選択してください。';$('modelFileLabel').hidden=false;$('play').textContent='正式モデルが必要';}
+}
+$('modelFile').onchange=async()=>{
+ const file=$('modelFile').files?.[0];if(!file)return;
+ $('play').disabled=true;$('modelStatus').textContent='正式モデル読込中…';
+ try{const buffer=await file.arrayBuffer();await loadApprovedHorse(buffer);
+  try{const db=await openHorseCache();try{await new Promise((resolve,reject)=>{const tx=db.transaction('glb','readwrite');tx.objectStore('glb').put({blob:new Blob([buffer],{type:'model/gltf-binary'})},DESIGN01_CACHE_KEY);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}finally{db.close()}}catch(e){$('modelStatus').textContent='読込完了（端末への保存はできませんでした）'}
+ }catch(e){$('modelStatus').textContent='読込失敗：'+e.message;$('play').disabled=!modelReady}
+};
 function xyz(p,lateral=0,lift=0){return new THREE.Vector3(p.x-p.tz*lateral,p.y*relief+lift,p.z+p.tx*lateral)}
 function dispose(g){for(const obj of [...g.children]){g.remove(obj);obj.geometry?.dispose();if(obj.material?.map){obj.material.map.dispose();obj.material.dispose()}}}
 function meshStrip(points,material,offsets=null,lift=.04){
@@ -78,7 +127,7 @@ function rebuild(){
  }
  const n=Math.ceil(route.distance/3);
  const path=Array.from({length:n+1},(_,i)=>{const p=laneAt(route,route.distance*i/n,lane);return xyz(p,0,.22)});
- marks.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(path),routeMat));
+ routeLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(path),routeMat);marks.add(routeLine);
  const start=routeAt(route,0),goal=routeAt(route,route.distance);stripe(start,rail);stripe(goal,rail);label('S',start,'#245c82');label('G',goal,'#9f3b32');
  const measured=measureRoute(route,lane);$('laneLength').textContent=measured.horizontal.toFixed(1)+'m';$('laneExtra').textContent=(measured.extra>=.05?'+':'')+(Math.abs(measured.extra)<.05?0:measured.extra).toFixed(1)+'m';$('ascent').textContent=measured.ascent.toFixed(2)+'m';
  $('landmarks').textContent='芝'+railChoice+'｜内1周 '+spec.innerLap.toFixed(1)+'m・外1周 '+spec.outerLap.toFixed(1)+'m｜'+courseLandmarks(route.distance,railChoice).map(m=>m.name+'：発走後 '+m.distance.toFixed(1)+'m（'+m.source+'）').join(' / ');
@@ -88,8 +137,8 @@ function rebuild(){
  for(let i=0;i<6;i++){const step=new THREE.Mesh(new THREE.BoxGeometry(260,2.4,6),baseMat);step.position.set(65,2+i*2.4,52+i*6);course.add(step)}
 }
 function setView(which){
- mode=which;camera.up.set(0,1,0);orbit.enabled=which!=='follow';
- if(which==='follow'){update();return}
+ mode=which;camera.up.set(0,1,0);orbit.enabled=which==='overhead'||which==='angle';cameraSnap=true;
+ if(!orbit.enabled){update();return}
  const center=new THREE.Vector3(105,0,-185);
  const aspect=Math.max(.45,stage.clientWidth/Math.max(1,stage.clientHeight));
  const fit=Math.max(620,770/aspect)/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));
@@ -108,21 +157,62 @@ function profile(){
  c.beginPath();for(let i=0;i<=450;i++){const d=route.distance*i/450,p=routeAt(route,d);if(!i)c.moveTo(x(d),y(p.y));else c.lineTo(x(d),y(p.y))}c.strokeStyle='#7bdd9a';c.lineWidth=2;c.stroke();c.lineWidth=1;
  c.fillStyle='#bfd6d2';c.fillText('S',left,h-6);c.fillText('G',right-8,h-6);c.fillStyle='#ffe15c';c.beginPath();c.arc(x(travel),y(routeAt(route,travel).y),4,0,Math.PI*2);c.fill();
 }
+function updateHorse(dt=0){
+ if(!run)return;
+ const p=runAt(run,elapsed);travel=p.d;
+ // Source GLB faces +Z, as in the approved Tokyo model.
+ horseRoot.position.set(p.x,p.y*relief+.12,p.z);
+ horseRoot.rotation.order='YXZ';horseRoot.rotation.set(-Math.atan(Math.tan(p.pitch)*relief),Math.atan2(p.tx,p.tz),0);
+ if(mixer)mixer.setTime(p.length*1.42065/16);
+ const close=['follow','front','rear'].includes(mode);
+ if(routeLine)routeLine.visible=!close;
+ // Keep billboard markers out of close inspection views.
+ for(const obj of marks.children)if(obj.isSprite)obj.visible=!close;
+ if(close){
+  const target=new THREE.Vector3(p.x,p.y*relief+1.5,p.z),forward=new THREE.Vector3(p.tx,0,p.tz);
+  // Clockwise course: outside is left of the running direction in x/z.
+  const side=new THREE.Vector3(p.tz,0,-p.tx);
+  const eye=target.clone().addScaledVector(side,mode==='rear'?4:mode==='front'?11:10)
+   .addScaledVector(forward,mode==='rear'?-18:mode==='front'?8:1.2);
+  eye.y+=mode==='rear'?5:2.2;
+  if(cameraSnap||dt===0){camera.position.copy(eye);cameraSnap=false}else camera.position.lerp(eye,1-Math.exp(-dt*10));
+  camera.lookAt(target.clone().addScaledVector(forward,mode==='rear'?5:.7));
+ }
+ return p;
+}
 function update(){
- const p=laneAt(route,travel,lane);marker.position.copy(xyz(p,0,2.8));
- $('type').textContent=p.kind==='pocket'?'ポケット':p.kind==='chute'?'直線延長':p.kind==='inner'?'内回り':'外回り';$('remain').textContent=Math.round(route.distance-travel)+'m';$('alt').textContent=p.y.toFixed(2)+'m';$('grade').textContent=gradeAt(route,travel).toFixed(2)+'%';
- $('progress').value=String(Math.round(travel));$('hud').textContent='中山 芝'+railChoice+' '+route.distance+'m｜右回り｜'+route.label;
- if(mode==='follow'){const target=marker.position.clone();camera.position.lerp(target.clone().add(new THREE.Vector3(-p.tx*42,20,-p.tz*42)),.12);camera.lookAt(target.clone().add(new THREE.Vector3(p.tx*16,0,p.tz*16)))}
+ if(!run)return;
+ const p=runAt(run,elapsed),pos=laneAt(route,p.d,lane);travel=p.d;
+ $('type').textContent=pos.kind==='pocket'?'ポケット':pos.kind==='chute'?'直線延長':pos.kind==='inner'?'内回り':'外回り';$('remain').textContent=Math.round(route.distance-travel)+'m';$('alt').textContent=p.y.toFixed(2)+'m';$('grade').textContent=p.grade.toFixed(2)+'%';
+ $('elapsed').textContent=elapsed.toFixed(2)+'秒';$('velocity').textContent=(p.speed*3.6).toFixed(1)+' km/h';$('delay').textContent=elapsed===0?'抽選済（発走前）':run.delay>0?run.delay.toFixed(2)+'秒':'なし';
+ $('progress').value=String(Math.round(travel));$('hud').textContent='中山 芝'+railChoice+' '+route.distance+'m｜'+route.label+'｜'+elapsed.toFixed(1)+'秒';
+ if(!playing)updateHorse();
  profile();
 }
-function reset(){travel=0;playing=false;$('play').textContent='走路確認スタート';update()}
-$('distance').onchange=()=>{route=makeRoute(Number($('distance').value),railChoice);$('progress').max=route.distance;rebuild();reset()};
-$('rail').onchange=()=>{railChoice=$('rail').value;route=makeRoute(Number($('distance').value),railChoice);$('venueTitle').textContent='中山競馬場｜芝'+railChoice+'コース';$('progress').max=route.distance;rebuild();reset()};
-$('relief').onchange=()=>{relief=Number($('relief').value);rebuild();update()};
-$('lane').onchange=()=>{lane=$('lane').value==='center'?'center':Number($('lane').value);rebuild();update()};
-$('overhead').onclick=()=>setView('overhead');$('angle').onclick=()=>setView('angle');$('follow').onclick=()=>setView('follow');
-$('play').onclick=()=>{if(travel>=route.distance)travel=0;playing=!playing;$('play').textContent=playing?'一時停止':'走路確認スタート'};
-$('reset').onclick=reset;$('progress').oninput=()=>{travel=Number($('progress').value);playing=false;$('play').textContent='走路確認スタート';update()};
-let last=performance.now(),lastPaint=0;function animate(t){const dt=Math.min(.15,(t-last)/1000);last=t;if(playing){travel=Math.min(route.distance,travel+dt*16*Number($('speed').value));if(travel>=route.distance){playing=false;$('play').textContent='再スタート'}if(t-lastPaint>=50){update();lastPaint=t}}if(orbit.enabled)orbit.update();renderer.render(scene,camera);requestAnimationFrame(animate)}
-rebuild();setView('overhead');reset();requestAnimationFrame(animate);
+function reset(){playing=false;elapsed=0;travel=0;cameraSnap=true;$('play').textContent=modelReady?'スタート':'モデル読込待ち';update()}
+function rebuildRun(){
+ const seed=Math.max(1,Math.min(999999,Math.floor(Number($('seed').value)||1)));$('seed').value=seed;
+ run=buildRun(buildPath(route,lane),{risk:Number($('risk').value),seed});
+ $('progress').max=route.distance;rebuild();reset();
+}
+$('distance').onchange=()=>{route=makeRoute(Number($('distance').value),railChoice);rebuildRun()};
+$('rail').onchange=()=>{railChoice=$('rail').value;route=makeRoute(Number($('distance').value),railChoice);$('venueTitle').textContent='中山競馬場｜芝'+railChoice+'コース';rebuildRun()};
+$('relief').onchange=()=>{relief=Number($('relief').value);rebuild();cameraSnap=true;updateHorse();update()};
+$('lane').onchange=()=>{lane=$('lane').value==='center'?'center':Number($('lane').value);rebuildRun()};
+$('risk').onchange=rebuildRun;$('seed').onchange=rebuildRun;
+for(const name of ['overhead','angle','follow','front','rear'])$(name).onclick=()=>{setView(name);updateHorse()};
+$('play').onclick=()=>{if(!modelReady||!run)return;if(elapsed>=run.duration)reset();playing=!playing;$('play').textContent=playing?'一時停止':'再開'};
+$('reset').onclick=reset;
+function seek(t){if(!modelReady||!run)return;elapsed=Math.max(0,Math.min(run.duration,t));playing=false;cameraSnap=true;$('play').textContent=elapsed>=run.duration?'再スタート':'再開';update()}
+$('progress').oninput=()=>seek(timeAtDistance(run,Number($('progress').value)));
+$('back10').onclick=()=>seek(elapsed-10);$('forward10').onclick=()=>seek(elapsed+10);
+let last=performance.now(),lastPaint=0;
+function animate(t){
+ const dt=Math.min(.1,Math.max(0,(t-last)/1000));last=t;
+ if(playing&&modelReady){elapsed=Math.min(run.duration,elapsed+dt*Number($('speed').value));if(elapsed>=run.duration){playing=false;$('play').textContent='再スタート';update()}}
+ updateHorse(dt);
+ if(t-lastPaint>=100&&playing){update();lastPaint=t}
+ if(orbit.enabled)orbit.update();renderer.render(scene,camera);requestAnimationFrame(animate);
+}
+rebuildRun();setView('follow');requestAnimationFrame(animate);loadCached();
 </script></body></html>
