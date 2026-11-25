@@ -200,11 +200,22 @@ export function courseLandmarks(distance,rail='A'){
 // based on JRA's 1493m / 308m / 4.5m / 20–25m specifications.
 // Absolute elevation relative to turf and surveyed offsets are not known.
 export const DIRT_SPEC=Object.freeze({lap:1493,straight:308,relief:4.5,widthMin:20,widthMax:25});
+// Retain the pre-refinement scenery reference independently of turf changes.
+// No new dirt-racing functionality is introduced.
+const sceneryRaw=join(
+ straight(G,[firstTurnX,665]),cubic([firstTurnX,665],[275,665],[190,584],[190,478]),
+ cubic([190,478],[190,440],[200,405],[215,380]),
+ cubic([215,380],[253,312],[311,289],[390,289]),straight([390,289],[835,289]),
+ cubic([835,289],[893,289],[931,324],[967,359]),
+ cubic([967,359],[1000,390],[1018,430],[1018,478]),cubic([1018,478],[1018,580],[965,665],home),straight(home,G));
+const sceneryLoop=arc(calibrate(k=>metric(sceneryRaw,k),SPEC.innerLap,.2,2));
 function dirtPlan(offset){
- const n=Math.ceil(SPEC.innerLap/.5);
+ const n=Math.ceil(SPEC.innerLap/.5),arr=sceneryLoop.samples;
  return Array.from({length:n+1},(_,i)=>{
-  const p=at('inner',SPEC.innerLap*i/n);
-  return [(p.x-p.tz*offset)*DIRT_SPEC.straight/SPEC.straight,p.z+p.tx*offset];
+  const target=mod(SPEC.innerLap*i/n,SPEC.innerLap)/SPEC.innerLap*sceneryLoop.length;
+  let lo=0,hi=arr.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(arr[m].s<target)lo=m;else hi=m}
+  const a=arr[lo],b=arr[hi],u=(target-a.s)/Math.max(1e-9,b.s-a.s),dx=b.x-a.x,dz=b.z-a.z,norm=Math.hypot(dx,dz)||1;
+  return [(lerp(a.x,b.x,u)-dz/norm*offset)*DIRT_SPEC.straight/SPEC.straight,lerp(a.z,b.z,u)+dx/norm*offset];
  });
 }
 const dirtLoop=arc(calibrate(k=>dirtPlan(-k),DIRT_SPEC.lap,-35,-20));
