@@ -4,22 +4,22 @@
 :root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#101f26;color:#eef6f4}*{box-sizing:border-box}body{margin:0}main{max-width:1280px;margin:auto;padding:12px}header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}h1{font-size:21px;margin:0}p{line-height:1.6;font-size:13px;color:#b4c9c6}a{color:#b9e8de}button,select,input{font:inherit}button,select{color:#f2ffff;background:#274653;border:1px solid #71959b;border-radius:8px;min-height:44px;padding:8px 12px}button.primary{background:#bde975;color:#14251b;font-weight:bold}button:disabled{opacity:.5}.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.stage{position:relative;height:min(62vh,680px);min-height:310px;border:1px solid #537c80;border-radius:12px;overflow:hidden;background:#9ac4dd}.stage canvas{width:100%;height:100%;display:block;touch-action:none}.stage .hud{position:absolute;left:10px;top:10px;background:#10232fe8;color:white;border-radius:8px;padding:8px;font-size:13px;pointer-events:none}.stage .error{position:absolute;inset:15px;background:#142c37;padding:15px;border-radius:8px} .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}.metric{border:1px solid #36535a;border-radius:9px;background:#172c36;padding:10px}.metric span{display:block;font-size:11px;color:#b2cac7}.metric strong{display:block;font-size:18px;margin-top:5px;font-variant-numeric:tabular-nums}#profile{width:100%;height:160px;background:#142b35;border-radius:8px;margin-top:10px}#progress{width:100%;min-height:34px}small{color:#b4c9c6}details{margin-top:12px;border:1px solid #36535a;border-radius:9px;padding:12px}summary{cursor:pointer} @media(max-width:500px){main{padding:8px}.stage{height:48vh;min-height:300px}h1{font-size:18px}.controls{gap:5px}button,select{padding:8px}}
 </style><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script></head>
 <body><main><header><h1>中山競馬場｜芝Aコース</h1><a href="./tokyo-turf-a-elevation-rebuild.html?relief=3&amp;model=design01&amp;group=18">東京・既存レースへ戻る</a></header>
-<p>第1段階・形状修正版：JRA平面図から走路を再構築。馬の能力計算や18頭の競走はまだ接続していません。</p>
-<div class="controls"><label>距離 <select id="distance"></select></label><button id="overhead">全体・上空</button><button id="angle">斜め全景</button><button id="follow">走路追尾</button><label>坂の表示 <select id="relief"><option value="1">実寸</option><option value="3" selected>3倍（確認用）</option></select></label></div>
+<p>第1段階・距離／勾配補正版：JRA平面図とコース解説に基づいて再構築。馬の能力計算や18頭の競走はまだ接続していません。</p>
+<div class="controls"><label>距離 <select id="distance"></select></label><button id="overhead">全体・上空</button><button id="angle">斜め全景</button><button id="follow">走路追尾</button><label>坂の表示 <select id="relief"><option value="1" selected>実寸</option><option value="3">3倍（確認用）</option></select></label></div>
 <div id="stage" class="stage"><div class="hud" id="hud">読み込み中</div></div>
 <div class="controls"><button id="play" class="primary">走路確認スタート</button><button id="reset">発走地点へ</button><label>速度 <select id="speed"><option value="1">1倍</option><option value="2">2倍</option><option value="4" selected>4倍</option><option value="8">8倍</option></select></label><small>青い点は走路確認用の位置マーカーです。</small></div>
-<label>走行位置 <input id="progress" type="range" min="0" max="2500" value="0" step="1"></label>
+<div class="controls"><label>走行ライン <select id="lane"><option value="0">基準線（内ラチから1m）</option><option value="2">基準線の2m外</option><option value="5">基準線の5m外</option><option value="center">コース中央</option></select></label><small>残り距離は基準線、走行距離は選択したラインで計算</small></div><label>走行位置 <input id="progress" type="range" min="0" max="2500" value="0" step="1"></label>
 <div class="metrics"><div class="metric"><span>コース</span><strong id="type">—</strong></div><div class="metric"><span>残り距離</span><strong id="remain">—</strong></div><div class="metric"><span>相対高度（近似）</span><strong id="alt">—</strong></div><div class="metric"><span>勾配（近似）</span><strong id="grade">—</strong></div></div>
-<canvas id="profile" aria-label="距離別高低断面図"></canvas>
-<details><summary>コースの仕様・出典</summary><p>右回り、内1667.1m／外1839.7m、直線310m、全体高低差5.3m、残り180〜70mの急坂2.2m・最大勾配2.24%。平面座標、分岐点の距離、幅員分布、各坂の細部は公式図から推定した再構築値。ポケットは仮形状。内側のダートは景観用の近似です。仮柵B/C、ダート競走、障害競走は対象外です。</p><p><a href="https://www.jra.go.jp/facilities/race/nakayama/course/" target="_blank" rel="noopener">JRA公式 中山競馬場コース紹介</a></p></details>
+<div class="metrics" style="margin-top:8px"><div class="metric"><span>ライン全長（水平距離）</span><strong id="laneLength">—</strong></div><div class="metric"><span>基準線との差</span><strong id="laneExtra">—</strong></div><div class="metric"><span>累積上昇量</span><strong id="ascent">—</strong></div></div><p id="landmarks"></p><canvas id="profile" aria-label="距離別高低断面図"></canvas>
+<details><summary>コースの仕様・出典</summary><p>右回り、内1667.1m／外1839.7m、直線310m、全体高低差5.3m、残り180〜70mの急坂2.2m・最大勾配2.24%。平面座標、分岐点の距離、幅員分布、各坂の細部は公式図から推定した再構築値。発走用の直線延長とポケットは公式図に基づく近似です。1200mの約4.4mの下りは4コーナー出口までと解釈して校正。ダートは1周1493m・直線308m・高低差4.5m・幅員20〜25mに校正した景観用モデルです。仮柵B/C、ダート競走、障害競走は対象外です。</p><p><a href="https://www.jra.go.jp/facilities/race/nakayama/course/" target="_blank" rel="noopener">JRA公式 中山競馬場コース紹介</a></p></details>
 </main><script type="module">
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
-import {SPEC,DISTANCES,ROUTE_LABELS,LOOPS,SECTIONS,at,widthAt,makeRoute,routeAt,gradeAt} from './nakayama-course.mjs?v=2';
+import {SPEC,DISTANCES,ROUTE_LABELS,LOOPS,SECTIONS,at,widthAt,makeRoute,routeAt,gradeAt,laneAt,measureRoute,courseLandmarks,DIRT_SPEC,dirtAt} from './nakayama-course.mjs?v=3';
 const $=id=>document.getElementById(id),stage=$('stage');
 for(const d of DISTANCES)$('distance').add(new Option(d+'m（'+ROUTE_LABELS[d]+'）',d));
 $('distance').value='2500';
-let route=makeRoute(2500),travel=0,playing=false,mode='overhead',relief=3;
+let route=makeRoute(2500),travel=0,playing=false,mode='overhead',relief=1,lane=0;
 const scene=new THREE.Scene();scene.background=new THREE.Color(0xa6cddd);scene.fog=new THREE.Fog(0xa6cddd,1200,2700);
 const camera=new THREE.PerspectiveCamera(48,1,.5,4000);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.7));stage.prepend(renderer.domElement);
@@ -55,7 +55,7 @@ function rebuild(){
  const inner=loopPoints('inner',0,SPEC.innerLap);meshStrip(inner,grass);
  const outer=loopPoints('outer',SECTIONS.split,SECTIONS.mergeOuter);meshStrip(outer,outerGrass,null,.07);
  // Dirt is a visual-only inward strip, not a calibrated dirt-racing route.
- meshStrip(inner,dirtMat,[38,12],-.03);
+ const dirt=Array.from({length:Math.ceil(DIRT_SPEC.lap/3)+1},(_,i)=>dirtAt(DIRT_SPEC.lap*i/Math.ceil(DIRT_SPEC.lap/3)));meshStrip(dirt,dirtMat,null,-.03);
  // A shared rail opening follows the actual branch locations, rather
  // than the old model's fixed station numbers. Wider gaps prevent a
  // fence across the overlapping turf at the fork and merge.
@@ -65,14 +65,18 @@ function rebuild(){
   loopPoints('inner',SECTIONS.mergeInner+gap,SPEC.innerLap)];
  for(const p of parts){drawRail(p,0);drawRail(p,1)}
  const o=loopPoints('outer',SECTIONS.split+gap,SECTIONS.mergeOuter-gap);drawRail(o,0);drawRail(o,1);
- if(route.legs[0].kind==='pocket'){
-  const length=route.legs[0].length,pts=Array.from({length:51},(_,i)=>routeAt(route,length*i/50));
+ // Both start extensions are permanent physical features, independent of
+ // the selected race distance; no transverse rail closes their joins.
+ for(const d of [1600,2200]){
+  const rr=makeRoute(d),length=rr.legs[0].length,pts=Array.from({length:51},(_,i)=>routeAt(rr,length*i/50));
   meshStrip(pts,outerGrass);drawRail(pts.slice(0,40),0);drawRail(pts.slice(0,40),1);
  }
  const n=Math.ceil(route.distance/3);
- const path=Array.from({length:n+1},(_,i)=>{const p=routeAt(route,route.distance*i/n);return xyz(p,1-p.width/2,.22)});
+ const path=Array.from({length:n+1},(_,i)=>{const p=laneAt(route,route.distance*i/n,lane);return xyz(p,0,.22)});
  marks.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(path),routeMat));
  const start=routeAt(route,0),goal=routeAt(route,route.distance);stripe(start,rail);stripe(goal,rail);label('S',start,'#245c82');label('G',goal,'#9f3b32');
+ const measured=measureRoute(route,lane);$('laneLength').textContent=measured.horizontal.toFixed(1)+'m';$('laneExtra').textContent=(measured.extra>=.05?'+':'')+(Math.abs(measured.extra)<.05?0:measured.extra).toFixed(1)+'m';$('ascent').textContent=measured.ascent.toFixed(2)+'m';
+ $('landmarks').textContent=courseLandmarks(route.distance).map(m=>m.name+'：発走後 '+m.distance.toFixed(1)+'m（'+m.source+'）').join(' / ');
  for(const d of [200,400,600]){const p=routeAt(route,route.distance-d);label(String(d),p,'#3c584a')}
  // Approximate grandstand, independent of Tokyo's building geometry.
  const stand=new THREE.Mesh(new THREE.BoxGeometry(270,18,42),baseMat);stand.position.set(65,2,88);course.add(stand);
@@ -100,8 +104,8 @@ function profile(){
  c.fillStyle='#bfd6d2';c.fillText('S',left,h-6);c.fillText('G',right-8,h-6);c.fillStyle='#ffe15c';c.beginPath();c.arc(x(travel),y(routeAt(route,travel).y),4,0,Math.PI*2);c.fill();
 }
 function update(){
- const p=routeAt(route,travel);marker.position.copy(xyz(p,1-p.width/2,2.8));
- $('type').textContent=p.kind==='pocket'?'ポケット':p.kind==='inner'?'内回り':'外回り';$('remain').textContent=Math.round(route.distance-travel)+'m';$('alt').textContent=p.y.toFixed(2)+'m';$('grade').textContent=gradeAt(route,travel).toFixed(2)+'%';
+ const p=laneAt(route,travel,lane);marker.position.copy(xyz(p,0,2.8));
+ $('type').textContent=p.kind==='pocket'?'ポケット':p.kind==='chute'?'直線延長':p.kind==='inner'?'内回り':'外回り';$('remain').textContent=Math.round(route.distance-travel)+'m';$('alt').textContent=p.y.toFixed(2)+'m';$('grade').textContent=gradeAt(route,travel).toFixed(2)+'%';
  $('progress').value=String(Math.round(travel));$('hud').textContent='中山 芝A '+route.distance+'m｜右回り｜'+route.label;
  if(mode==='follow'){const target=marker.position.clone();camera.position.lerp(target.clone().add(new THREE.Vector3(-p.tx*42,20,-p.tz*42)),.12);camera.lookAt(target.clone().add(new THREE.Vector3(p.tx*16,0,p.tz*16)))}
  profile();
@@ -109,6 +113,7 @@ function update(){
 function reset(){travel=0;playing=false;$('play').textContent='走路確認スタート';update()}
 $('distance').onchange=()=>{route=makeRoute(Number($('distance').value));$('progress').max=route.distance;rebuild();reset()};
 $('relief').onchange=()=>{relief=Number($('relief').value);rebuild();update()};
+$('lane').onchange=()=>{lane=$('lane').value==='center'?'center':Number($('lane').value);rebuild();update()};
 $('overhead').onclick=()=>setView('overhead');$('angle').onclick=()=>setView('angle');$('follow').onclick=()=>setView('follow');
 $('play').onclick=()=>{if(travel>=route.distance)travel=0;playing=!playing;$('play').textContent=playing?'一時停止':'走路確認スタート'};
 $('reset').onclick=reset;$('progress').oninput=()=>{travel=Number($('progress').value);playing=false;$('play').textContent='走路確認スタート';update()};
