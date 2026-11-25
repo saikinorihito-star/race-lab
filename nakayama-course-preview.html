@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {createRaceVisionSystem} from './turf-vision-race.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,stallCenter,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
 import {buildPath,buildRun,runAt,timeAtDistance,START_RISK} from './nakayama-single-run.mjs?v=1';
@@ -35,6 +36,19 @@ renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFi
 const orbit=new OrbitControls(camera,renderer.domElement);orbit.enableDamping=true;orbit.maxPolarAngle=Math.PI*.48;orbit.minDistance=25;orbit.maxDistance=2000;
 scene.add(new THREE.HemisphereLight(0xe7f7ff,0x5b744a,2.2));const sun=new THREE.DirectionalLight(0xfff4d5,2);sun.position.set(-300,550,300);scene.add(sun);
 const ground=new THREE.Mesh(new THREE.PlaneGeometry(2400,1800),new THREE.MeshStandardMaterial({color:0x59854b}));ground.rotation.x=-Math.PI/2;ground.position.set(30,-15,-120);scene.add(ground);
+const raceVision=createRaceVisionSystem(THREE,{scene,renderer,venue:'nakayama',mobile:matchMedia('(pointer:coarse)').matches});
+// Existing infield plane is below the turf; support each board on a local grass bank.
+const visionBanks=raceVision.boards.map(b=>{
+ const w=b.d.outerWidth+4,depth=b.d.depth+5,g=new THREE.BufferGeometry();
+ const vertices=[],indices=[];
+ for(const [y,dx,dz] of [[-15,13,13],[b.p.y,w/2,depth/2]]){
+  const hw=y===-15?w/2+dx:dx,hd=y===-15?depth/2+dz:dz;
+  for(const [x,z] of [[-hw,-hd],[hw,-hd],[hw,hd],[-hw,hd]])vertices.push(x,y,z);
+ }
+ indices.push(4,6,5,4,7,6);for(let i=0;i<4;i++){const j=(i+1)%4;indices.push(i,j,j+4,i,j+4,i+4)}
+ g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));g.setIndex(indices);g.computeVertexNormals();
+ const bank=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x59854b,roughness:1,side:THREE.DoubleSide}));bank.position.set(b.p.x,0,b.p.z);scene.add(bank);return bank;
+});
 const course=new THREE.Group(),marks=new THREE.Group();scene.add(course,marks);
 const grass=new THREE.MeshStandardMaterial({color:0x237f29,roughness:.95,side:THREE.DoubleSide}),outerGrass=new THREE.MeshStandardMaterial({color:0x27862c,roughness:.95,side:THREE.DoubleSide}),rail=new THREE.LineBasicMaterial({color:0xffffff}),routeMat=new THREE.LineBasicMaterial({color:0xffdb42}),baseMat=new THREE.MeshStandardMaterial({color:0x929a9c,side:THREE.DoubleSide}),dirtMat=new THREE.MeshStandardMaterial({color:0xc7a472,roughness:1,side:THREE.DoubleSide}),bankMat=new THREE.MeshStandardMaterial({color:0x496842,roughness:1,side:THREE.DoubleSide});
 const horseRoot=new THREE.Group();scene.add(horseRoot);
@@ -249,7 +263,17 @@ function animate(t){
  if(playing&&modelReady){elapsed=Math.min(run.duration,elapsed+dt*Number($('speed').value));if(elapsed>=run.duration){playing=false;$('play').textContent='再スタート';update()}}
  updateHorse(dt);
  if(t-lastPaint>=100&&playing){update();lastPaint=t}
- if(orbit.enabled)orbit.update();renderer.render(scene,camera);requestAnimationFrame(animate);
+ if(orbit.enabled)orbit.update();
+ if(run){
+  const p=runAt(run,elapsed),finished=elapsed>=run.duration;
+  raceVision.update(t,camera,{ready:modelReady,single:true,phase:finished?'finish':elapsed>0?'race':'before',playing,elapsed,distance:route.distance,remaining:route.distance-p.d,
+   horses:modelReady?[{number:1,name:'走行テスト',distance:p.d,finished,finishTime:run.duration}]:[],fps:dt>0?1/dt:0},feedCamera=>{
+   const focus=new THREE.Vector3(p.x,p.y*relief+1.4,p.z);
+   feedCamera.position.copy(focus).addScaledVector(new THREE.Vector3(p.tz,0,-p.tx),12).addScaledVector(new THREE.Vector3(p.tx,0,p.tz),5).add(new THREE.Vector3(0,2.8,0));
+   feedCamera.lookAt(focus);
+  });
+ }
+ renderer.render(scene,camera);requestAnimationFrame(animate);
 }
 rebuildRun();setView('follow');requestAnimationFrame(animate);loadCached();
 loadApprovedGate(new GLTFLoader()).then(source=>{
