@@ -10,6 +10,9 @@ on:
       - 'tests/nakayama-single-run.test.mjs'
       - 'nakayama-course-preview.html'
       - 'assets/jss50-approved.glb.b64'
+      - 'turf-vision-model.mjs'
+      - 'turf-vision-preview.html'
+      - 'tests/turf-vision-model.test.mjs'
       - 'jss50-gate.mjs'
       - 'jss50-race-gate.mjs'
       - 'tests/jss50-race-gate.test.mjs'
@@ -36,6 +39,9 @@ on:
       - 'tests/nakayama-single-run.test.mjs'
       - 'nakayama-course-preview.html'
       - 'assets/jss50-approved.glb.b64'
+      - 'turf-vision-model.mjs'
+      - 'turf-vision-preview.html'
+      - 'tests/turf-vision-model.test.mjs'
       - 'jss50-gate.mjs'
       - 'jss50-race-gate.mjs'
       - 'tests/jss50-race-gate.test.mjs'
@@ -70,4 +76,4 @@ jobs:
         with:
           node-version: '20'
       - name: Validate official 2/4/8/18 Design01 horse positions, headways, cameras, performance and rail clearance
-        run: node --test tests/jss50-race-gate.test.mjs tests/jss50-gate.test.mjs tests/nakayama-single-run.test.mjs tests/nakayama-course.test.mjs tests/race-cloud-sync.test.mjs tests/official-design01-ten-abilities.test.mjs tests/official-design01-pair.test.mjs tests/official-design01-eight.test.mjs tests/official-design01-eighteen.test.mjs tests/official-design01-camera.test.mjs tests/official-design01-visuals.test.mjs tests/official-design01-desktop-frame-trees.test.mjs tests/official-design01-broadcast-recolour.test.mjs tests/official-design01-name-label.test.mjs
+        run: node --test tests/turf-vision-model.test.mjs tests/jss50-race-gate.test.mjs tests/jss50-gate.test.mjs tests/nakayama-single-run.test.mjs tests/nakayama-course.test.mjs tests/race-cloud-sync.test.mjs tests/official-design01-ten-abilities.test.mjs tests/official-design01-pair.test.mjs tests/official-design01-eight.test.mjs tests/official-design01-eighteen.test.mjs tests/official-design01-camera.test.mjs tests/official-design01-visuals.test.mjs tests/official-design01-desktop-frame-trees.test.mjs tests/official-design01-broadcast-recolour.test.mjs tests/official-design01-name-label.test.mjs
