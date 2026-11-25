@@ -3596,6 +3596,7 @@ const EIGHTEEN_SPACING_FROM=300;
 const EIGHTEEN_MIN_ROLL_BASE=10.4,EIGHTEEN_MIN_ROLL_STAGGER=.01;
 function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  const width=fieldCenterAt(activePlan,h.distance).width;
+ const sprint=activePlan.distance<=1400;
  const inner=fourHorseInnerLane(width);
  const lateralRate=FOUR_INWARD_RATE*(.68+.32*THREE.MathUtils.clamp(h.distance/15,0,1));
  // Physical pace is converted into reference-distance progress. Wide
@@ -3664,7 +3665,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // two-dimensional collision check or the lateral-distance budget.
  // Beyond initial formation, do not voluntarily join the back of a slower line.
  // Keeping a clear lane is not a lateral passing move.
- if(h.distance>240&&!holdingOutside&&lane>railHoldingLane){
+ if(!sprint&&h.distance>240&&!holdingOutside&&lane>railHoldingLane){
   const pathBlocked=snapshot.some(o=>o.idx!==h.idx&&!o.finished&&o.distance-h.distance>4&&o.distance-h.distance<20&&Math.abs(o.lane-(railHoldingLane+2.35))<1.7&&Math.abs(o.lane-railHoldingLane)>1.9&&o.speed<targetSpeed/cornerPathFactor(h.distance,h.lane)-.15);
   if(pathBlocked)lane=railHoldingLane;
  }
@@ -3681,8 +3682,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // never crossed instantaneously, even when it is the shorter path.
  if(h.distance>105&&h.distance<activePlan.distance-35&&
     h.blockedFor>THREE.MathUtils.clamp(
-     .65-((h.raceProfile?.trafficAbility??5)-5)*.08*balanceWeights.traffic+
-      (h.raceFlow?.trafficPatience??0), .35,1.20)&&
+     (sprint?.9:.65)-((h.raceProfile?.trafficAbility??5)-5)*(sprint?.10:.08)*balanceWeights.traffic+
+      (h.raceFlow?.trafficPatience??0),sprint?.50:.35,sprint?1.45:1.20)&&
     h.passUntil<=h.distance&&h.passCooldown<=h.distance&&
     !holdingOutside&&
     h.passAttempts<8){
@@ -3698,11 +3699,11 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   // Merely detecting congestion somewhere in the pack is insufficient.
   const blockingHorse=snapshot.filter(o=>o.idx!==h.idx&&!o.finished&&
    o.distance-h.distance>1.5&&o.distance-h.distance<15&&
-   Math.abs(o.lane-h.lane)<2.45&&
+   Math.abs(o.lane-h.lane)<(sprint?2.15:2.45)&&
    targetSpeed/cornerPathFactor(h.distance,h.lane)>o.speed+.24&&h.speed>o.speed-1.1)
    .sort((a,b)=>a.distance-b.distance)[0];
   const outsideAllowed=Boolean(blockingHorse)&&h.blockedFor>=THREE.MathUtils.clamp(
-    (activePlan.distance-h.distance<850?.85:1.30)-((h.raceProfile?.trafficAbility??5)-5)*.07*balanceWeights.traffic,.55,1.75)&&
+    (sprint?1.65:activePlan.distance-h.distance<850?.85:1.30)-((h.raceProfile?.trafficAbility??5)-5)*.07*balanceWeights.traffic,sprint?1.3:.55,sprint?2:1.75)&&
    h.distance>140&&h.distance<activePlan.distance-35;
   const congestionAt=destination=>snapshot.reduce((total,o)=>{
    if(o.idx===h.idx||o.finished)return total;
@@ -3713,12 +3714,12 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
     (o.speed<h.speed+.3?1.25:.52);
   },0);
   const currentCongestion=congestionAt(railHoldingLane);
-  const choices=[railHoldingLane+2.85,railHoldingLane-2.75,railHoldingLane-5.5].map(destination=>{
+  const choices=[railHoldingLane+2.85,railHoldingLane-2.75,...(sprint?[]:[railHoldingLane-5.5])].map(destination=>{
    if(destination>insideLimit||destination<outsideLimit)return null;
    const unsafe=snapshot.some(o=>{
     if(o.idx===h.idx||o.finished)return false;
     const longitudinal=o.distance+o.speed*dt-distance;
-    return Math.abs(longitudinal)<4.5&&
+    return Math.abs(longitudinal)<(sprint?5.5:4.5)&&
      Math.abs(o.lane-destination)<2.1;
    });
    if(unsafe)return null;
@@ -3728,12 +3729,12 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
    const benefit=currentCongestion-congestion;
    if(benefit<.30)return null;
    const isInside=destination>railHoldingLane;
-   if(!isInside&&(!outsideAllowed||benefit<.24))return null;
+   if(!isInside&&(!outsideAllowed||benefit<(sprint?.32:.24)))return null;
    if(Math.abs(destination-railHoldingLane)>3&&snapshot.some(o=>o.idx!==h.idx&&!o.finished&&Math.abs(o.distance-h.distance)<6&&o.lane<railHoldingLane&&o.lane>destination))return null;
    const bendPreference=THREE.MathUtils.clamp(bend.kappa*105,0,1);
    const score=benefit+
     (isInside?.24:0)+(isInside?.70:-.12)*bendPreference-
-    .13*Math.abs(destination-railHoldingLane);
+    (sprint?.06:.13)*Math.abs(destination-railHoldingLane);
    return {destination,score,isInside};
   }).filter(Boolean).sort((a,b)=>b.score-a.score);
   // Choose a safe INNER gap first; only use the outside when no inside
@@ -3770,7 +3771,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   const clear=snapshot.every(o=>{
    if(o.idx===h.idx||o.finished)return true;
    const longitudinal=o.distance+o.speed*dt-distance;
-   return Math.abs(longitudinal)>3.5||
+   return Math.abs(longitudinal)>(sprint?4.5:3.5)||
     o.lane<low-1.35||o.lane>high+1.35;
   });
   if(clear){
