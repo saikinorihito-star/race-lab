@@ -405,10 +405,10 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
      <output id="hoofSoundVolumeValue">35%</output>
     </label>
     <div id="raceBgmControls">
-     <strong>♫ レースBGM｜Velocity Field</strong><label for="raceBgmSource">曲の選択 <select id="raceBgmSource"><option value="fusion" selected>オリジナル・フュージョン</option><option value="custom">端末に保存した音源</option></select></label>
-     <label for="raceBgmFile">別のBGMファイルを使う場合だけ選択</label>
+     <strong>♫ レースBGM｜Champion Run</strong><label for="raceBgmSource">曲の選択 <select id="raceBgmSource"><option value="champion" selected>Champion Run（6番）</option><option value="fusion">Velocity Field</option><option value="custom">以前の登録音源</option></select></label>
+     <label for="raceBgmFile">初回のみ選択中の曲のMP3を登録</label>
      <input id="raceBgmFile" type="file" accept="audio/mpeg,audio/*" aria-label="任意のBGM音源を選択"/>
-     <div id="raceBgmStatus" role="status" aria-live="polite">標準BGMを準備中（ファイル選択不要）</div>
+     <div id="raceBgmStatus" role="status" aria-live="polite">Champion Run の保存音源を確認中</div>
      <label for="raceBgmVolume">BGM音量<input id="raceBgmVolume" type="range" min="0" max="100" step="5" value="10" aria-label="BGMの音量"/><output id="raceBgmVolumeValue">10%</output></label>
      <div class="camNote">足音とは別の音量です。レースの一時停止・再開・10秒送りに連動し、曲を繰り返します。音源は同じ端末に保存します。</div>
     </div>
@@ -6313,15 +6313,15 @@ function updateTurfSpray(dt){
 const raceBgmToggle=document.querySelector('#raceBgmToggle');
 const raceBgmInput=document.querySelector('#raceBgmFile');
 const raceBgmSource=document.querySelector('#raceBgmSource');
-let fusionBgmBlob=null,rememberedBgmBlob=null,fusionBgmTask=null;
+let fusionBgmBlob=null,rememberedBgmBlob=null,championBgmBlob=null,fusionBgmTask=null;
 const raceBgmVolume=document.querySelector('#raceBgmVolume');
 const raceBgmStatus=document.querySelector('#raceBgmStatus');
 const raceBgmVolumeValue=document.querySelector('#raceBgmVolumeValue');
 const raceBgmAudio=new Audio();
 raceBgmAudio.loop=true;raceBgmAudio.preload='auto';raceBgmAudio.playsInline=true;raceBgmAudio.volume=0;
 let raceBgmEnabled=true,raceBgmLoaded=false,raceBgmUrl=null;
-let raceBgmDB=null,raceBgmPending=null,lastBgmRaceSync=-Infinity;
-const RACE_BGM_DB_KEY='cinematic-intro-120s-v1';
+let raceBgmDB=null,raceBgmPending=new Map(),lastBgmRaceSync=-Infinity;
+const RACE_BGM_DB_KEY='cinematic-intro-120s-v1',CHAMPION_BGM_DB_KEY='champion-run-06-v1';
 function syncRaceBgmControls(){
  const enabled=raceBgmLoaded&&raceBgmEnabled&&Number(raceBgmVolume.value)>0;
  raceBgmToggle.textContent=!raceBgmLoaded?'♫ BGM未設定':enabled?'♫ BGMオン':'♫ BGMオフ';
@@ -6337,7 +6337,7 @@ function installRaceBgmBlob(blob,restored=false,builtIn=false){
  raceBgmAudio.src=raceBgmUrl;
  raceBgmAudio.load();
  raceBgmLoaded=true;lastBgmRaceSync=-Infinity;
- raceBgmStatus.textContent=builtIn?'Velocity Field｜160 BPM・96秒｜レース開始で再生':restored?'保存済みのBGMを復元しました':'BGMを登録しました。レース開始で再生します';
+ raceBgmStatus.textContent=builtIn?'Velocity Field｜160 BPM・96秒｜レース開始で再生':raceBgmSource.value==='champion'?'Champion Run（6番）｜'+(restored?'保存済み音源を復元':'音源登録完了')+'｜レース開始で再生':restored?'保存済みのBGMを復元しました':'BGMを登録しました。レース開始で再生します';
  syncRaceBgmControls();
 }
 function clearRaceBgm(){
@@ -6361,14 +6361,17 @@ async function prepareFusionBgm(){
 raceBgmSource.addEventListener('change',()=>{
  clearRaceBgm();
  if(raceBgmSource.value==='fusion'){prepareFusionBgm();if(raceBgmLoaded&&playing)playRaceBgmFromGesture()}
- else if(rememberedBgmBlob){installRaceBgmBlob(rememberedBgmBlob,true);if(playing)playRaceBgmFromGesture()}
+ else if(raceBgmSource.value==='champion'){
+  if(championBgmBlob){installRaceBgmBlob(championBgmBlob,true);if(playing)playRaceBgmFromGesture()}
+  else raceBgmStatus.textContent='初回のみ 06_Champion_Run.mp3 を選択してください';
+ }else if(rememberedBgmBlob){installRaceBgmBlob(rememberedBgmBlob,true);if(playing)playRaceBgmFromGesture()}
  else raceBgmStatus.textContent='端末の音源を選択してください';
 });
-function persistRaceBgm(blob){
- if(!raceBgmDB){raceBgmPending=blob;return}
+function persistRaceBgm(blob,key=RACE_BGM_DB_KEY){
+ if(!raceBgmDB){raceBgmPending.set(key,blob);return}
  try{
   const tx=raceBgmDB.transaction('tracks','readwrite');
-  tx.objectStore('tracks').put(blob,RACE_BGM_DB_KEY);
+  tx.objectStore('tracks').put(blob,key);
   tx.onerror=()=>{raceBgmStatus.textContent='再生可能ですが端末保存には失敗しました'};
  }catch(error){console.warn('BGM保存エラー',error)}
 }
@@ -6379,7 +6382,9 @@ function loadRememberedRaceBgm(){
   req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('tracks'))req.result.createObjectStore('tracks')};
   req.onsuccess=()=>{
    raceBgmDB=req.result;
-   if(raceBgmPending){persistRaceBgm(raceBgmPending);raceBgmPending=null}
+   for(const [key,blob] of raceBgmPending)persistRaceBgm(blob,key);raceBgmPending.clear();
+   const champion=raceBgmDB.transaction('tracks','readonly').objectStore('tracks').get(CHAMPION_BGM_DB_KEY);
+   champion.onsuccess=()=>{if(champion.result&&!championBgmBlob)championBgmBlob=champion.result;if(raceBgmSource.value==='champion'&&!raceBgmLoaded){if(championBgmBlob)installRaceBgmBlob(championBgmBlob,true);else raceBgmStatus.textContent='初回のみ 06_Champion_Run.mp3 を選択してください'}};
    const get=raceBgmDB.transaction('tracks','readonly').objectStore('tracks').get(RACE_BGM_DB_KEY);
    get.onsuccess=()=>{if(get.result){rememberedBgmBlob=get.result;if(raceBgmSource.value==='custom'&&!raceBgmLoaded)installRaceBgmBlob(get.result,true)}};
   };
@@ -6443,10 +6448,11 @@ raceBgmInput.addEventListener('change',()=>{
   raceBgmStatus.textContent='MP3などの音声ファイルを選択してください';
   return;
  }
- raceBgmSource.value='custom';rememberedBgmBlob=blob;installRaceBgmBlob(blob);persistRaceBgm(blob);
+ if(raceBgmSource.value==='champion'){championBgmBlob=blob;installRaceBgmBlob(blob);persistRaceBgm(blob,CHAMPION_BGM_DB_KEY)}
+ else{raceBgmSource.value='custom';rememberedBgmBlob=blob;installRaceBgmBlob(blob);persistRaceBgm(blob,RACE_BGM_DB_KEY)}
  if(playing)playRaceBgmFromGesture();
 });
-if(isOfficialEighteenTest){loadRememberedRaceBgm();prepareFusionBgm();}
+if(isOfficialEighteenTest){loadRememberedRaceBgm();if(raceBgmSource.value==='fusion')prepareFusionBgm();else if(!window.indexedDB)raceBgmStatus.textContent='初回のみ 06_Champion_Run.mp3 を選択してください';}
 syncRaceBgmControls();
 window.addEventListener('pagehide',()=>raceBgmAudio.pause());
 // Lightweight synthesized gallop: original sound generated by the Web Audio API.
