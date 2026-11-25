@@ -710,7 +710,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
-import {createRaceGate} from './jss50-race-gate.mjs?v=1';
+import {createRaceGate,measureGateHorseRear} from './jss50-race-gate.mjs?v=2';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
@@ -2282,7 +2282,7 @@ const fieldHorses=[],fieldRoot=new THREE.Group(),gateRoot=new THREE.Group();
 scene.add(fieldRoot);scene.add(gateRoot);
 let gateDoors=[],gateOpening=0;
 const approvedGateRoot=new THREE.Group();scene.add(approvedGateRoot);approvedGateRoot.visible=false;
-let approvedGateSource=null,approvedRaceGate=null,approvedGatePitch=0,approvedGateFailed=false;
+let approvedGateSource=null,approvedRaceGate=null,approvedGatePitch=0,approvedGateFailed=false,approvedHorseRear=null;
 function fieldCenterAt(plan,distance){
  const d=Math.max(0,Math.min(distance,plan.distance+90));
  if(plan.pocket&&d<plan.pocket.length){
@@ -4475,6 +4475,7 @@ function syncApprovedRaceGate(){
  approvedGateRoot.visible=ready&&gateRoot.visible;
  if(ready){
   approvedGateRoot.position.copy(gateRoot.position);approvedGateRoot.quaternion.copy(gateRoot.quaternion);
+  approvedRaceGate.fitHorseRear(approvedHorseRear);
   approvedRaceGate.setDoors(gateOpening,0);
  }
 }
@@ -4762,10 +4763,16 @@ async function loadApprovedHorse(buffer){
   min:bounds.min.clone().multiplyScalar(scale).add(horse.position).toArray(),
   max:bounds.max.clone().multiplyScalar(scale).add(horse.position).toArray()};
  if(installedScene){runner.remove(installedScene)}
- runner.remove(fallback);runner.add(horse);installedScene=horse;
+ runner.remove(fallback);
  runnerMixer=new THREE.AnimationMixer(horse);
  const action=runnerMixer.clipAction(gltf.animations[0]);
  action.setLoop(THREE.LoopRepeat,Infinity);action.play();
+ if(isOfficialEighteenTest){
+  const restMinZ=horse.userData.raceLabelBounds.min[2];
+  approvedHorseRear=restMinZ;
+  try{approvedHorseRear=measureGateHorseRear(THREE,horse,runnerMixer,restMinZ)}catch(e){console.warn('発馬機の尻尾余裕計測失敗、静止形状を使用',e)}
+ }
+ runner.add(horse);installedScene=horse;
  installedDesign01=true;usedStoredGLB=true;
  runner.visible=fieldMode.value==='single';
  document.querySelector('#design01Overlay').hidden=true;
