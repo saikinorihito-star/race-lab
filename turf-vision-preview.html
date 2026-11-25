@@ -66,9 +66,12 @@ import {createTurfVision} from './turf-vision-model.mjs?v=2';
 const $=id=>document.getElementById(id),stage=$('stage');
 try{
  function texture(canvas){const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t}
+ function sizedCanvas(ratio){const c=document.createElement('canvas');c.width=Math.max(1,Math.round(2048*Math.min(1,ratio)));c.height=Math.max(1,Math.round(2048*Math.min(1,1/ratio)));return c}
  function demoScreen(){
-  const c=document.createElement('canvas');c.width=2048;c.height=Math.round(2048*preview.height/preview.width);
-  const x=c.getContext('2d');x.scale(1,c.height/346);const grad=x.createLinearGradient(0,0,0,346);grad.addColorStop(0,'#213c44');grad.addColorStop(1,'#0c1821');x.fillStyle=grad;x.fillRect(0,0,2048,346);
+  const c=sizedCanvas(preview.width/preview.height);
+  const x=c.getContext('2d');
+  if(preview.width/preview.height<4){const W=c.width,H=c.height,bar=Math.round(H*.11),font=Math.min(H*.065,W*.044);x.fillStyle='#152b33';x.fillRect(0,0,W,H);x.fillStyle='#dce9e4';x.font='bold '+font+'px sans-serif';x.textAlign='center';x.fillText(presets[preview.key].venueId.toUpperCase()+' RACECOURSE',W/2,bar*.72,W*.94);x.fillStyle='#304f42';x.fillRect(W*.035,bar,W*.93,H*.72);x.fillStyle='#e5eee9';x.font='bold '+font+'px sans-serif';x.fillText('表示テスト・映像未接続',W/2,H*.47,W*.9);x.fillStyle='#d9c780';x.fillText('RACE LAB  /  SAMPLE',W/2,H*.94,W*.94);return texture(c)}
+  x.scale(c.width/2048,c.height/346);const grad=x.createLinearGradient(0,0,0,346);grad.addColorStop(0,'#213c44');grad.addColorStop(1,'#0c1821');x.fillStyle=grad;x.fillRect(0,0,2048,346);
   x.fillStyle='#263c48';x.fillRect(0,0,2048,37);x.fillStyle='#dbe9e3';x.font='bold 24px sans-serif';x.fillText(presets[preview.key].venueId.toUpperCase()+' RACECOURSE    表示テスト',22,27);
   for(const [left,width,label] of [[16,1120,'MAIN VIDEO AREA'],[1148,620,'SUB VIDEO AREA']]){
    const g=x.createLinearGradient(0,42,0,315);g.addColorStop(0,'#385961');g.addColorStop(.6,'#294b3a');g.addColorStop(1,'#152c22');x.fillStyle=g;x.fillRect(left,46,width,270);x.strokeStyle='#77958a';x.lineWidth=2;x.strokeRect(left,46,width,270);
@@ -79,7 +82,7 @@ try{
   x.font='bold 27px sans-serif';x.fillText('0:00.0',1799,322);x.fillStyle='#a8bfc4';x.font='15px sans-serif';x.fillText('RACE LAB • DEMONSTRATION',17,337);return texture(c)
  }
  function rearArt(){
-  const c=document.createElement('canvas');c.width=2048;c.height=Math.round(2048*(preview.height+1.19)/(preview.width+1.04));const x=c.getContext('2d');x.scale(1,c.height/376);const g=x.createLinearGradient(0,0,0,376);g.addColorStop(0,'#b7d6e2');g.addColorStop(1,'#e2e5c9');x.fillStyle=g;x.fillRect(0,0,2048,376);
+  const c=sizedCanvas((preview.width+1.04)/(preview.height+1.19));const x=c.getContext('2d');x.scale(c.width/2048,c.height/376);const g=x.createLinearGradient(0,0,0,376);g.addColorStop(0,'#b7d6e2');g.addColorStop(1,'#e2e5c9');x.fillStyle=g;x.fillRect(0,0,2048,376);
   x.fillStyle='#8caf80';x.beginPath();x.moveTo(0,270);x.bezierCurveTo(440,155,660,322,1000,225);x.bezierCurveTo(1370,130,1750,290,2048,206);x.lineTo(2048,376);x.lineTo(0,376);x.fill();
   for(const [i,color] of ['#d6a38b','#e7c48f','#e7df9a','#a8caab','#9ac2d1'].entries()){x.strokeStyle=color;x.lineWidth=12;x.beginPath();x.moveTo(310,345);x.quadraticCurveTo(1024,-225+i*25,1738,345);x.stroke()}
   x.fillStyle='#386269';x.textAlign='center';x.font='bold 62px sans-serif';x.fillText(presets[preview.key].venueId.toUpperCase()+' RACECOURSE',1024,210);x.font='23px sans-serif';x.fillText('背面仮デザイン',1024,250);return texture(c)
@@ -89,7 +92,7 @@ try{
  const scene=new THREE.Scene();scene.background=new THREE.Color(0xc8dbe6);scene.add(model.root,new THREE.HemisphereLight(0xf4faff,0x627252,2.4));
  const sun=new THREE.DirectionalLight(0xfff4df,2.3);sun.position.set(-30,45,30);scene.add(sun);
  const lawn=new THREE.Mesh(new THREE.PlaneGeometry(500,500),new THREE.MeshStandardMaterial({color:0x72974b,roughness:1}));lawn.rotation.x=-Math.PI/2;lawn.position.y=-.025;scene.add(lawn);
- const paving=new THREE.Mesh(new THREE.BoxGeometry(76,.035,6.5),new THREE.MeshStandardMaterial({color:0xa7ada7,roughness:.98}));paving.position.set(0,-.005,0);scene.add(paving);
+ const paving=new THREE.Mesh(new THREE.BoxGeometry(76,.035,6.5),new THREE.MeshStandardMaterial({color:0xa7ada7,roughness:.98}));paving.position.set(0,-.005,0);paving.scale.x=Math.max(1,(model.dimensions.outerWidth+8)/76);scene.add(paving);
  const camera=new THREE.PerspectiveCamera(36,1,.1,1400),renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;
  stage.append(renderer.domElement);const orbit=new OrbitControls(camera,renderer.domElement);orbit.target.set(0,6.3,0);orbit.enableDamping=true;orbit.minDistance=6;orbit.maxDistance=900;orbit.maxPolarAngle=Math.PI*.49;
  function resize(){const w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
