@@ -1,7 +1,7 @@
 // Nakayama turf A, approximate plan geometry; distances calibrated in horizontal metres.
 // Source: https://www.jra.go.jp/facilities/race/nakayama/course/
 // No measured XY coordinates or individual width stations are published in the cited chart.
-export const SPEC=Object.freeze({innerLap:1667.1,outerLap:1839.7,straight:310,relief:5.3,steepStart:180,steepEnd:70,steepRise:2.2,maxGrade:2.24,innerWidth:[20,32],outerWidth:[24,32],turn:'right'});
+export const SPEC=Object.freeze({offset:0,innerLap:1667.1,outerLap:1839.7,straight:310,relief:5.3,steepStart:180,steepEnd:70,steepRise:2.2,maxGrade:2.24,innerWidth:[20,32],outerWidth:[24,32],turn:'right'});
 export const DISTANCES=[1200,1600,1800,2000,2200,2500,2600,3200,3600,4000];
 const lerp=(a,b,t)=>a+(b-a)*t;
 // Fixed fine sampling makes horizontal arc length reproducible.
@@ -23,9 +23,9 @@ const G=[460,665],split=[215,380],merge=[967,359],home=[850,665];
 const firstTurnX=G[0]-72.1*(home[0]-G[0])/310;
 const rawPre=join(straight(G,[firstTurnX,665]),
  cubic([firstTurnX,665],[275,665],[190,584],[190,478]),
- cubic([190,478],[190,440],[200,405],split));
-const rawInner=join(cubic(split,[253,312],[311,289],[390,289]),
- straight([390,289],[835,289]),cubic([835,289],[893,289],[931,324],merge));
+ cubic([190,478],[190,450],[185,430],[191,420]),straight([191,420],split));
+const rawInner=join(cubic(split,[255.8,312],[311,289],[390,289]),
+ straight([390,289],[835,289]),cubic([835,289],[893,289],[934,328],merge));
 const rawPost=join(cubic(merge,[1000,390],[1018,430],[1018,478]),
  cubic([1018,478],[1018,580],[965,665],home),straight(home,G));
 const SX=310/(home[0]-G[0]);
@@ -35,9 +35,14 @@ let low=.2,high=2;
 for(let i=0;i<48;i++){const m=(low+high)/2;if(arc(metric(rawLoop,m)).length<SPEC.innerLap)low=m;else high=m}
 const SY=(low+high)/2;
 const pre=metric(rawPre,SY),innerBranch=metric(rawInner,SY),post=metric(rawPost,SY);
+// Tangent-aligned approaches: the mile starts from a straight pocket and
+// the 2500m start lies on the straight approach to the shared right turn.
+const outerEntry=[278,275],outerExit=[780,359-(967-780)*31/33];
 function outerTrace(depth){return metric(join(
- cubic(split,[269,290],[255,80+depth],[410,80+depth]),
- cubic([410,80+depth],[620,80+depth],[806,203],merge)),SY)}
+ straight(split,outerEntry),
+ cubic(outerEntry,[362,135],[380,80+depth],[470,80+depth]),
+ cubic([470,80+depth],[620,80+depth],[710,outerExit[1]-70*31/33],outerExit),
+ straight(outerExit,merge)),SY)}
 const preLen=arc(pre).length,postLen=arc(post).length;
 const innerLen=arc(innerBranch).length;
 // Outer depth increases as its image-space y decreases.
@@ -45,7 +50,10 @@ const outerBranch=calibrate(k=>outerTrace(-k),SPEC.outerLap-preLen-postLen,-150,
 export const LOOPS={inner:arc(join(pre,innerBranch,post)),outer:arc(join(pre,outerBranch,post))};
 export const SECTIONS=Object.freeze({split:preLen,mergeInner:preLen+innerLen,
  mergeOuter:SPEC.outerLap-postLen,homeInner:SPEC.innerLap-SPEC.straight,
- homeOuter:SPEC.outerLap-SPEC.straight,sharedFinish:postLen,firstTurn:72.1});
+ homeOuter:SPEC.outerLap-SPEC.straight,sharedFinish:postLen,firstTurn:72.1,
+ outerTurn2:preLen+arc(metric(straight(split,outerEntry),SY)).length,
+ outerStraightToMerge:arc(metric(straight(outerExit,merge),SY)).length,
+ innerTurn3:preLen+arc(metric(join(cubic(split,[255.8,312],[311,289],[390,289]),straight([390,289],[835,289])),SY)).length});
 const mod=(x,m)=>(x%m+m)%m;
 // Profile knots digitized approximately from provided JRA elevation diagrams.
 // Shared segments use identical elevations. The 180–70m slope uses a piecewise
@@ -58,7 +66,7 @@ function hill(rem){
  return -2.45+flat*(u-edge/2);
 }
 const commonEnd=[[0,0],[70,-.25],[180,-2.45],[240,-2.7],[310,-2.3],[400,-2.05],[600,-2.0]];
-const innerProfile=[...commonEnd,[750,-2],[950,-1.6],[1150,.95],[1280,2.15],[1370,2.6],[1450,2.6],[1575,.85],[1667.1,0]];
+const innerProfile=[...commonEnd,[800,-2],[950,-1.6],[1150,.95],[1280,2.15],[1370,2.6],[1450,2.6],[1575,.85],[1667.1,0]];
 function interp(points,r){for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i];if(r<=b[0])return lerp(a[1],b[1],(r-a[0])/(b[0]-a[0]))}return points.at(-1)[1]}
 const splitInner=SPEC.innerLap-SECTIONS.split,splitOuter=SPEC.outerLap-SECTIONS.split;
 const outerProfile=[[SECTIONS.sharedFinish,interp(innerProfile,SECTIONS.sharedFinish)],
@@ -73,14 +81,16 @@ export function altitude(kind,remaining){
  if(r>=splitOuter)return interp(innerProfile,r-(SPEC.outerLap-SPEC.innerLap));
  return interp(outerProfile,r);
 }
-export function at(kind,station){
+export function at(kind,station,rail='A'){
+ if(rail!=='A')return railAt(kind,station,rail);
  const loop=LOOPS[kind],lap=kind==='inner'?SPEC.innerLap:SPEC.outerLap;
  const s=mod(station,lap),target=s/lap*loop.length,arr=loop.samples;
  let lo=0,hi=arr.length-1;while(hi-lo>1){const m=(hi+lo)>>1;if(arr[m].s<target)lo=m;else hi=m}
  const a=arr[lo],b=arr[hi],u=(target-a.s)/Math.max(1e-9,b.s-a.s),dx=b.x-a.x,dz=b.z-a.z,n=Math.hypot(dx,dz)||1;
  return {x:lerp(a.x,b.x,u),z:lerp(a.z,b.z,u),y:altitude(kind,lap-s),tx:dx/n,tz:dz/n,kind,station:s};
 }
-export function widthAt(kind,station){
+export function widthAt(kind,station,rail='A'){
+ if(rail!=='A')return railAt(kind,station,rail).width;
  const lap=kind==='inner'?SPEC.innerLap:SPEC.outerLap,s=mod(station,lap),rem=lap-s;
  if(rem<=SECTIONS.sharedFinish||s<=SECTIONS.split)return 24+8*Math.max(0,1-Math.min(rem,s)/420);
  const end=kind==='inner'?SECTIONS.mergeInner:SECTIONS.mergeOuter;
@@ -90,29 +100,30 @@ export function widthAt(kind,station){
  return lerp(base,kind==='inner'?20:32,peak);
 }
 export const ROUTE_LABELS={1200:'外回り',1600:'外回り・ポケット',1800:'内回り',2000:'内回り',2200:'外回り',2500:'外回り発走→内回り',2600:'外回り',3200:'外回り発走→内回り',3600:'内回り・2周',4000:'外回り・2周'};
-export function makeRoute(distance){
+export function makeRoute(distance,rail='A'){
+ const spec=railSpec(rail),sections=railSections(rail);
  if(!DISTANCES.includes(distance))throw Error('unsupported distance');
  const finalKind=[1800,2000,2500,3200,3600].includes(distance)?'inner':'outer';
- const lap=finalKind==='inner'?SPEC.innerLap:SPEC.outerLap;
+ const lap=finalKind==='inner'?spec.innerLap:spec.outerLap;
  const n=Math.floor(distance/lap),partial=distance-n*lap;
  const initialKind=[2500,3200].includes(distance)?'outer':finalKind;
- const initialLap=initialKind==='inner'?SPEC.innerLap:SPEC.outerLap;
+ const initialLap=initialKind==='inner'?spec.innerLap:spec.outerLap;
  // Both starts use the same left-side pocket and tangent join; 3200m
  // runs the outer partial lap and then one complete inner lap.
  const legs=[];
- const pocketJoin=349.7;
+ const pocketJoin=railStation('outer',349.7,rail);
  if(distance===1600||distance===3200){
   const length=partial-(initialLap-pocketJoin);
   legs.push({kind:'pocket',length,joinKind:initialKind,joinStation:pocketJoin});
   legs.push({kind:initialKind,start:pocketJoin,length:initialLap-pocketJoin});
- }else if([2000,2200,4000].includes(distance)){
+ }else if(partial>SPEC.straight&&[2000,2200,4000].includes(distance)){
   // Starts beyond the exit of turn 4 are on the straight extension.
   const length=partial-SPEC.straight;
   legs.push({kind:'chute',length,joinKind:initialKind,joinStation:initialLap-SPEC.straight});
   legs.push({kind:initialKind,start:initialLap-SPEC.straight,length:SPEC.straight});
  }else if(partial>0)legs.push({kind:initialKind,start:initialLap-partial,length:partial});
  for(let i=0;i<n;i++)legs.push({kind:finalKind,start:0,length:lap});
- return {distance,legs,label:ROUTE_LABELS[distance],finalKind};
+ return {distance,legs,label:ROUTE_LABELS[distance],finalKind,rail};
 }
 export function routeAt(route,distance){
  let d=Math.max(0,Math.min(route.distance,distance));
@@ -120,17 +131,17 @@ export function routeAt(route,distance){
   const leg=route.legs[i];
   if(d<=leg.length||i===route.legs.length-1){
    if(leg.kind==='pocket'||leg.kind==='chute'){
-    const p=at(leg.joinKind,leg.joinStation),remain=leg.length-d;
+    const p=at(leg.joinKind,leg.joinStation,route.rail),remain=leg.length-d;
     // Use a shared physical extension for each pocket and continuous heights.
     // Pocket high point ~2.6m is inferred from the official section diagram.
-    const slope=leg.kind==='pocket'?(2.6-p.y)/110:-((altitude(leg.joinKind,310-1)-p.y));
+    const spec=railSpec(route.rail),slope=leg.kind==='pocket'?(2.6-p.y)/Math.max(1,1600-(spec.outerLap-leg.joinStation)):-(at(leg.joinKind,leg.joinStation+1,route.rail).y-p.y);
     const y=p.y+remain*slope;
-    const width=leg.kind==='pocket'?lerp(widthAt(leg.joinKind,leg.joinStation),32,Math.min(1,remain/110)):widthAt(leg.joinKind,leg.joinStation);
+    const w=widthAt(leg.joinKind,leg.joinStation,route.rail),width=leg.kind==='pocket'?lerp(w,32-spec.offset,Math.min(1,remain/Math.max(1,1600-(spec.outerLap-leg.joinStation)))):w;
     // The chute is straight, not the preceding curve's sampled tangent.
     const tx=leg.kind==='chute'?-1:p.tx,tz=leg.kind==='chute'?0:p.tz;
     return {...p,x:p.x-tx*remain,z:p.z-tz*remain,y,tx,tz,kind:leg.kind,width};
    }
-   const p=at(leg.kind,leg.start+d);return {...p,width:widthAt(leg.kind,p.station)};
+   const p=at(leg.kind,leg.start+d,route.rail);return {...p,width:widthAt(leg.kind,p.station,route.rail)};
   }
   d-=leg.length;
  }
@@ -165,15 +176,25 @@ export function curvatureAt(route,distance,span=4){
  if(!ds)return 0;
  return Math.atan2(a.tx*b.tz-a.tz*b.tx,a.tx*b.tx+a.tz*b.tz)/ds;
 }
-export function courseLandmarks(distance){
- const route=makeRoute(distance),first=route.legs[0],partial=distance%SPEC[route.finalKind+'Lap'];
- if([1800,2000,2200].includes(distance))return [{name:'1コーナー入口',distance:partial+SECTIONS.firstTurn,source:'JRA-VAN 約205/405/432m'}];
- if(distance===1600)return [{name:'2コーナー目安',distance:240,source:'JRA-VAN 約240m（境界近似）'}];
- if(distance===1200)return [{name:'3コーナー目安',distance:255,source:'JRA-VAN 250m強（255mと仮定）'}];
- if(distance===2500)return [{name:'内外合流',distance:SECTIONS.mergeOuter-first.start,source:'モデルの合流点。JRA-VANの約192mの説明とは定義未確認'}];
- return [];
+export function courseLandmarks(distance,rail='A'){
+ const route=makeRoute(distance,rail),spec=railSpec(rail),s=railSections(rail);
+ const kinds=route.legs,marks=[];let traveled=0;
+ // Model boundaries: explicit geometry-derived stations where available.
+ // JRA does not publish surveyed corner-boundary coordinates.
+ for(const leg of kinds){
+  if(leg.kind==='pocket'||leg.kind==='chute'){traveled+=leg.length;continue}
+  const lap=spec[leg.kind+'Lap'];
+  const points=leg.kind==='inner'?
+   [[s.firstTurn,'1コーナー入口'],[s.split,'2コーナー・分岐目安'],[s.innerTurn3,'3コーナー入口目安'],[s.mergeInner,'3〜4コーナー共通区間']]:
+   [[s.firstTurn,'1コーナー入口'],[s.outerTurn2,'2コーナー入口'],[railStation('outer',894.7,rail),'3コーナー入口目安'],[s.mergeOuter,'内外合流・4コーナー方面']];
+  for(const [station,name] of points){
+   if(station>=leg.start&&station<leg.start+leg.length)
+    marks.push({name,distance:traveled+station-leg.start,source:'モデル境界（近似）'});
+  }
+  traveled+=leg.length;
+ }
+ return marks;
 }
-
 // Visual-only dirt course: separately calibrated reference loop and section
 // based on JRA's 1493m / 308m / 4.5m / 20–25m specifications.
 // Absolute elevation relative to turf and surveyed offsets are not known.
@@ -196,3 +217,63 @@ export function dirtAt(station){
   width:20+5*Math.max(0,1-Math.min(s,DIRT_SPEC.lap-s)/420),kind:'dirt',station:s};
 }
 export const DIRT_MODEL_LENGTH=dirtLoop.length;
+
+// B/C are parallel outward reference lines, not stretched A routes.
+// Published lap rounding is assigned only to the divergent branch, preserving
+// the common physical segment stations and the 310m home straight.
+export const RAILS=Object.freeze({
+ A:SPEC,
+ B:Object.freeze({...SPEC,offset:3,innerLap:1686,outerLap:1858.5,innerWidth:[17,29],outerWidth:[21,29]}),
+ C:Object.freeze({...SPEC,offset:6,innerLap:1704.8,outerLap:1877.3,innerWidth:[14,26],outerWidth:[18,26]})
+});
+export function railSpec(rail='A'){if(!Object.hasOwn(RAILS,rail))throw Error('unsupported rail');return RAILS[rail]}
+const railModels={};
+function buildRail(rail,kind){
+ const spec=railSpec(rail),lap=SPEC[kind+'Lap'],merge=SECTIONS[kind==='inner'?'mergeInner':'mergeOuter'];
+ const knots=[0,SECTIONS.firstTurn,SECTIONS.split,merge,lap-310,lap];
+ const segments=knots.slice(0,-1).map((start,j)=>{
+  const end=knots[j+1],n=Math.ceil((end-start)/.35),points=[];
+  for(let i=0;i<=n;i++){
+   const s=lerp(start,end,i/n),p=at(kind,s),prev=at(kind,s-.15),next=at(kind,s+.15);
+   const dx=next.x-prev.x,dz=next.z-prev.z,norm=Math.hypot(dx,dz)||1;
+   points.push({a:s,x:p.x+dz/norm*spec.offset,z:p.z-dx/norm*spec.offset,y:p.y});
+  }
+  let len=0;points.forEach((p,i)=>{if(i)len+=Math.hypot(p.x-points[i-1].x,p.z-points[i-1].z);p.s=len});
+  return {start,end,points,len,target:len};
+ });
+ // Preserve exact straight boundaries. The small correction from published
+ // rounding is applied to the nonshared section only.
+ segments[0].target=SECTIONS.firstTurn;segments[4].target=310;
+ segments[2].target=spec[kind+'Lap']-segments.filter((_,i)=>i!==2).reduce((a,p)=>a+p.target,0);
+ let station=0;for(const seg of segments){seg.station=station;station+=seg.target;}
+ return {kind,segments,lap:spec[kind+'Lap']};
+}
+function models(rail){
+ railSpec(rail);
+ if(!railModels[rail])railModels[rail]={inner:buildRail(rail,'inner'),outer:buildRail(rail,'outer')};
+ return railModels[rail];
+}
+function findSample(arr,x,key){
+ let lo=0,hi=arr.length-1;while(hi-lo>1){const mid=(hi+lo)>>1;if(arr[mid][key]<x)lo=mid;else hi=mid}return [arr[lo],arr[hi]];
+}
+export function railStation(kind,a,rail='A'){
+ if(rail==='A')return a;
+ const m=models(rail)[kind],seg=m.segments.find(s=>a<=s.end+1e-8)||m.segments.at(-1);
+ const [p,q]=findSample(seg.points,a,'a'),u=(a-p.a)/Math.max(1e-9,q.a-p.a);
+ return seg.station+lerp(p.s,q.s,u)*seg.target/seg.len;
+}
+export function railSections(rail='A'){
+ if(rail==='A')return SECTIONS;
+ const s=(kind,v)=>railStation(kind,v,rail),spec=railSpec(rail);
+ return {split:s('inner',SECTIONS.split),mergeInner:s('inner',SECTIONS.mergeInner),mergeOuter:s('outer',SECTIONS.mergeOuter),
+ firstTurn:s('inner',SECTIONS.firstTurn),homeInner:spec.innerLap-310,homeOuter:spec.outerLap-310,
+ sharedFinish:spec.innerLap-s('inner',SECTIONS.mergeInner),outerTurn2:s('outer',SECTIONS.outerTurn2),
+ outerStraightToMerge:s('outer',SECTIONS.mergeOuter)-s('outer',SECTIONS.mergeOuter-SECTIONS.outerStraightToMerge),
+ innerTurn3:s('inner',SECTIONS.innerTurn3)};
+}
+function railAt(kind,station,rail){
+ const m=models(rail)[kind],s=mod(station,m.lap),seg=m.segments.find(v=>s<=v.station+v.target+1e-8)||m.segments.at(-1);
+ const target=(s-seg.station)*seg.len/seg.target,[p,q]=findSample(seg.points,target,'s'),u=Math.max(0,Math.min(1,(target-p.s)/Math.max(1e-9,q.s-p.s)));
+ const a=lerp(p.a,q.a,u),base=at(kind,a);
+ return {x:lerp(p.x,q.x,u),z:lerp(p.z,q.z,u),y:base.y,tx:base.tx,tz:base.tz,station:s,kind,width:widthAt(kind,a)-railSpec(rail).offset};
+}
