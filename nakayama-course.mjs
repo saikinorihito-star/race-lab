@@ -14,14 +14,36 @@ function calibrate(builder,target,lo,hi){
  for(let i=0;i<48;i++){const m=(lo+hi)/2;if(arc(builder(m)).length<target)lo=m;else hi=m}
  return builder((lo+hi)/2);
 }
-const G=[0,0],split=[-200,-180],merge=[260,-120],home=[310,0],firstTurn=[-72.1,0];
-const pre=calibrate(k=>join(straight(G,firstTurn),cubic(firstTurn,[-72.1-k,0],[-200-k,-180],split)),517.1,50,500);
-const post=calibrate(k=>join(cubic(merge,[260+k,-120+k*.5],[310+k,0],home),straight(home,G)),600,50,500);
-const branch=(z)=>join(cubic(split,[-100,-180],[-90,z],[30,z]),cubic([30,z],[150,z],[140,-180],merge));
-const innerBranch=calibrate(k=>branch(-180-k),550,0,450);
-const outerBranch=calibrate(k=>branch(-180-k),722.6,0,600);
+// Control points traced from the JRA schematic supplied by the user.
+// Image-space x increases right; z increases down. Goal is the origin.
+// Calibrate the common plan as a whole rather than stretching individual
+// corners into long loops. The final straight is 310m by construction.
+const G=[460,665],split=[215,380],merge=[967,349],home=[850,665];
+const rawPre=join(straight(G,[390,665]),
+ cubic([390,665],[275,665],[190,584],[190,478]),
+ cubic([190,478],[190,440],[200,405],split));
+const rawInner=join(cubic(split,[253,312],[311,289],[390,289]),
+ straight([390,289],[835,289]),cubic([835,289],[893,289],[931,314],merge));
+const rawPost=join(cubic(merge,[1000,380],[1018,430],[1018,478]),
+ cubic([1018,478],[1018,580],[965,665],home),straight(home,G));
+const SX=310/(home[0]-G[0]);
+function metric(points,sy){return points.map(p=>[(p[0]-G[0])*SX,(p[1]-G[1])*sy])}
+const rawLoop=join(rawPre,rawInner,rawPost);
+let low=.2,high=2;
+for(let i=0;i<48;i++){const m=(low+high)/2;if(arc(metric(rawLoop,m)).length<SPEC.innerLap)low=m;else high=m}
+const SY=(low+high)/2;
+const pre=metric(rawPre,SY),innerBranch=metric(rawInner,SY),post=metric(rawPost,SY);
+function outerTrace(depth){return metric(join(
+ cubic(split,[253,312],[225,80+depth],[389,80+depth]),
+ cubic([389,80+depth],[620,80+depth],[806,193],merge)),SY)}
+const preLen=arc(pre).length,postLen=arc(post).length;
+const innerLen=arc(innerBranch).length;
+// Outer depth increases as its image-space y decreases.
+const outerBranch=calibrate(k=>outerTrace(-k),SPEC.outerLap-preLen-postLen,-150,200);
 export const LOOPS={inner:arc(join(pre,innerBranch,post)),outer:arc(join(pre,outerBranch,post))};
-export const SECTIONS={split:517.1,mergeInner:1067.1,mergeOuter:1239.7,homeInner:1357.1,homeOuter:1529.7};
+export const SECTIONS=Object.freeze({split:preLen,mergeInner:preLen+innerLen,
+ mergeOuter:SPEC.outerLap-postLen,homeInner:SPEC.innerLap-SPEC.straight,
+ homeOuter:SPEC.outerLap-SPEC.straight,sharedFinish:postLen});
 const mod=(x,m)=>(x%m+m)%m;
 // Profile knots digitized approximately from provided JRA elevation diagrams.
 // Shared segments use identical elevations. The 180–70m slope uses a piecewise
@@ -34,21 +56,18 @@ function hill(rem){
  return -2.45+flat*(u-edge/2);
 }
 const commonEnd=[[0,0],[70,-.25],[180,-2.45],[240,-2.7],[310,-2.3],[400,-2.05],[600,-2.0]];
-const profiles={
- inner:[...commonEnd,[750,-2],[950,-1.6],[1150,.95],[1280,2.05],[1370,2.6],[1450,2.6],[1575,.85],[1667.1,0]],
- outer:[...commonEnd,[750,-2],[970,-1.2],[1200,1.45],[1270,2.05],[1440,2.05],[1542.6,2.6],[1622.6,2.6],[1747.6,.85],[1839.7,0]]
-};
- // At split, both branches must have identical elevation. At merge, both are -2.
-profiles.inner=profiles.inner.filter(p=>p[0]!==1150);profiles.inner.push([1150,1.45]);profiles.inner.sort((a,b)=>a[0]-b[0]);
-profiles.outer.push([1322.6,1.45]);profiles.outer.sort((a,b)=>a[0]-b[0]);
-// Keep common pre-split height values identical by mapping remaining distance.
+const innerProfile=[...commonEnd,[750,-2],[950,-1.6],[1150,.95],[1280,2.05],[1370,2.6],[1450,2.6],[1575,.85],[1667.1,0]];
 function interp(points,r){for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i];if(r<=b[0])return lerp(a[1],b[1],(r-a[0])/(b[0]-a[0]))}return points.at(-1)[1]}
+const splitInner=SPEC.innerLap-SECTIONS.split,splitOuter=SPEC.outerLap-SECTIONS.split;
+const outerProfile=[[SECTIONS.sharedFinish,interp(innerProfile,SECTIONS.sharedFinish)],
+ [800,-1.8],[1000,-.9],[1260,1.7],[splitOuter,interp(innerProfile,splitInner)]];
 export function altitude(kind,remaining){
  const lap=kind==='inner'?SPEC.innerLap:SPEC.outerLap;
  const r=mod(remaining,lap);
  if(r>=70&&r<=180)return hill(r);
- if(kind==='outer'&&r>=1322.6)return interp(profiles.inner,r-172.6);
- return interp(profiles[kind],r);
+ if(kind==='inner'||r<=SECTIONS.sharedFinish)return interp(innerProfile,r);
+ if(r>=splitOuter)return interp(innerProfile,r-(SPEC.outerLap-SPEC.innerLap));
+ return interp(outerProfile,r);
 }
 export function at(kind,station){
  const loop=LOOPS[kind],lap=kind==='inner'?SPEC.innerLap:SPEC.outerLap;
@@ -57,16 +76,14 @@ export function at(kind,station){
  const a=arr[lo],b=arr[hi],u=(target-a.s)/Math.max(1e-9,b.s-a.s),dx=b.x-a.x,dz=b.z-a.z,n=Math.hypot(dx,dz)||1;
  return {x:lerp(a.x,b.x,u),z:lerp(a.z,b.z,u),y:altitude(kind,lap-s),tx:dx/n,tz:dz/n,kind,station:s};
 }
-export function widthAt(kind,s){
- const lap=kind==='inner'?SPEC.innerLap:SPEC.outerLap;
- const rem=mod(lap-s,lap);
- // Approximate width distribution, constrained to published A-course ranges.
- // On the shared sections both routes use exactly the same width, so a
- // runner or a route-centre marker never jumps sideways at the finish.
- if(rem<=600||s<=517.1)return 24+8*Math.max(0,1-Math.min(rem,lap-rem)/420);
- const span=kind==='inner'?550:722.6;
- const u=(s-517.1)/span;
- return kind==='inner'?24-4*Math.sin(Math.PI*u)**2:24+4*Math.sin(Math.PI*u)**2;
+export function widthAt(kind,station){
+ const lap=kind==='inner'?SPEC.innerLap:SPEC.outerLap,s=mod(station,lap),rem=lap-s;
+ if(rem<=SECTIONS.sharedFinish||s<=SECTIONS.split)return 24+8*Math.max(0,1-Math.min(rem,s)/420);
+ const end=kind==='inner'?SECTIONS.mergeInner:SECTIONS.mergeOuter;
+ const u=(s-SECTIONS.split)/(end-SECTIONS.split);
+ const startWidth=24+8*Math.max(0,1-SECTIONS.split/420),base=lerp(startWidth,24,u);
+ const peak=Math.sin(Math.PI*u)**2;
+ return lerp(base,kind==='inner'?20:32,peak);
 }
 export const ROUTE_LABELS={1200:'外回り',1600:'外回り・ポケット',1800:'内回り',2000:'内回り',2200:'外回り',2500:'外回り発走→内回り',2600:'外回り',3200:'外回り発走→内回り',3600:'内回り・2周',4000:'外回り・2周'};
 export function makeRoute(distance){
