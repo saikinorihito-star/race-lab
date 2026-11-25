@@ -1,4 +1,4 @@
-import {createGateVenueController} from './jss50-gate.mjs?v=2';
+import {createGateVenueController} from './jss50-gate.mjs?v=3';
 export const APPROVED_PITCH=.98;
 export function stallCenter(count,index,pitch=APPROVED_PITCH){return (index-(count-1)/2)*pitch}
 export function stallNumber(count,index,insideRight){return insideRight?count-index:index+1}
@@ -76,21 +76,19 @@ export function createRaceGate(THREE,source,{count=18,pitch=APPROVED_PITCH,venue
   const x=stallCenter(count,i),number=stallNumber(count,i,insideRight);
   for(const side of ['front','rear']){
    for(const lr of ['L','R']){
-    const src=nodes.get(side+'_04_'+lr);if(!src)throw Error('元モデルの扉不足');
+    const src=nodes.get(side+'_'+(count===8?String(i+1).padStart(2,'0'):'04')+'_'+lr);if(!src)throw Error('元モデルの扉不足');
     const leaf=src.clone(true);leaf.name=side+'_'+String(i+1).padStart(2,'0')+'_'+lr;
     leaf.position.x=x+(lr==='L'?-.45:.45);root.add(leaf);doors.push(leaf);
    }
-   const src=nodes.get('number_'+side+'_04');if(!src?.material?.map)throw Error('元モデルの番号板不足');
-   const plate=src.clone(false);plate.position.x+=x-stallCenter(8,3);
+   const src=nodes.get('number_'+side+'_'+(count===8?String(i+1).padStart(2,'0'):'04'));if(!src?.material?.map)throw Error('元モデルの番号板不足');
+   const plate=src.clone(false);plate.position.x+=count===8?0:x-stallCenter(8,3);
    plate.name='number_'+side+'_'+String(number).padStart(2,'0');plate.material=src.material.clone();ownedMaterials.push(plate.material);
    let tex=numberTextures.get(number);
    if(!tex){tex=numberTexture(THREE,src.material.map,number);numberTextures.set(number,tex);ownedTextures.push(tex)}
    plate.material.map=tex;plate.material.needsUpdate=true;root.add(plate);
   }
  }
- // Controller's original 8-stall contract is retained; pass a signs-only
- // view with 32 original hinge references to its venue controller.
- const venueController=createGateVenueController(THREE,{traverse(fn){root.children.filter(o=>/^venue_/.test(o.name)).forEach(fn);doors.slice(0,32).forEach(fn)}});
+ const venueController=createGateVenueController(THREE,root,count);
  venueController.setVenue(venue);
  root.scale.x=pitch/APPROVED_PITCH;
  function setDoors(front=0,rear=0){for(const p of doors){const f=p.name.startsWith('front'),left=p.name.endsWith('_L');p.rotation.y=(left?-1:1)*(f?1:-1)*Math.PI*.48*Math.max(0,Math.min(1,f?front:rear))}}
