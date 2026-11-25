@@ -35,7 +35,24 @@ function rearArt(THREE,venue,ratio){
 }
 const COLORS=['#eeeeee','#20242a','#bb3539','#2868b6','#dcc43e','#258356','#e3832e','#db81a5'];
 function frameIndex(n){return n<=12?Math.floor((n-1)/2):n<=15?6:7}
-export function createRaceVisionSystem(THREE,{scene,renderer,venue,mobile=false,live=true}){
+// Board foundation follows the displayed course datum, not the world-ground datum.
+export function visionMountHeight(trackBaseY){return Math.max(0,trackBaseY)+3;}
+function addRaisedVisionFoundation(THREE,group,d,trackBaseY,mountY){
+ const groundY=-.15,bankTop=Math.max(groundY+.1,trackBaseY),bankH=bankTop-groundY;
+ // Tapered grass embankment, narrow enough to remain inside the dirt inner rail.
+ const geo=new THREE.BoxGeometry(1,1,1),pos=geo.attributes.position;
+ for(let i=0;i<pos.count;i++){
+  const upper=pos.getY(i)>0;
+  pos.setXYZ(i,pos.getX(i)*(d.outerWidth+(upper?2:12)),pos.getY(i)*bankH,pos.getZ(i)*(upper?5:18));
+ }
+ pos.needsUpdate=true;geo.computeVertexNormals();geo.computeBoundingSphere();
+ const bank=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x468c4b,roughness:.98}));
+ bank.name='vision-raised-grass-berm';bank.position.y=groundY+bankH/2-mountY;group.add(bank);
+ const plinthH=mountY-bankTop;
+ const pedestal=new THREE.Mesh(new THREE.BoxGeometry(d.outerWidth+.85,plinthH+.06,d.depth+.85),new THREE.MeshStandardMaterial({color:0x7b8482,roughness:.91}));
+ pedestal.name='vision-elevated-concrete-plinth';pedestal.position.y=-plinthH/2-.03;group.add(pedestal);
+}
+export function createRaceVisionSystem(THREE,{scene,renderer,venue,mobile=false,live=true,trackBaseY=null}){
  const boards=[],groups=[],placements=VISION_PLACEMENTS[venue]||[];
  // Render once at the widest panel's native panoramic aspect. Narrower boards center-crop horizontally, never stretch.
  const feedAspect=Math.max(16/9,...placements.map(p=>{const d=visionDimensions(p.key),v=monitorLayout(d.width,d.height).video;return v.w/v.h}));
@@ -48,7 +65,11 @@ export function createRaceVisionSystem(THREE,{scene,renderer,venue,mobile=false,
   const c=newCanvas(Math.min(2048,Math.round(512*ratio)),Math.min(1024,Math.round(Math.min(2048,512*ratio)/ratio)));
   const background=canvasTexture(THREE,c),art=rearArt(THREE,venue,d.outerWidth/d.rearH);
   const model=createTurfVision(THREE,{key:p.key,screenTexture:background,rearTexture:art});
-  const group=model.root;group.position.set(p.x,p.y,p.z);group.rotation.y=p.yaw;scene.add(group);groups.push(group);
+  const group=model.root,raised=venue==='tokyo'&&Number.isFinite(trackBaseY);
+  const mountY=raised?visionMountHeight(trackBaseY):p.y;
+  group.position.set(p.x,mountY,p.z);group.rotation.y=p.yaw;
+  if(raised)addRaisedVisionFoundation(THREE,group,d,trackBaseY,mountY);
+  scene.add(group);groups.push(group);
   const v=layout.video,mesh=new THREE.Mesh(new THREE.PlaneGeometry(v.w,v.h),new THREE.MeshBasicMaterial({map:target?.texture||null,color:0xffffff,toneMapped:false,side:THREE.FrontSide}));
   const uv=mesh.geometry.attributes.uv,portion=Math.min(1,(v.w/v.h)/feedCamera.aspect);
   for(let i=0;i<uv.count;i++)uv.setX(i,.5+(uv.getX(i)-.5)*portion);
