@@ -6177,7 +6177,7 @@ function renderLiveRaceMonitor(time){
   const medianLane=nearFront.reduce((v,h)=>v+h.lane,0)/nearFront.length;
   const a=fieldCenterAt(activePlan,Math.max(0,Math.min(activePlan.distance,leader.distance-7)));
   const side=new THREE.Vector3(a.t.z,0,-a.t.x),focus=a.p.clone().addScaledVector(side,medianLane);
-  feedCamera.position.copy(focus).addScaledVector(side,36).addScaledVector(a.t,17).add(new THREE.Vector3(0,10,0));
+  feedCamera.position.copy(focus).addScaledVector(side,-36).addScaledVector(a.t,17).add(new THREE.Vector3(0,10,0));
   feedCamera.lookAt(focus.clone().add(new THREE.Vector3(0,1.4,0)));
  });
 }
