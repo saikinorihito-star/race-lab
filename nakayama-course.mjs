@@ -173,3 +173,26 @@ export function courseLandmarks(distance){
  if(distance===2500)return [{name:'内外合流',distance:SECTIONS.mergeOuter-first.start,source:'モデルの合流点。JRA-VANの約192mの説明とは定義未確認'}];
  return [];
 }
+
+// Visual-only dirt course: separately calibrated reference loop and section
+// based on JRA's 1493m / 308m / 4.5m / 20–25m specifications.
+// Absolute elevation relative to turf and surveyed offsets are not known.
+export const DIRT_SPEC=Object.freeze({lap:1493,straight:308,relief:4.5,widthMin:20,widthMax:25});
+function dirtPlan(offset){
+ const n=Math.ceil(SPEC.innerLap/.5);
+ return Array.from({length:n+1},(_,i)=>{
+  const p=at('inner',SPEC.innerLap*i/n);
+  return [(p.x-p.tz*offset)*DIRT_SPEC.straight/SPEC.straight,p.z+p.tx*offset];
+ });
+}
+const dirtLoop=arc(calibrate(k=>dirtPlan(-k),DIRT_SPEC.lap,-35,-20));
+const dirtProfile=[[0,0],[70,-.2],[180,-2.4],[260,-2.5],[400,-2.5],[550,-2.1],[900,-1.4],[1080,1.4],[1300,2],[1493,0]];
+export function dirtAt(station){
+ const s=mod(station,DIRT_SPEC.lap),arr=dirtLoop.samples,target=s/ DIRT_SPEC.lap*dirtLoop.length;
+ let lo=0,hi=arr.length-1;
+ while(hi-lo>1){const m=(lo+hi)>>1;if(arr[m].s<target)lo=m;else hi=m}
+ const a=arr[lo],b=arr[hi],u=(target-a.s)/Math.max(1e-9,b.s-a.s),dx=b.x-a.x,dz=b.z-a.z,n=Math.hypot(dx,dz)||1;
+ return {x:lerp(a.x,b.x,u),z:lerp(a.z,b.z,u),y:interp(dirtProfile,DIRT_SPEC.lap-s),tx:dx/n,tz:dz/n,
+  width:20+5*Math.max(0,1-Math.min(s,DIRT_SPEC.lap-s)/420),kind:'dirt',station:s};
+}
+export const DIRT_MODEL_LENGTH=dirtLoop.length;
