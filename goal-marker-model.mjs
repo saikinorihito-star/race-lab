@@ -42,11 +42,13 @@ export function createGoalMarker(THREE,{key='tokyo-turf',scale=1,decor=0x17264f}
  oval(1.87,1.20,.34,ivory,0);oval(1.76,1.10,.035,face,.19);oval(1.76,1.10,.035,face,-.19);
  function texture(w,h,paint){const c=document.createElement('canvas');c.width=w;c.height=h;paint(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;textures.add(t);return t}
  function decal(w,h,t,x,y,z,side,angle=0){const o=mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:t,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2,side:THREE.FrontSide}),x,y,z);o.rotation.y=side===-1?Math.PI:0;o.rotateZ(angle);return o}
- const lettering=texture(512,128,(c,w,h)=>{c.fillStyle='#f4f5ef';c.font='900 102px Arial,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText('TOKYO',w/2,h/2,w*.97)});
+ const lettering=texture(512,128,(c,w,h)=>{c.fillStyle='#f4f5ef';c.font='900 102px Arial,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText('TOKYO',w/2,h/2,w*.90)});
  const logo=texture(512,320,(c,w,h)=>{c.strokeStyle='#f3f3eb';c.lineWidth=12;c.lineCap='round';c.lineJoin='round';c.beginPath();c.arc(256,77,46,.35,Math.PI*1.91);c.stroke();c.beginPath();c.moveTo(226,106);c.lineTo(249,75);c.lineTo(282,86);c.lineTo(260,48);c.lineTo(236,60);c.stroke();c.fillStyle='#f3f3eb';c.textAlign='center';c.font='bold 76px Georgia,serif';c.fillText('JRA',256,195);c.font='bold 49px sans-serif';c.fillText('東 京',256,260)});
  for(const side of [-1,1]){
   decal(1.62,1.01,logo,0,4.83,side*.218,side);
-  for(const leg of [-1,1])decal(2.05,.46,lettering,leg*1.00,2.72,side*(spec.depth/2+.064),side,side*leg*-1.77);
+  // Follow the actual straight leg centreline, leaving clear margins on both edges.
+  const legAngle=Math.PI/2+Math.atan(.43/2.03);
+  for(const leg of [-1,1])decal(1.55,.34,lettering,leg*.803,2.43,side*(spec.depth/2+.10),side,-side*leg*legAngle);
  }
  // Two galvanized uprights and three rows of twin floodlights.
  for(const x of [-.13,.13])box(.072,2.38,.09,silver,x,5.07,-.12);
