@@ -18,15 +18,15 @@ function calibrate(builder,target,lo,hi){
 // Image-space x increases right; z increases down. Goal is the origin.
 // Calibrate the common plan as a whole rather than stretching individual
 // corners into long loops. The final straight is 310m by construction.
-const G=[460,665],split=[215,380],merge=[967,349],home=[850,665];
+const G=[460,665],split=[215,380],merge=[967,359],home=[850,665];
 // JRA-VAN: 1800m to turn 1 ~205m, hence 72.1m past the finish.
 const firstTurnX=G[0]-72.1*(home[0]-G[0])/310;
 const rawPre=join(straight(G,[firstTurnX,665]),
  cubic([firstTurnX,665],[275,665],[190,584],[190,478]),
  cubic([190,478],[190,440],[200,405],split));
 const rawInner=join(cubic(split,[253,312],[311,289],[390,289]),
- straight([390,289],[835,289]),cubic([835,289],[893,289],[931,314],merge));
-const rawPost=join(cubic(merge,[1000,380],[1018,430],[1018,478]),
+ straight([390,289],[835,289]),cubic([835,289],[893,289],[931,324],merge));
+const rawPost=join(cubic(merge,[1000,390],[1018,430],[1018,478]),
  cubic([1018,478],[1018,580],[965,665],home),straight(home,G));
 const SX=310/(home[0]-G[0]);
 function metric(points,sy){return points.map(p=>[(p[0]-G[0])*SX,(p[1]-G[1])*sy])}
@@ -36,8 +36,8 @@ for(let i=0;i<48;i++){const m=(low+high)/2;if(arc(metric(rawLoop,m)).length<SPEC
 const SY=(low+high)/2;
 const pre=metric(rawPre,SY),innerBranch=metric(rawInner,SY),post=metric(rawPost,SY);
 function outerTrace(depth){return metric(join(
- cubic(split,[253,312],[225,80+depth],[389,80+depth]),
- cubic([389,80+depth],[620,80+depth],[806,193],merge)),SY)}
+ cubic(split,[269,290],[255,80+depth],[410,80+depth]),
+ cubic([410,80+depth],[620,80+depth],[806,203],merge)),SY)}
 const preLen=arc(pre).length,postLen=arc(post).length;
 const innerLen=arc(innerBranch).length;
 // Outer depth increases as its image-space y decreases.
@@ -58,13 +58,13 @@ function hill(rem){
  return -2.45+flat*(u-edge/2);
 }
 const commonEnd=[[0,0],[70,-.25],[180,-2.45],[240,-2.7],[310,-2.3],[400,-2.05],[600,-2.0]];
-const innerProfile=[...commonEnd,[750,-2],[950,-1.6],[1150,.95],[1280,2.05],[1370,2.6],[1450,2.6],[1575,.85],[1667.1,0]];
+const innerProfile=[...commonEnd,[750,-2],[950,-1.6],[1150,.95],[1280,2.15],[1370,2.6],[1450,2.6],[1575,.85],[1667.1,0]];
 function interp(points,r){for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i];if(r<=b[0])return lerp(a[1],b[1],(r-a[0])/(b[0]-a[0]))}return points.at(-1)[1]}
 const splitInner=SPEC.innerLap-SECTIONS.split,splitOuter=SPEC.outerLap-SECTIONS.split;
 const outerProfile=[[SECTIONS.sharedFinish,interp(innerProfile,SECTIONS.sharedFinish)],
  // JRA-VAN's ~4.4m descent for 1200m, interpreted to the exit of turn 4
  // (remaining 310m, -2.3m). Exact intermediate elevations are unavailable.
- [800,-1.8],[950,-1.1],[1200,2.1],[1300,2.1],[splitOuter,interp(innerProfile,splitInner)]];
+ [800,-1.8],[950,-1.1],[1200,2.1],[1300,2.14],[splitOuter,interp(innerProfile,splitInner)]];
 export function altitude(kind,remaining){
  const lap=kind==='inner'?SPEC.innerLap:SPEC.outerLap;
  const r=mod(remaining,lap);
