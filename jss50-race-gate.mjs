@@ -1,22 +1,22 @@
 import {createGateVenueController} from './jss50-gate.mjs?v=3';
 export const APPROVED_PITCH=.98;
-// Keep the front-door plane and the horse's race origin fixed. Only extend
-// the existing gate along its depth when the actual normalized horse needs it.
-export const GATE_HINGE_Z=1.42,TAIL_CLEARANCE=.18;
-export function gateDepthFit(horseMinZ){
+// Fit both ends independently around the unchanged horse/race origin.
+export const GATE_HINGE_Z=1.42,TAIL_CLEARANCE=.18,HEAD_CLEARANCE=.18;
+export function gateDepthFit(horseMinZ,horseMaxZ){
  const rear=Number.isFinite(horseMinZ)?Math.min(-GATE_HINGE_Z,horseMinZ-TAIL_CLEARANCE):-GATE_HINGE_Z;
- const scaleZ=(GATE_HINGE_Z-rear)/(2*GATE_HINGE_Z);
- return {scaleZ,offsetZ:GATE_HINGE_Z*(1-scaleZ),rear};
+ const front=Number.isFinite(horseMaxZ)?Math.max(GATE_HINGE_Z,horseMaxZ+HEAD_CLEARANCE):GATE_HINGE_Z;
+ return {scaleZ:(front-rear)/(2*GATE_HINGE_Z),offsetZ:(front+rear)/2,rear,front};
 }
-// The horse is detached, already normalized and in the exact release pose.
-// Measure once per load, never per frame or per horse.
-export function measureGateHorseRear(THREE,model,mixer,restMinZ){
+// The detached horse has already been normalized. Include both its rest
+// bounds and the exact animated release pose, once per model load.
+export function measureGateHorseBounds(THREE,model,mixer,rest){
  mixer.setTime(0);
  model.updateMatrixWorld(true);
  model.traverse(o=>{if(o.isSkinnedMesh)o.skeleton.update()});
  const box=new THREE.Box3().setFromObject(model,true);
- const values=[restMinZ,box.min.z].filter(Number.isFinite);
- return values.length?Math.min(...values):null;
+ const mins=[rest?.minZ,box.min.z].filter(Number.isFinite);
+ const maxs=[rest?.maxZ,box.max.z].filter(Number.isFinite);
+ return {minZ:mins.length?Math.min(...mins):null,maxZ:maxs.length?Math.max(...maxs):null};
 }
 
 export function stallCenter(count,index,pitch=APPROVED_PITCH){return (index-(count-1)/2)*pitch}
@@ -111,7 +111,7 @@ export function createRaceGate(THREE,source,{count=18,pitch=APPROVED_PITCH,venue
  venueController.setVenue(venue);
  root.scale.x=pitch/APPROVED_PITCH;
  function setDoors(front=0,rear=0){for(const p of doors){const f=p.name.startsWith('front'),left=p.name.endsWith('_L');p.rotation.y=(left?-1:1)*(f?1:-1)*Math.PI*.48*Math.max(0,Math.min(1,f?front:rear))}}
- function fitHorseRear(minZ){const {scaleZ,offsetZ}=gateDepthFit(minZ);root.scale.z=scaleZ;root.position.z=offsetZ;}
+ function fitHorseBounds(bounds){const {scaleZ,offsetZ}=gateDepthFit(bounds?.minZ,bounds?.maxZ);root.scale.z=scaleZ;root.position.z=offsetZ;}
  function dispose(){venueController.dispose();ownedGeometries.forEach(g=>g.dispose());ownedMaterials.forEach(m=>m.dispose());ownedTextures.forEach(t=>t.dispose())}
- return {root,doors,setDoors,setVenue:venueController.setVenue,fitHorseRear,dispose,count,pitch};
+ return {root,doors,setDoors,setVenue:venueController.setVenue,fitHorseBounds,dispose,count,pitch};
 }
