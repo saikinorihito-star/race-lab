@@ -19,8 +19,10 @@ function calibrate(builder,target,lo,hi){
 // Calibrate the common plan as a whole rather than stretching individual
 // corners into long loops. The final straight is 310m by construction.
 const G=[460,665],split=[215,380],merge=[967,349],home=[850,665];
-const rawPre=join(straight(G,[390,665]),
- cubic([390,665],[275,665],[190,584],[190,478]),
+// JRA-VAN: 1800m to turn 1 ~205m, hence 72.1m past the finish.
+const firstTurnX=G[0]-72.1*(home[0]-G[0])/310;
+const rawPre=join(straight(G,[firstTurnX,665]),
+ cubic([firstTurnX,665],[275,665],[190,584],[190,478]),
  cubic([190,478],[190,440],[200,405],split));
 const rawInner=join(cubic(split,[253,312],[311,289],[390,289]),
  straight([390,289],[835,289]),cubic([835,289],[893,289],[931,314],merge));
@@ -43,7 +45,7 @@ const outerBranch=calibrate(k=>outerTrace(-k),SPEC.outerLap-preLen-postLen,-150,
 export const LOOPS={inner:arc(join(pre,innerBranch,post)),outer:arc(join(pre,outerBranch,post))};
 export const SECTIONS=Object.freeze({split:preLen,mergeInner:preLen+innerLen,
  mergeOuter:SPEC.outerLap-postLen,homeInner:SPEC.innerLap-SPEC.straight,
- homeOuter:SPEC.outerLap-SPEC.straight,sharedFinish:postLen});
+ homeOuter:SPEC.outerLap-SPEC.straight,sharedFinish:postLen,firstTurn:72.1});
 const mod=(x,m)=>(x%m+m)%m;
 // Profile knots digitized approximately from provided JRA elevation diagrams.
 // Shared segments use identical elevations. The 180–70m slope uses a piecewise
@@ -60,7 +62,9 @@ const innerProfile=[...commonEnd,[750,-2],[950,-1.6],[1150,.95],[1280,2.05],[137
 function interp(points,r){for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i];if(r<=b[0])return lerp(a[1],b[1],(r-a[0])/(b[0]-a[0]))}return points.at(-1)[1]}
 const splitInner=SPEC.innerLap-SECTIONS.split,splitOuter=SPEC.outerLap-SECTIONS.split;
 const outerProfile=[[SECTIONS.sharedFinish,interp(innerProfile,SECTIONS.sharedFinish)],
- [800,-1.8],[1000,-.9],[1260,1.7],[splitOuter,interp(innerProfile,splitInner)]];
+ // JRA-VAN's ~4.4m descent for 1200m, interpreted to the exit of turn 4
+ // (remaining 310m, -2.3m). Exact intermediate elevations are unavailable.
+ [800,-1.8],[950,-1.1],[1200,2.1],[1300,2.1],[splitOuter,interp(innerProfile,splitInner)]];
 export function altitude(kind,remaining){
  const lap=kind==='inner'?SPEC.innerLap:SPEC.outerLap;
  const r=mod(remaining,lap);
@@ -93,11 +97,20 @@ export function makeRoute(distance){
  const n=Math.floor(distance/lap),partial=distance-n*lap;
  const initialKind=[2500,3200].includes(distance)?'outer':finalKind;
  const initialLap=initialKind==='inner'?SPEC.innerLap:SPEC.outerLap;
- // 1600/3200 pocket position is a schematic tangent extension, not a survey.
- const pocketLength=distance===1600?110:distance===3200?105:0;
+ // Both starts use the same left-side pocket and tangent join; 3200m
+ // runs the outer partial lap and then one complete inner lap.
  const legs=[];
- if(pocketLength)legs.push({kind:'pocket',length:pocketLength,joinKind:initialKind,joinStation:initialLap-(partial-pocketLength)});
- if(partial>pocketLength)legs.push({kind:initialKind,start:initialLap-(partial-pocketLength),length:partial-pocketLength});
+ const pocketJoin=349.7;
+ if(distance===1600||distance===3200){
+  const length=partial-(initialLap-pocketJoin);
+  legs.push({kind:'pocket',length,joinKind:initialKind,joinStation:pocketJoin});
+  legs.push({kind:initialKind,start:pocketJoin,length:initialLap-pocketJoin});
+ }else if([2000,2200,4000].includes(distance)){
+  // Starts beyond the exit of turn 4 are on the straight extension.
+  const length=partial-SPEC.straight;
+  legs.push({kind:'chute',length,joinKind:initialKind,joinStation:initialLap-SPEC.straight});
+  legs.push({kind:initialKind,start:initialLap-SPEC.straight,length:SPEC.straight});
+ }else if(partial>0)legs.push({kind:initialKind,start:initialLap-partial,length:partial});
  for(let i=0;i<n;i++)legs.push({kind:finalKind,start:0,length:lap});
  return {distance,legs,label:ROUTE_LABELS[distance],finalKind};
 }
@@ -106,9 +119,16 @@ export function routeAt(route,distance){
  for(let i=0;i<route.legs.length;i++){
   const leg=route.legs[i];
   if(d<=leg.length||i===route.legs.length-1){
-   if(leg.kind==='pocket'){
+   if(leg.kind==='pocket'||leg.kind==='chute'){
     const p=at(leg.joinKind,leg.joinStation),remain=leg.length-d;
-    return {...p,x:p.x-p.tx*remain,z:p.z-p.tz*remain,y:p.y,kind:'pocket',width:lerp(32,widthAt(leg.joinKind,leg.joinStation),d/leg.length)};
+    // Use a shared physical extension for each pocket and continuous heights.
+    // Pocket high point ~2.6m is inferred from the official section diagram.
+    const slope=leg.kind==='pocket'?(2.6-p.y)/110:-((altitude(leg.joinKind,310-1)-p.y));
+    const y=p.y+remain*slope;
+    const width=leg.kind==='pocket'?lerp(widthAt(leg.joinKind,leg.joinStation),32,Math.min(1,remain/110)):widthAt(leg.joinKind,leg.joinStation);
+    // The chute is straight, not the preceding curve's sampled tangent.
+    const tx=leg.kind==='chute'?-1:p.tx,tz=leg.kind==='chute'?0:p.tz;
+    return {...p,x:p.x-tx*remain,z:p.z-tz*remain,y,tx,tz,kind:leg.kind,width};
    }
    const p=at(leg.kind,leg.start+d);return {...p,width:widthAt(leg.kind,p.station)};
   }
@@ -119,4 +139,37 @@ export function routeAt(route,distance){
 export function gradeAt(route,distance){
  const a=Math.max(0,distance-1),b=Math.min(route.distance,distance+1);
  return (routeAt(route,b).y-routeAt(route,a).y)/Math.max(.001,b-a)*100;
+}
+
+// Measured along the modeled inner-rail-plus-one-metre reference. A horse's
+// lateral offset is positive outward; actual horizontal and 3D travel differ
+// from advertised distance and can be used by a future race engine.
+export function laneAt(route,distance,outward=0){
+ const p=routeAt(route,distance),offset=Math.max(0,Math.min(p.width-2,outward==='center'?p.width/2-1:Number(outward)||0));
+ return {...p,x:p.x+p.tz*offset,z:p.z-p.tx*offset,offset};
+}
+export function measureRoute(route,outward=0,step=.5){
+ if(!Number.isFinite(step)||step<=0)throw Error('invalid sample interval');
+ const n=Math.ceil(route.distance/step);
+ let previous=laneAt(route,0,outward),horizontal=0,surface=0,ascent=0,descent=0;
+ for(let i=1;i<=n;i++){
+  const p=laneAt(route,route.distance*i/n,outward),ds=Math.hypot(p.x-previous.x,p.z-previous.z),dy=p.y-previous.y;
+  horizontal+=ds;surface+=Math.hypot(ds,dy);ascent+=Math.max(0,dy);descent+=Math.max(0,-dy);previous=p;
+ }
+ return {horizontal,surface,ascent,descent,extra:horizontal-route.distance};
+}
+// Model curvature, not a claim about surveyed JRA turn radii.
+export function curvatureAt(route,distance,span=4){
+ const a=routeAt(route,Math.max(0,distance-span)),b=routeAt(route,Math.min(route.distance,distance+span));
+ const ds=Math.min(route.distance,distance+span)-Math.max(0,distance-span);
+ if(!ds)return 0;
+ return Math.atan2(a.tx*b.tz-a.tz*b.tx,a.tx*b.tx+a.tz*b.tz)/ds;
+}
+export function courseLandmarks(distance){
+ const route=makeRoute(distance),first=route.legs[0],partial=distance%SPEC[route.finalKind+'Lap'];
+ if([1800,2000,2200].includes(distance))return [{name:'1コーナー入口',distance:partial+SECTIONS.firstTurn,source:'JRA-VAN 約205/405/432m'}];
+ if(distance===1600)return [{name:'2コーナー目安',distance:240,source:'JRA-VAN 約240m（境界近似）'}];
+ if(distance===1200)return [{name:'3コーナー目安',distance:255,source:'JRA-VAN 250m強（255mと仮定）'}];
+ if(distance===2500)return [{name:'内外合流',distance:SECTIONS.mergeOuter-first.start,source:'モデルの合流点。JRA-VANの約192mの説明とは定義未確認'}];
+ return [];
 }
