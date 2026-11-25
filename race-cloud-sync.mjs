@@ -132,9 +132,28 @@ export function mergeAppearanceConflict(binding,local,remote){
 }
 function appearanceCount(payload){return (payload?.library?.horses||[]).filter(h=>h.appearance).length}
 function readBinding(){try{return JSON.parse(localStorage.getItem(BIND)||'null')}catch{return null}}
+// Bound stalled reads/auth calls without allowing an expired task to update local data.
+export function syncDeadline(promise,label,ms=12000){
+ let timer;
+ return Promise.race([Promise.resolve(promise),new Promise((_,reject)=>{
+  timer=setTimeout(()=>reject(Error(label+'がタイムアウトしました。再試行してください。')),ms);
+ })]).finally(()=>clearTimeout(timer));
+}
+async function syncFetch(input,init={}){
+ const controller=new AbortController(),signal=init.signal||input?.signal;
+ const abort=()=>controller.abort();
+ if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
+ const timer=setTimeout(abort,12000);
+ try{return await fetch(input,{...init,signal:controller.signal})}
+ finally{clearTimeout(timer);signal?.removeEventListener('abort',abort)}
+}
 export async function startPrivateSync({capture,restore,safe,status,ui}){
- let client=null,busy=false,user=null,latest=null;
+ let client=null,busy=false,user=null,latest=null,queuedRefresh=false;
  const say=t=>status.textContent=t;
+ const finish=()=>{
+  busy=false;ui.refresh.textContent='今すぐ同期';ui.refresh.removeAttribute('aria-busy');
+  if(queuedRefresh){queuedRefresh=false;void tick('refresh')}
+ };
  const show=(logged,manual)=>{
   ui.auth.hidden=logged;ui.auth.style.display=logged?'none':'flex';ui.actions.hidden=!logged;
   ui.email.disabled=logged;ui.password.disabled=logged;
@@ -143,12 +162,12 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
  };
  const ready=async()=>{
   if(client)return client;
-  const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/+esm');
-  client=createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  const {createClient}=await syncDeadline(import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/+esm'),'同期ライブラリの読み込み');
+  client=createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},global:{fetch:syncFetch}});
   return client;
  };
  const read=async()=>{
-  const {data,error}=await client.from(TABLE).select('revision,payload,updated_at').eq('user_id',user.id).maybeSingle();
+  const {data,error}=await syncDeadline(client.from(TABLE).select('revision,payload,updated_at').eq('user_id',user.id).maybeSingle(),'クラウドの読み込み');
   if(error)throw error;
   if(data&&(!validPayload(data.payload)||!Number.isSafeInteger(data.revision)))throw Error('クラウドデータが不正です。端末のデータは保持しました。');
   return data;
@@ -161,6 +180,7 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
   const next={user_id:user.id,revision:remote?remote.revision+1:1,payload:local,updated_at:new Date().toISOString()};
   const request=remote?client.from(TABLE).update(next).eq('user_id',user.id).eq('revision',remote.revision):
    client.from(TABLE).insert(next);
+  say('同期中：クラウドへ保存しています…');
   const {data,error}=await request.select('revision,payload,updated_at').maybeSingle();
   if(error||!data){latest=await read();show(true,true);throw Error('同期先が変更されたか、保存に失敗しました。端末データは保持されています。')}
   bind(data);latest=data;show(true,false);
@@ -174,15 +194,21 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
   restore(remote.payload,()=>bind(remote));
  }
  async function tick(mode='auto'){
-  if(busy)return;
+  if(busy){
+   if(mode==='refresh'){queuedRefresh=true;say('同期通信中です。終了後にもう一度確認します…');ui.refresh.textContent='同期中…'}
+   else if(mode==='send'||mode==='receive')say('同期通信中です。終了後にもう一度押してください。');
+   return;
+  }
   if(document.visibilityState==='hidden'&&mode==='auto')return;
-  busy=true;
+  busy=true;ui.refresh.setAttribute('aria-busy','true');ui.refresh.textContent='同期中…';
+  say('同期中：接続を確認しています…');
   try{
    await ready();
-   const {data,error}=await client.auth.getSession();
+   const {data,error}=await syncDeadline(client.auth.getSession(),'ログイン状態の確認');
    if(error)throw error;
    user=data.session?.user||null;
    if(!user){latest=null;show(false,false);say('未接続：端末内に保存しています');return}
+   say('同期中：クラウドの登録馬を確認しています…');
    const local=capture(),remote=await read();latest=remote;
    if(!validPayload(local))throw Error('端末のデータ形式を確認できません。');
    // Never replace or upload an unseen local edit while a request was in flight.
@@ -220,40 +246,41 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
    show(true,false);
    if(decision==='equal'){say('同期済み（外見設定 '+appearanceCount(local)+'頭）');return}
    if(decision==='ack'){bind(remote);say('同期済み（外見設定 '+appearanceCount(local)+'頭）');return}
-   if(!safe()){say('同期保留：レース・編集終了後に反映します');return}
+   if(!safe()){say('同期保留：発馬機に戻し、未保存の馬名・能力・外見などを保存してください。');return}
    if(decision==='download'){receive(local,remote);return}
    if(decision==='upload'){
     const next=preserveMissingAppearance(local,remote?.payload),saved=await upload(next,remote);
     if(stable(next)!==stable(local))receive(local,saved);
    }
   }catch(e){say('同期できません：'+String(e?.message||e)+'（端末保存は継続）')}
-  finally{busy=false}
+  finally{finish()}
  }
  async function auth(signup){
-  if(busy)return;busy=true;
+  if(busy){say('同期通信中です。終了後にもう一度押してください。');return}busy=true;
+  say('認証中…');
   try{
    await ready();
    const email=ui.email.value.trim(),password=ui.password.value;
    if(!email||password.length<8)throw Error('メールアドレスと8文字以上のパスワードを入力してください。');
    const credentials={email,password};
-   const {data,error}=signup?await client.auth.signUp(credentials):await client.auth.signInWithPassword(credentials);
+   const {data,error}=await syncDeadline(signup?client.auth.signUp(credentials):client.auth.signInWithPassword(credentials),'認証');
    if(error)throw error;
    ui.password.value='';
    if(signup&&!data.session){say('確認メールを開いて認証し、この画面でログインしてください。');return}
   }catch(e){say('認証できません：'+String(e?.message||e));return}
-  finally{busy=false}
+  finally{finish()}
   await tick();
  }
  ui.login.addEventListener('click',()=>auth(false));ui.signup.addEventListener('click',()=>auth(true));
  ui.logout.addEventListener('click',async()=>{
-  if(busy)return;busy=true;
-  try{await ready();const {error}=await client.auth.signOut({scope:'local'});if(error)throw error;show(false,false);say('ログアウトしました。端末データは残っています。')}
-  catch(e){say('ログアウトできません：'+String(e?.message||e))}finally{busy=false}
+  if(busy){say('同期通信中です。終了後にもう一度押してください。');return}busy=true;
+  try{await ready();const {error}=await syncDeadline(client.auth.signOut({scope:'local'}),'ログアウト');if(error)throw error;show(false,false);say('ログアウトしました。端末データは残っています。')}
+  catch(e){say('ログアウトできません：'+String(e?.message||e))}finally{finish()}
  });
  const manual=mode=>{document.activeElement?.blur?.();return tick(mode)};
  ui.send.addEventListener('click',()=>manual('send'));ui.receive.addEventListener('click',()=>manual('receive'));
- ui.refresh.addEventListener('click',()=>manual('auto'));
- document.addEventListener('race-lab:appearance-saved',()=>manual('auto'));
+ ui.refresh.addEventListener('click',()=>manual('refresh'));
+ document.addEventListener('race-lab:appearance-saved',()=>manual('refresh'));
  window.addEventListener('online',()=>tick());
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')tick()});
  // Do not make a network request on every animation frame.
