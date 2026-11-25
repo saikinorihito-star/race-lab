@@ -6203,14 +6203,14 @@ function addTurfBlade(angle,length,width,lean){
   rr=point(width*.5,length*.28,lean*.14),ridge=point(0,length*.30,lean*.14+.018),
   ml=point(-width*.30,length*.61,lean*.54),mr=point(width*.30,length*.61,lean*.54),
   mid=point(0,length*.65,lean*.54+.012),tip=point(width*.13,length,lean);
- turfBladeTriangle(root,l,ridge,.67);turfBladeTriangle(root,ridge,rr,.92);
- turfBladeTriangle(l,ml,mid,.76);turfBladeTriangle(l,mid,ridge,.76);
+ turfBladeTriangle(root,l,ridge,.55);turfBladeTriangle(root,ridge,rr,.95);
+ turfBladeTriangle(l,ml,mid,.62);turfBladeTriangle(l,mid,ridge,.62);
  turfBladeTriangle(ridge,mid,mr,.98);turfBladeTriangle(ridge,mr,rr,.98);
  turfBladeTriangle(ml,tip,mid,.84);turfBladeTriangle(mid,tip,mr,1);
 }
-addTurfBlade(.12,.34,.085,.105);
-addTurfBlade(2.13,.24,.067,.135);
-addTurfBlade(4.37,.17,.060,.09);
+addTurfBlade(.12,.37,.105,.105);
+addTurfBlade(2.13,.26,.081,.135);
+addTurfBlade(4.37,.19,.072,.09);
 turfSprayGeometry.setAttribute('position',new THREE.Float32BufferAttribute(turfBladeVertices,3));
 turfSprayGeometry.setAttribute('color',new THREE.Float32BufferAttribute(turfBladeColors,3));
 const turfSprayMaterial=new THREE.MeshBasicMaterial({
@@ -6275,10 +6275,10 @@ function spawnTurfClipping(position,tangent,side,lateralOffset,going){
  state.life=state.maxLife=.43+Math.random()*.17;
  state.rx=Math.random()*Math.PI*2;state.ry=Math.random()*Math.PI*2;state.rz=Math.random()*Math.PI*2;
  state.spinX=(Math.random()-.5)*9;state.spinY=(Math.random()-.5)*10;state.spinZ=(Math.random()-.5)*9;
- state.size=.48+Math.random()*.48;
+ state.size=.54+Math.random()*.48;
  const shades=going>.4?
-  [[.16,.25,.055],[.23,.32,.08],[.18,.15,.045],[.25,.21,.07]]:
-  [[.13,.33,.035],[.19,.40,.055],[.16,.29,.035],[.25,.39,.07]];
+  [[.17,.30,.042],[.25,.39,.068],[.18,.15,.045],[.25,.21,.07]]:
+  [[.15,.43,.035],[.23,.50,.045],[.13,.33,.025],[.29,.48,.058]];
  const shade=shades[(Math.random()*shades.length)|0];
  [state.cr,state.cg,state.cb]=shade;
 }
