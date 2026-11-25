@@ -709,7 +709,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {createRaceVisionSystem} from './turf-vision-race.mjs?v=1';
+import {createRaceVisionSystem} from './turf-vision-race.mjs?v=2';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
@@ -1668,8 +1668,8 @@ label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+11,dirtLabelPos
  }
  label3D('芝 Aコース｜左回り',-5,35,0,16,'#1c665c');
 // 黄色い進行方向の矢印は表示しない。
-// 大型モニター用の自主制作テスト映像。実在のレース動画・放映画面ではない。
-const raceVision=createRaceVisionSystem(THREE,{scene,renderer,venue:'tokyo',mobile:matchMedia('(pointer:coarse)').matches,live:isOfficialEighteenTest});
+// 大型モニターに現在進行中の3Dレースを専用カメラで生中継する。
+const raceVision=createRaceVisionSystem(THREE,{scene,renderer,venue:'tokyo',mobile:matchMedia('(pointer:coarse)').matches,live:true});
 const turfVisionGroups=raceVision.groups;
 
 // カメラが模型の内部に入った場合の閉塞を防ぐため、スタンド外形を登録。
@@ -5859,7 +5859,7 @@ function updateSceneLabelVisibility(){
  turfVisionGroups.forEach(group=>{
   // Keep both stand-facing giant screens visible during the 18-horse race.
   // The live feed updates only while a screen intersects the camera frustum.
-  group.visible=isOfficialEighteenTest||!closeViews.has(view);
+  group.visible=true;
  });
 }
 checkLabels.addEventListener('change',updateSceneLabelVisibility);
@@ -6165,23 +6165,39 @@ function setupRaceWatchUI(){
 }
 
 function renderLiveRaceMonitor(time){
- if(!activePlan)return;
- const horses=isOfficialEighteenTest?raceHorses.slice(0,18).map(h=>({...h,name:officialRunnerNames[h.idx]||'試験馬'+h.number})):[];
- const ready=isOfficialEighteenTest&&installedDesign01&&horses.length===18;
- const elapsed=ready?raceElapsed:0,phase=ready&&horses.every(h=>h.finished)?'finish':elapsed>0?'race':'before';
- raceVision.update(time,camera,{ready,phase,playing:ready&&playing,elapsed,distance:activePlan.distance,
-  remaining:Math.max(0,activePlan.distance-travel),horses:ready?horses:[],fps:auto18ObservedFps},feedCamera=>{
-  const pool=horses.filter(h=>!h.finished);const byProgress=[...(pool.length?pool:horses)].sort((a,b)=>b.distance-a.distance||a.number-b.number);
-  const leader=byProgress[0];if(!leader)return;
-  const nearFront=byProgress.filter(h=>leader.distance-h.distance<22);
-  const medianLane=nearFront.reduce((v,h)=>v+h.lane,0)/nearFront.length;
-  const a=fieldCenterAt(activePlan,Math.max(0,Math.min(activePlan.distance,leader.distance-7)));
-  const side=new THREE.Vector3(a.t.z,0,-a.t.x),focus=a.p.clone().addScaledVector(side,medianLane);
-  feedCamera.position.copy(focus).addScaledVector(side,-36).addScaledVector(a.t,17).add(new THREE.Vector3(0,10,0));
-  feedCamera.lookAt(focus.clone().add(new THREE.Vector3(0,1.4,0)));
- });
-}
-// One fixed-buffer particle system for subtle kicked-up grass from 18 horses.
+  if(!activePlan)return;
+  const single=fieldMode.value==='single',competitive=fieldMode.value==='race18';
+  const count=isOfficialPairTest?OFFICIAL_TEST_COUNT:FIELD_COUNT;
+  const ready=single?!!runner?.visible:isOfficialPairTest?!!installedDesign01&&officialPair.length>=count:!isDesign01Review;
+  const horses=!ready?[]:single?[{number:1,name:'',distance:travel,finished:travel>=activePlan.distance,finishTime:travel/16.7}]:
+   competitive?raceHorses.slice(0,count).map(h=>({...h,name:officialRunnerNames[h.idx]||'試験馬'+h.number})):
+   Array.from({length:count},(_,i)=>({number:i+1,name:officialRunnerNames[i]||'試験馬'+(i+1),distance:travel,finished:travel>=activePlan.distance,finishTime:travel/16.7}));
+  const elapsed=ready?(competitive&&!single?raceElapsed:travel/16.7):0;
+  const phase=ready&&horses.length&&horses.every(h=>h.finished)?'finish':elapsed>0?'race':'before';
+  raceVision.update(time,camera,{ready,phase,playing:ready&&playing,elapsed,distance:activePlan.distance,
+   remaining:Math.max(0,activePlan.distance-travel),horses,fps:auto18ObservedFps||fps,single},feedCamera=>{
+   const pool=horses.filter(h=>!h.finished);
+   const byProgress=[...(pool.length?pool:horses)].sort((a,b)=>b.distance-a.distance||a.number-b.number);
+   const leader=byProgress[0];if(!leader)return;
+   const a=single?(isDesign01Review?fieldCenterAt(activePlan,travel):racePointAt(activePlan,travel)):
+    fieldCenterAt(activePlan,Math.max(0,Math.min(activePlan.distance,leader.distance)));
+   const side=new THREE.Vector3(a.t.z,0,-a.t.x);
+   let focus=a.p.clone(),pullback=27;
+   if(single)focus.copy(runner.position);
+   else if(competitive){
+    const front=byProgress.filter(h=>leader.distance-h.distance<28);
+    const tail=front[front.length-1];
+    const midpoint=fieldCenterAt(activePlan,Math.max(0,leader.distance-(leader.distance-tail.distance)*.5));
+    const lane=front.reduce((sum,h)=>sum+(Number.isFinite(h.lane)?h.lane:0),0)/front.length;
+    focus=midpoint.p.clone().addScaledVector(new THREE.Vector3(midpoint.t.z,0,-midpoint.t.x),lane);
+    pullback=35;
+   }else pullback=35;
+   // Outside rail, low broadcast perspective; wide feed uses its full native aspect.
+   feedCamera.position.copy(focus).addScaledVector(side,-pullback).addScaledVector(a.t,9).add(new THREE.Vector3(0,6,0));
+   feedCamera.lookAt(focus.clone().add(new THREE.Vector3(0,1.35,0)));
+  });
+ }
+ // One fixed-buffer particle system for subtle kicked-up grass from 18 horses.
 // No per-particle meshes, material allocations, textures or draw calls.
 const TURF_SPRAY_CAPACITY=256;
 const turfSprayPositions=new Float32Array(TURF_SPRAY_CAPACITY*3);
