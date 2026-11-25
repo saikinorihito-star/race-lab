@@ -1,8 +1,10 @@
 // Shared approved JSS50-style gate. Keep geometry and door pivots unchanged.
-export const VENUES=Object.freeze({nakayama:'NAKAYAMA RACECOURSE',tokyo:'TOKYO RACECOURSE'});
+export const VENUE_NAMES=Object.freeze({"sapporo":"札幌","hakodate":"函館","fukushima":"福島","niigata":"新潟","tokyo":"東京","nakayama":"中山","chukyo":"中京","kyoto":"京都","hanshin":"阪神","kokura":"小倉"});
+export const VENUES=Object.freeze({"sapporo":"SAPPORO RACECOURSE","hakodate":"HAKODATE RACECOURSE","fukushima":"FUKUSHIMA RACECOURSE","niigata":"NIIGATA RACECOURSE","tokyo":"TOKYO RACECOURSE","nakayama":"NAKAYAMA RACECOURSE","chukyo":"CHUKYO RACECOURSE","kyoto":"KYOTO RACECOURSE","hanshin":"HANSHIN RACECOURSE","kokura":"KOKURA RACECOURSE"});
 export function venueKey(value){
  const v=String(value??'').trim().toLowerCase();
- return v==='東京'||v==='東京競馬場'?'tokyo':v==='中山'||v==='中山競馬場'?'nakayama':Object.hasOwn(VENUES,v)?v:'nakayama';
+ if(Object.hasOwn(VENUES,v))return v;
+ return Object.keys(VENUE_NAMES).find(k=>v===VENUE_NAMES[k]||v===VENUE_NAMES[k]+'競馬場'||v===VENUES[k].toLowerCase())??'nakayama';
 }
 export async function loadApprovedGate(loader){
  const response=await fetch(new URL('./assets/jss50-approved.glb.b64',import.meta.url));
