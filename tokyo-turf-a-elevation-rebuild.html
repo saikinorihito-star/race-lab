@@ -405,10 +405,10 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
      <output id="hoofSoundVolumeValue">35%</output>
     </label>
     <div id="raceBgmControls">
-     <strong>♫ レースBGM｜2番・映画風（120秒）</strong>
-     <label for="raceBgmFile">BGMファイル（最初に一度だけ選択）</label>
-     <input id="raceBgmFile" type="file" accept="audio/mpeg,audio/*" aria-label="2番の120秒BGMを選択"/>
-     <div id="raceBgmStatus" role="status" aria-live="polite">音源未登録｜120秒のMP3を選んでください</div>
+     <strong>♫ レースBGM｜Velocity Field</strong><label for="raceBgmSource">曲の選択 <select id="raceBgmSource"><option value="fusion" selected>オリジナル・フュージョン</option><option value="custom">端末に保存した音源</option></select></label>
+     <label for="raceBgmFile">別のBGMファイルを使う場合だけ選択</label>
+     <input id="raceBgmFile" type="file" accept="audio/mpeg,audio/*" aria-label="任意のBGM音源を選択"/>
+     <div id="raceBgmStatus" role="status" aria-live="polite">標準BGMを準備中（ファイル選択不要）</div>
      <label for="raceBgmVolume">BGM音量<input id="raceBgmVolume" type="range" min="0" max="100" step="5" value="10" aria-label="BGMの音量"/><output id="raceBgmVolumeValue">10%</output></label>
      <div class="camNote">足音とは別の音量です。レースの一時停止・再開・10秒送りに連動し、曲を繰り返します。音源は同じ端末に保存します。</div>
     </div>
@@ -6309,10 +6309,11 @@ function updateTurfSpray(dt){
   turfSprayColorAttribute.needsUpdate=true;
  }
 }
-// Chosen #2 cinematic BGM, supplied as a local MP3 and remembered in IndexedDB.
-// No music playback is possible until the original file has been provided.
+// Original built-in fusion BGM; optional custom track remains device-local.
 const raceBgmToggle=document.querySelector('#raceBgmToggle');
 const raceBgmInput=document.querySelector('#raceBgmFile');
+const raceBgmSource=document.querySelector('#raceBgmSource');
+let fusionBgmBlob=null,rememberedBgmBlob=null,fusionBgmTask=null;
 const raceBgmVolume=document.querySelector('#raceBgmVolume');
 const raceBgmStatus=document.querySelector('#raceBgmStatus');
 const raceBgmVolumeValue=document.querySelector('#raceBgmVolumeValue');
@@ -6328,7 +6329,7 @@ function syncRaceBgmControls(){
  raceBgmToggle.setAttribute('aria-label',!raceBgmLoaded?'BGMの音源を選択':enabled?'BGMを消す':'BGMを再生');
  raceBgmVolumeValue.textContent=raceBgmVolume.value+'%';
 }
-function installRaceBgmBlob(blob,restored=false){
+function installRaceBgmBlob(blob,restored=false,builtIn=false){
  if(!blob||!blob.size)return;
  raceBgmAudio.pause();
  if(raceBgmUrl)URL.revokeObjectURL(raceBgmUrl);
@@ -6336,9 +6337,33 @@ function installRaceBgmBlob(blob,restored=false){
  raceBgmAudio.src=raceBgmUrl;
  raceBgmAudio.load();
  raceBgmLoaded=true;lastBgmRaceSync=-Infinity;
- raceBgmStatus.textContent=restored?'保存済みのBGMを復元しました':'120秒のBGMを登録しました。レース開始で再生します';
+ raceBgmStatus.textContent=builtIn?'Velocity Field｜160 BPM・96秒｜レース開始で再生':restored?'保存済みのBGMを復元しました':'BGMを登録しました。レース開始で再生します';
  syncRaceBgmControls();
 }
+function clearRaceBgm(){
+ raceBgmAudio.pause();raceBgmAudio.removeAttribute('src');raceBgmAudio.load();
+ if(raceBgmUrl)URL.revokeObjectURL(raceBgmUrl);raceBgmUrl=null;raceBgmLoaded=false;syncRaceBgmControls();
+}
+async function prepareFusionBgm(){
+ if(fusionBgmBlob){if(raceBgmSource.value==='fusion')installRaceBgmBlob(fusionBgmBlob,false,true);return}
+ if(fusionBgmTask)return;
+ if(raceBgmSource.value==='fusion')raceBgmStatus.textContent='Velocity Field を準備中…';
+ fusionBgmTask=(async()=>{try{
+  const {createFusionBgm}=await import('./race-fusion-bgm.mjs?v=1');
+  fusionBgmBlob=await createFusionBgm();
+  if(raceBgmSource.value==='fusion'){
+   installRaceBgmBlob(fusionBgmBlob,false,true);
+   if(playing&&raceBgmEnabled)raceBgmStatus.textContent='Velocity Field 準備完了｜BGMボタンをタップして再生';
+  }
+ }catch(e){console.warn('標準BGM生成失敗',e);if(raceBgmSource.value==='fusion')raceBgmStatus.textContent='標準BGMの準備に失敗しました。BGMボタンで再試行できます。'}
+ finally{fusionBgmTask=null}})();
+}
+raceBgmSource.addEventListener('change',()=>{
+ clearRaceBgm();
+ if(raceBgmSource.value==='fusion'){prepareFusionBgm();if(raceBgmLoaded&&playing)playRaceBgmFromGesture()}
+ else if(rememberedBgmBlob){installRaceBgmBlob(rememberedBgmBlob,true);if(playing)playRaceBgmFromGesture()}
+ else raceBgmStatus.textContent='端末の音源を選択してください';
+});
 function persistRaceBgm(blob){
  if(!raceBgmDB){raceBgmPending=blob;return}
  try{
@@ -6356,7 +6381,7 @@ function loadRememberedRaceBgm(){
    raceBgmDB=req.result;
    if(raceBgmPending){persistRaceBgm(raceBgmPending);raceBgmPending=null}
    const get=raceBgmDB.transaction('tracks','readonly').objectStore('tracks').get(RACE_BGM_DB_KEY);
-   get.onsuccess=()=>{if(get.result&&!raceBgmLoaded)installRaceBgmBlob(get.result,true)};
+   get.onsuccess=()=>{if(get.result){rememberedBgmBlob=get.result;if(raceBgmSource.value==='custom'&&!raceBgmLoaded)installRaceBgmBlob(get.result,true)}};
   };
   req.onerror=()=>{raceBgmStatus.textContent='音源を選択できます（端末への保存は利用できません）'};
  }catch(error){console.warn('BGM保存領域を開けません',error)}
@@ -6400,7 +6425,8 @@ function updateRaceBgm(){
  if(Number(rate.value)===1)seekRaceBgm();
 }
 raceBgmToggle.addEventListener('click',()=>{
- if(!raceBgmLoaded){raceBgmInput.click();return}
+ if(!raceBgmLoaded){if(raceBgmSource.value==='fusion')prepareFusionBgm();else raceBgmInput.click();return}
+ if(playing&&raceBgmEnabled&&raceBgmAudio.paused&&Number(raceBgmVolume.value)>0){playRaceBgmFromGesture();return}
  raceBgmEnabled=!raceBgmEnabled;syncRaceBgmControls();
  if(raceBgmEnabled&&playing)playRaceBgmFromGesture();
  else if(!raceBgmEnabled)raceBgmAudio.pause();
@@ -6417,10 +6443,10 @@ raceBgmInput.addEventListener('change',()=>{
   raceBgmStatus.textContent='MP3などの音声ファイルを選択してください';
   return;
  }
- installRaceBgmBlob(blob);persistRaceBgm(blob);
+ raceBgmSource.value='custom';rememberedBgmBlob=blob;installRaceBgmBlob(blob);persistRaceBgm(blob);
  if(playing)playRaceBgmFromGesture();
 });
-if(isOfficialEighteenTest)loadRememberedRaceBgm();
+if(isOfficialEighteenTest){loadRememberedRaceBgm();prepareFusionBgm();}
 syncRaceBgmControls();
 window.addEventListener('pagehide',()=>raceBgmAudio.pause());
 // Lightweight synthesized gallop: original sound generated by the Web Audio API.
