@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {stallCenter,stallNumber,extensionSlabs,repeatFixedGeometry,createRaceGate,gateDepthFit,measureGateHorseRear,GATE_HINGE_Z,TAIL_CLEARANCE} from '../jss50-race-gate.mjs';
+import {stallCenter,stallNumber,extensionSlabs,repeatFixedGeometry,createRaceGate,gateDepthFit,measureGateHorseBounds,GATE_HINGE_Z,TAIL_CLEARANCE,HEAD_CLEARANCE} from '../jss50-race-gate.mjs';
 const raw=Buffer.from(readFileSync(new URL('../assets/jss50-approved.glb.b64',import.meta.url),'utf8'),'base64');
 const jsonLength=raw.readUInt32LE(12),data=JSON.parse(raw.subarray(20,20+jsonLength)),bin=20+jsonLength+8;
 class Attr{
@@ -81,32 +81,40 @@ test('race pages use course-specific gate and synchronize release with existing 
  assert.match(nakayama,/approvedRaceGate\?\.setDoors\(Math.min\(1,elapsed\/\.18\),0\)/);
 });
 
-test('tail clearance extends only as needed, fixing front hinge and keeping rear behind actual horse',()=>{
+test('head and tail clearances independently extend only when needed',()=>{
  for(const minZ of [null,undefined,NaN,-.8,-1.1,-1.24,-1.42,-1.8,-2.6]){
-  const fit=gateDepthFit(minZ);
-  assert.ok(fit.scaleZ>=1);
-  assert.ok(Math.abs(GATE_HINGE_Z*fit.scaleZ+fit.offsetZ-GATE_HINGE_Z)<1e-12);
-  assert.ok(Math.abs(-GATE_HINGE_Z*fit.scaleZ+fit.offsetZ-fit.rear)<1e-12);
-  if(Number.isFinite(minZ))assert.ok(fit.rear<=minZ-TAIL_CLEARANCE+1e-12);
+  for(const maxZ of [null,undefined,NaN,.8,1.1,1.24,1.42,1.8,2.6]){
+   const fit=gateDepthFit(minZ,maxZ);
+   assert.ok(fit.scaleZ>=1);
+   assert.ok(Math.abs(GATE_HINGE_Z*fit.scaleZ+fit.offsetZ-fit.front)<1e-12);
+   assert.ok(Math.abs(-GATE_HINGE_Z*fit.scaleZ+fit.offsetZ-fit.rear)<1e-12);
+   if(Number.isFinite(minZ))assert.ok(fit.rear<=minZ-TAIL_CLEARANCE+1e-12);
+   if(Number.isFinite(maxZ))assert.ok(fit.front>=maxZ+HEAD_CLEARANCE-1e-12);
+   assert.ok(fit.rear<=-GATE_HINGE_Z&&fit.front>=GATE_HINGE_Z);
+  }
  }
- assert.equal(gateDepthFit(-1.1).scaleZ,1);
- assert.equal(gateDepthFit(null).offsetZ,0);
+ assert.equal(gateDepthFit(-1.1,1.1).scaleZ,1);
+ assert.equal(gateDepthFit(null,null).offsetZ,0);
+ const rearOnly=gateDepthFit(-2.1,1.1),both=gateDepthFit(-2.1,2.5);
+ assert.equal(both.rear,rearOnly.rear);
+ assert.equal(rearOnly.front,GATE_HINGE_Z);
+ assert.ok(both.front>rearOnly.front);
 });
-test('measure release-pose tail once, taking the more conservative rest and posed bounds',()=>{
+test('measure release-pose head and tail once using union with normalized rest bounds',()=>{
  const events=[];
  const model={updateMatrixWorld(v){assert.equal(v,true);events.push('world')},traverse(fn){fn({isSkinnedMesh:true,skeleton:{update(){events.push('skin')}}})}};
  const mixer={setTime(v){assert.equal(v,0);events.push('pose')}};
- const THREE={Box3:class{setFromObject(obj,precise){assert.equal(obj,model);assert.equal(precise,true);events.push('bounds');return {min:{z:-1.9}}}}};
- assert.equal(measureGateHorseRear(THREE,model,mixer,-1.6),-1.9);
+ const THREE={Box3:class{setFromObject(obj,precise){assert.equal(obj,model);assert.equal(precise,true);events.push('bounds');return {min:{z:-1.9},max:{z:2.1}}}}};
+ assert.deepEqual(measureGateHorseBounds(THREE,model,mixer,{minZ:-1.6,maxZ:1.8}),{minZ:-1.9,maxZ:2.1});
  assert.deepEqual(events,['pose','world','skin','bounds']);
- assert.equal(measureGateHorseRear(THREE,model,mixer,-2.2),-2.2);
+ assert.deepEqual(measureGateHorseBounds(THREE,model,mixer,{minZ:-2.2,maxZ:2.4}),{minZ:-2.2,maxZ:2.4});
 });
-test('race pages measure the detached horse and apply gate fit without offsetting the horse',()=>{
+test('race pages measure both ends on detached horse before attaching, then fit gate not horse',()=>{
  for(const file of ['tokyo-turf-a-elevation-rebuild.html','nakayama-course-preview.html']){
   const html=readFileSync(new URL('../'+file,import.meta.url),'utf8');
-  assert.match(html,/measureGateHorseRear\(THREE,(?:horse|model),(?:runnerMixer|mixer),restMinZ\)/);
-  assert.match(html,/approvedRaceGate(?:\?\.|\.)fitHorseRear\(approvedHorseRear\)/);
+  assert.match(html,/measureGateHorseBounds\(THREE,(?:horse|model),(?:runnerMixer|mixer),rest\)/);
+  assert.match(html,/approvedRaceGate(?:\?\.|\.)fitHorseBounds\(approvedHorseBounds\)/);
   const load=html.slice(html.indexOf('async function loadApprovedHorse('));
-  assert.ok(load.indexOf('measureGateHorseRear(')<load.indexOf(file.startsWith('tokyo')?'runner.add(horse)':'horseRoot.add(model)'));
+  assert.ok(load.indexOf('measureGateHorseBounds(')<load.indexOf(file.startsWith('tokyo')?'runner.add(horse)':'horseRoot.add(model)'));
  }
 });
