@@ -1,7 +1,7 @@
 // Tokyo turf finish marker, visual reconstruction. All dimensions are estimates in metres.
 // +Y up, +Z grandstand-facing, local X=0 is the finish plane.
 export const GOAL_SPECS=Object.freeze({
- 'tokyo-turf':Object.freeze({venue:'東京',surface:'芝',width:2.85,bodyHeight:4.8,totalHeight:6.3,depth:.29,face:0x17264f,status:'写真からの推定',
+ 'tokyo-turf':Object.freeze({venue:'東京',surface:'芝',width:2.85,bodyHeight:5.43,totalHeight:6.3,depth:.29,face:0x17264f,status:'写真からの推定',
  sources:['https://jra-fun.jp/event/tokyo/202305/img/202305tokyo.pdf','https://jra-fun.jp/event/tokyo/202605/','https://www.tokyokeibajo.com/2025/20250201.html']})
 });
 export function createGoalMarker(THREE,{key='tokyo-turf',scale=1,decor=0x17264f}={}){
