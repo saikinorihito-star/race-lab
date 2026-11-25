@@ -130,6 +130,28 @@ export function mergeAppearanceConflict(binding,local,remote){
  }
  return validPayload(next)?next:null;
 }
+// Synchronize appearance independently of race conditions and other local edits.
+// Never overwrite another field or an ambiguous same-horse edit.
+export function planAppearanceSync(local,remote,binding){
+ if(!validPayload(local)||!validPayload(remote))return null;
+ let base=null;try{base=JSON.parse(binding?.base||'null')}catch{}
+ const bm=new Map((base?.library?.horses||[]).map(h=>[h.id,h]));
+ const lm=new Map(local.library.horses.map(h=>[h.id,h]));
+ const next=structuredClone(remote),received=[],conflicts=[];
+ let sent=0;
+ for(const r of next.library.horses){
+  const l=lm.get(r.id),b=bm.get(r.id);
+  if(!l||l.name!==r.name)continue;
+  const lv=l.appearance||null,rv=r.appearance||null,bv=b?.appearance||null;
+  if(stable(lv)===stable(rv))continue;
+  if(lv&&!rv){r.appearance=structuredClone(lv);sent++;continue}
+  if(!lv&&rv){received.push({id:r.id,name:r.name,appearance:structuredClone(rv)});continue}
+  if(bv&&stable(rv)===stable(bv)){r.appearance=structuredClone(lv);sent++;continue}
+  if(bv&&stable(lv)===stable(bv)){received.push({id:r.id,name:r.name,appearance:structuredClone(rv)});continue}
+  conflicts.push(r.name);
+ }
+ return {payload:next,sent,received,conflicts};
+}
 function appearanceCount(payload){return (payload?.library?.horses||[]).filter(h=>h.appearance).length}
 function readBinding(){try{return JSON.parse(localStorage.getItem(BIND)||'null')}catch{return null}}
 // Bound stalled reads/auth calls without allowing an expired task to update local data.
@@ -147,7 +169,7 @@ async function syncFetch(input,init={}){
  try{return await fetch(input,{...init,signal:controller.signal})}
  finally{clearTimeout(timer);signal?.removeEventListener('abort',abort)}
 }
-export async function startPrivateSync({capture,restore,safe,status,ui}){
+export async function startPrivateSync({capture,restore,safe,status,ui,applyAppearance}){
  let client=null,busy=false,user=null,latest=null,queuedRefresh=false;
  const say=t=>status.textContent=t;
  const finish=()=>{
@@ -175,7 +197,7 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
  function bind(row){
   localStorage.setItem(BIND,JSON.stringify({uid:user.id,revision:row.revision,base:stable(row.payload)}));
  }
- async function upload(local,remote){
+ async function upload(local,remote,bindFull=true){
   if(!validPayload(local))throw Error('端末データを確認できません。送信を中止しました。');
   const next={user_id:user.id,revision:remote?remote.revision+1:1,payload:local,updated_at:new Date().toISOString()};
   const request=remote?client.from(TABLE).update(next).eq('user_id',user.id).eq('revision',remote.revision):
@@ -183,7 +205,7 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
   say('同期中：クラウドへ保存しています…');
   const {data,error}=await request.select('revision,payload,updated_at').maybeSingle();
   if(error||!data){latest=await read();show(true,true);throw Error('同期先が変更されたか、保存に失敗しました。端末データは保持されています。')}
-  bind(data);latest=data;show(true,false);
+  if(bindFull)bind(data);latest=data;show(true,false);
   say('同期済み（クラウドに保存・外見設定 '+appearanceCount(data.payload)+'頭）');
   return data;
  }
@@ -213,7 +235,28 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
    if(!validPayload(local))throw Error('端末のデータ形式を確認できません。');
    // Never replace or upload an unseen local edit while a request was in flight.
    if(stable(capture())!==stable(local)){say('編集中：次回の同期で反映します');return}
-   const binding=readBinding(),decision=syncDecision(binding,user.id,local,remote);
+   let binding=readBinding();
+   if(binding?.uid!==user.id)binding=null;
+   // Automatic targeted transfer works even if ordinary full-snapshot sync is
+   // blocked by differing race settings. Explicit send/receive retain old semantics.
+   if(remote&&mode!=='send'&&mode!=='receive'&&typeof applyAppearance==='function'){
+    const plan=planAppearanceSync(local,remote.payload,binding);
+    if(plan&&(plan.sent||plan.received.length)){
+     let saved=remote;
+     if(plan.sent)saved=await upload(plan.payload,remote,false);
+     const applied=plan.received.length?applyAppearance(plan.received):true;
+     // Advance the full-sync base only when the non-appearance server snapshot
+     // was already acknowledged; otherwise preserve the original core conflict.
+     if(binding){
+      let base=null;try{base=JSON.parse(binding.base)}catch{}
+      if(validPayload(base)&&stable(withoutAppearance(base))===stable(withoutAppearance(saved.payload)))bind(saved);
+     }
+     say('外見同期：送信 '+plan.sent+'頭／受信 '+(applied?plan.received.length:0)+'頭・クラウド '+appearanceCount(saved.payload)+'頭'+(!applied?'（受信は編集終了後）':'')+(plan.conflicts.length?'／同じ馬の競合 '+plan.conflicts.length+'頭':''));
+     return;
+    }
+    if(plan?.conflicts.length){show(true,true);say('同じ馬の外見が両端末で異なります。基準端末を選択してください。');return}
+   }
+   const decision=syncDecision(binding,user.id,local,remote);
    if(mode==='send'){
     if(!safe())throw Error('発馬機に戻り、編集中の項目を保存してから同期してください。');
     if(remote&&!confirm('クラウドの内容をこの端末の登録馬・設定で置き換えますか？'))return;
@@ -285,5 +328,6 @@ export async function startPrivateSync({capture,restore,safe,status,ui}){
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')tick()});
  // Do not make a network request on every animation frame.
  setInterval(()=>tick(),12000);
+ window.addEventListener('focus',()=>tick());
  await tick();
 }
