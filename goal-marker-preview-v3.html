@@ -1,0 +1,39 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Race Lab｜東京競馬場 芝ゴール板</title><style>
+*{box-sizing:border-box}body{margin:0;background:#112129;color:#e6eee9;font:15px system-ui,-apple-system,sans-serif}main{max-width:1200px;margin:auto;padding:14px}h1{font-size:21px;margin:0 0 5px}p{font-size:13px;line-height:1.6;color:#bed0d5}#stage{position:relative;height:65vh;height:65svh;min-height:300px;max-height:750px;border-radius:12px;overflow:hidden;background:#a9cddd}#stage canvas{display:block;width:100%;height:100%;touch-action:none}#fallback{position:absolute;inset:0;width:100%;height:100%}#fallback[hidden]{display:none}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}button{font:inherit;padding:10px 16px;min-height:44px;background:#244852;color:#eef7f4;border:1px solid #6d9093;border-radius:8px}button[aria-pressed=true]{background:#436f60}a{color:#b4deee}#status{margin:6px 0}footer{font-size:12px;color:#b7c8c9}svg text{font-family:Arial,sans-serif}
+</style><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script></head>
+<body><main><h1>東京競馬場｜芝ゴール板</h1><p>通常開催用・紺色馬蹄形モデル　｜　写真からの推定寸法　｜　文字修正版 03</p>
+<div id="stage"><svg id="fallback" viewBox="0 0 640 480" preserveAspectRatio="xMidYMid meet" role="img" aria-label="ゴール板の正面設計図"><rect width="640" height="480" fill="#a9cddd"/><rect y="425" width="640" height="55" fill="#6b984d"/><g transform="translate(320 425) scale(61 -61)"><path d="M-.46 .94 C-.76 .86 -.89 .96 -.94 1.27 L-1.37 3.3 C-1.68 4.68 -.78 5.03 0 5.03 C.78 5.03 1.68 4.68 1.37 3.3 L.94 1.27 C.89 .96 .76 .86 .46 .94 C.24 .99 .29 1.23 .34 1.48 L.76 3.38 C.91 4.08 .5 4.45 0 4.45 C-.5 4.45 -.91 4.08 -.76 3.38 L-.34 1.48 C-.29 1.23 -.24 .99 -.46 .94Z" fill="#17264f" stroke="#f4f3e9" stroke-width=".13"/><rect x="-1.06" y="0" width=".78" height=".94" fill="#f2f0e7"/><rect x=".28" y="0" width=".78" height=".94" fill="#f2f0e7"/><rect x="-.12" y=".35" width=".24" height="3.13" fill="#23674e"/><rect x="-.055" y=".63" width=".11" height="2.83" fill="#b6c6c9"/><path d="M-.13 5V6.28M.13 5V6.28" stroke="#c5cecc" stroke-width=".08"/><g fill="#303b3d" stroke="#abb5b4" stroke-width=".025"><rect x="-.33" y="5.4" width=".28" height=".18"/><rect x=".05" y="5.4" width=".28" height=".18"/><rect x="-.33" y="5.76" width=".28" height=".18"/><rect x=".05" y="5.76" width=".28" height=".18"/><rect x="-.33" y="6.12" width=".28" height=".18"/><rect x=".05" y="6.12" width=".28" height=".18"/></g><ellipse cy="4.83" rx=".935" ry=".60" fill="#17264f" stroke="#f3f2eb" stroke-width=".07"/></g><g fill="#f7f6f1" font-weight="bold" text-anchor="middle"><text x="320" y="125" font-size="18">JRA</text><text x="320" y="146" font-size="13">東京</text><text transform="translate(271 277) rotate(-102)" font-size="21">TOKYO</text><text transform="translate(369 277) rotate(102)" font-size="21">TOKYO</text></g><text x="320" y="465" fill="#f3f8ed" font-size="12" text-anchor="middle">3D未読込時の正面設計図</text></svg></div>
+<div class="controls"><button data-view="front" aria-pressed="true">正面</button><button data-view="angle" aria-pressed="false">斜め前</button><button data-view="side" aria-pressed="false">側面</button><button data-view="rear" aria-pressed="false">背面</button><button id="spin" aria-pressed="false">自動回転</button><button id="reset">表示リセット</button></div><p id="status" role="status">3Dモデル読込中。表示されない場合は正面設計図を表示します。</p><p>ドラッグで回転、スクロールまたはピンチで拡大・縮小。鏡は外観の近似表現です。公式寸法が確認できないため高さ・幅・厚みは仮設定です。</p><footer>参照：<a href="https://jra-fun.jp/event/tokyo/202305/img/202305tokyo.pdf">JRA 2023年東京競馬イベント資料</a> ／ <a href="https://www.tokyokeibajo.com/2025/20250201.html">通常開催時の写真（非公式）</a> ／ <a href="./tokyo-turf-a-elevation-rebuild.html?relief=3&model=design01&group=18">レース本体</a></footer></main>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {createGoalMarker} from './goal-marker-model.mjs?v=20261125-03';
+const stage=document.getElementById('stage'),status=document.getElementById('status');
+try{
+ const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+ renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;
+ renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;
+ stage.append(renderer.domElement);
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xa9cddd);
+ scene.add(new THREE.HemisphereLight(0xf4faff,0x62744f,2.1));
+ const sun=new THREE.DirectionalLight(0xfff1df,2.3);sun.position.set(-7,14,9);scene.add(sun);
+ const fill=new THREE.DirectionalLight(0xe4f2ff,.9);fill.position.set(4,9,-8);scene.add(fill);
+ const camera=new THREE.PerspectiveCamera(38,1,.2,200);
+ const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.10;controls.target.set(0,3.15,0);controls.minDistance=3;controls.maxDistance=32;controls.maxPolarAngle=Math.PI*.49;controls.autoRotateSpeed=1.5;
+ const {root}=createGoalMarker(THREE);scene.add(root);
+ const ground=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x5c9b47,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.025;scene.add(ground);
+ // Soft contact shadow without shadow-map shimmer.
+ const c=document.createElement('canvas');c.width=c.height=128;const ctx=c.getContext('2d'),g=ctx.createRadialGradient(64,64,2,64,64,64);g.addColorStop(0,'rgba(25,40,25,.42)');g.addColorStop(1,'rgba(25,40,25,0)');ctx.fillStyle=g;ctx.fillRect(0,0,128,128);
+ const shadow=new THREE.Mesh(new THREE.PlaneGeometry(4.4,2.2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=-.012;scene.add(shadow);
+ const views={front:[0,3.6,13],angle:[8,4.3,11],side:[13,3.6,0],rear:[0,3.6,-13]};
+ function view(name){controls.autoRotate=false;document.getElementById('spin').setAttribute('aria-pressed','false');camera.position.set(...views[name]);controls.target.set(0,3.15,0);controls.update();document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===name)))}
+ function resize(){const w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+ new ResizeObserver(resize).observe(stage);resize();view('front');
+ document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>view(b.dataset.view));
+ document.getElementById('spin').onclick=()=>{controls.autoRotate=!controls.autoRotate;document.getElementById('spin').setAttribute('aria-pressed',String(controls.autoRotate))};
+ document.getElementById('reset').onclick=()=>view('front');
+ renderer.render(scene,camera);document.getElementById('fallback').hidden=true;status.textContent='3Dモデル表示中（文字修正版 03）';
+ renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera)});
+ renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();document.getElementById('fallback').hidden=false;status.textContent='描画停止。ページを再読み込みしてください。';renderer.setAnimationLoop(null)});
+}catch(e){console.error(e);status.textContent='3D描画を開始できませんでした。正面設計図を表示しています。'}
+</script></body></html>
