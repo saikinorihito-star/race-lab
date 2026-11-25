@@ -14,7 +14,7 @@ export async function loadApprovedGate(loader){
  const gltf=await new Promise((resolve,reject)=>loader.parse(bytes.buffer,'',resolve,reject));
  return gltf.scene;
 }
-export function createGateVenueController(THREE,root){
+export function createGateVenueController(THREE,root,expectedStalls=8){
  const boards=[],doors=[];
  root.traverse(o=>{
   if(o.isMesh&&/^venue_(front|rear)$/.test(o.name)){
@@ -25,7 +25,7 @@ export function createGateVenueController(THREE,root){
   }
   if(/^(front|rear)_\d{2}_[LR]$/.test(o.name))doors.push(o);
  });
- if(boards.length!==2||doors.length!==32)throw Error('発馬機の部品数が異なります');
+ if(boards.length!==2||doors.length!==expectedStalls*4)throw Error('発馬機の部品数が異なります');
  let selected='nakayama';const generated=new Map();
  function setVenue(value){
   const key=venueKey(value);

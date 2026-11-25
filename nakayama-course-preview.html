@@ -18,6 +18,8 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {loadApprovedGate} from './jss50-gate.mjs?v=2';
+import {createRaceGate,stallCenter} from './jss50-race-gate.mjs?v=1';
 import {buildPath,buildRun,runAt,timeAtDistance,START_RISK} from './nakayama-single-run.mjs?v=1';
 import {SPEC,DISTANCES,ROUTE_LABELS,LOOPS,SECTIONS,at,widthAt,makeRoute,routeAt,gradeAt,laneAt,measureRoute,courseLandmarks,DIRT_SPEC,dirtAt,railSpec,railSections} from './nakayama-course.mjs?v=4';
 const $=id=>document.getElementById(id),stage=$('stage');
@@ -37,6 +39,7 @@ const course=new THREE.Group(),marks=new THREE.Group();scene.add(course,marks);
 const grass=new THREE.MeshStandardMaterial({color:0x237f29,roughness:.95,side:THREE.DoubleSide}),outerGrass=new THREE.MeshStandardMaterial({color:0x27862c,roughness:.95,side:THREE.DoubleSide}),rail=new THREE.LineBasicMaterial({color:0xffffff}),routeMat=new THREE.LineBasicMaterial({color:0xffdb42}),baseMat=new THREE.MeshStandardMaterial({color:0x929a9c,side:THREE.DoubleSide}),dirtMat=new THREE.MeshStandardMaterial({color:0xc7a472,roughness:1,side:THREE.DoubleSide}),bankMat=new THREE.MeshStandardMaterial({color:0x496842,roughness:1,side:THREE.DoubleSide});
 const horseRoot=new THREE.Group();scene.add(horseRoot);
 const gate=new THREE.Group(),gateDoors=[];scene.add(gate);
+let approvedRaceGate=null;const approvedGateRoot=new THREE.Group();scene.add(approvedGateRoot);approvedGateRoot.visible=false;
 const gateMat=new THREE.MeshStandardMaterial({color:0xc6d1cd,metalness:.4,roughness:.55});
 function gateBar(parent,x,y,z,w,h,d){
  const bar=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),gateMat);bar.position.set(x,y,z);parent.add(bar);
@@ -55,6 +58,11 @@ function positionGate(){
  if(!run)return;const p=runAt(run,0);
  gate.position.set(p.x,p.y*relief+.04,p.z);gate.rotation.order='YXZ';
  gate.rotation.set(-Math.atan(Math.tan(p.pitch)*relief),Math.atan2(p.tx,p.tz),0);
+ approvedGateRoot.position.copy(gate.position);approvedGateRoot.quaternion.copy(gate.quaternion);
+ // Align an occupied stall with the selected lane; avoid placing the gate across the inner rail.
+ const lanePoint=laneAt(route,0,lane),offset=lanePoint.offset??0;
+ const index=Math.max(0,Math.min(7,Math.floor(Math.max(0,offset)/.98)));
+ approvedGateRoot.translateX(-stallCenter(8,index));
 }
 
 const DESIGN01_CACHE_KEY='official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119';
@@ -183,7 +191,9 @@ function updateHorse(dt=0){
  const p=runAt(run,elapsed);travel=p.d;
  // Source GLB faces +Z, as in the approved Tokyo model.
  horseRoot.position.set(p.x,p.y*relief+.08,p.z);
- gate.visible=modelReady&&p.d<65;
+ gate.visible=modelReady&&p.d<65&&!approvedRaceGate;
+ approvedGateRoot.visible=modelReady&&p.d<65&&!!approvedRaceGate;
+ approvedRaceGate?.setDoors(Math.min(1,elapsed/.18),0);
  for(const {hinge,side} of gateDoors)hinge.rotation.y=side*Math.min(1,elapsed/.18)*1.35;
  horseRoot.rotation.order='YXZ';horseRoot.rotation.set(-Math.atan(Math.tan(p.pitch)*relief),Math.atan2(p.tx,p.tz),0);
  if(mixer)mixer.setTime(p.length*1.42065/16);
@@ -238,4 +248,7 @@ function animate(t){
  if(orbit.enabled)orbit.update();renderer.render(scene,camera);requestAnimationFrame(animate);
 }
 rebuildRun();setView('follow');requestAnimationFrame(animate);loadCached();
+loadApprovedGate(new GLTFLoader()).then(source=>{
+ approvedRaceGate=createRaceGate(THREE,source,{count:8,venue:'nakayama',insideRight:false});approvedGateRoot.add(approvedRaceGate.root);positionGate();updateHorse();
+}).catch(e=>console.warn('JSS50発馬機を取得できません、簡易発馬機を維持',e));
 </script></body></html>

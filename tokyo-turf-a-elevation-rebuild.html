@@ -709,6 +709,8 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {loadApprovedGate} from './jss50-gate.mjs?v=2';
+import {createRaceGate} from './jss50-race-gate.mjs?v=1';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
 
 const stage=document.querySelector('#stage'),info=document.querySelector('#telemetry'),msg=document.querySelector('#message');
@@ -2279,6 +2281,8 @@ const FIELD_COUNT=18,FIELD_STALL_WIDTH=1.17,FIELD_INNER_MARGIN=1.10,HORSE_WIDTH=
 const fieldHorses=[],fieldRoot=new THREE.Group(),gateRoot=new THREE.Group();
 scene.add(fieldRoot);scene.add(gateRoot);
 let gateDoors=[],gateOpening=0;
+const approvedGateRoot=new THREE.Group();scene.add(approvedGateRoot);approvedGateRoot.visible=false;
+let approvedGateSource=null,approvedRaceGate=null,approvedGatePitch=0,approvedGateFailed=false;
 function fieldCenterAt(plan,distance){
  const d=Math.max(0,Math.min(distance,plan.distance+90));
  if(plan.pocket&&d<plan.pocket.length){
@@ -4345,6 +4349,8 @@ function drawFieldGate(plan){
   eighteenStartLane(a.width,0)-eighteenStartLane(a.width,1):
   FIELD_STALL_WIDTH;
  const total=FIELD_COUNT*w;
+ approvedGatePitch=w;
+ if(approvedRaceGate&&Math.abs(approvedRaceGate.pitch-w)>1e-7){approvedGateRoot.remove(approvedRaceGate.root);approvedRaceGate.dispose();approvedRaceGate=null;}
  const gateCenter=isOfficialEighteenTest?
   (eighteenStartLane(a.width,0)+eighteenStartLane(a.width,FIELD_COUNT-1))/2:
   fieldGateCenterShift(a.width);
@@ -4458,6 +4464,21 @@ function drawFieldGate(plan){
   }
  }
 }
+function syncApprovedRaceGate(){
+ if(!isOfficialEighteenTest)return;
+ if(approvedGateSource&&!approvedRaceGate&&!approvedGateFailed&&approvedGatePitch>0&&!playing&&travel===0){
+  try{approvedRaceGate=createRaceGate(THREE,approvedGateSource,{count:18,pitch:approvedGatePitch,venue:'tokyo',insideRight:true});approvedGateRoot.add(approvedRaceGate.root)}
+  catch(e){approvedGateFailed=true;console.warn('JSS50発馬機の組立失敗、旧発馬機を維持',e)}
+ }
+ const ready=!!approvedRaceGate;
+ for(const child of gateRoot.children)child.visible=!ready;
+ approvedGateRoot.visible=ready&&gateRoot.visible;
+ if(ready){
+  approvedGateRoot.position.copy(gateRoot.position);approvedGateRoot.quaternion.copy(gateRoot.quaternion);
+  approvedRaceGate.setDoors(gateOpening,0);
+ }
+}
+if(isOfficialEighteenTest)loadApprovedGate(new GLTFLoader()).then(source=>{approvedGateSource=source}).catch(e=>{approvedGateFailed=true;console.warn('JSS50発馬機を取得できません、旧発馬機を維持',e)});
 function updateGateDoors(){
  // 扉はゲートの中央ではなく端の支点から回る。
  for(const {door,side} of gateDoors)door.rotation.y=side*gateOpening*1.17;
@@ -6768,6 +6789,7 @@ function animate(time){
   item.cameraOccluded=insideX&&insideZ&&insideY;
   item.group.visible=showStands.checked&&!item.cameraOccluded;
  }
+ syncApprovedRaceGate();
  renderLiveRaceMonitor(time);
  renderer.render(scene,camera);
  if(isOfficialEighteenTest)captureBroadcastTransitionFrame();
