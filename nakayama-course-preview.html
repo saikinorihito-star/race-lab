@@ -36,6 +36,27 @@ const ground=new THREE.Mesh(new THREE.PlaneGeometry(2400,1800),new THREE.MeshSta
 const course=new THREE.Group(),marks=new THREE.Group();scene.add(course,marks);
 const grass=new THREE.MeshStandardMaterial({color:0x237f29,roughness:.95,side:THREE.DoubleSide}),outerGrass=new THREE.MeshStandardMaterial({color:0x27862c,roughness:.95,side:THREE.DoubleSide}),rail=new THREE.LineBasicMaterial({color:0xffffff}),routeMat=new THREE.LineBasicMaterial({color:0xffdb42}),baseMat=new THREE.MeshStandardMaterial({color:0x929a9c,side:THREE.DoubleSide}),dirtMat=new THREE.MeshStandardMaterial({color:0xc7a472,roughness:1,side:THREE.DoubleSide}),bankMat=new THREE.MeshStandardMaterial({color:0x496842,roughness:1,side:THREE.DoubleSide});
 const horseRoot=new THREE.Group();scene.add(horseRoot);
+const gate=new THREE.Group(),gateDoors=[];scene.add(gate);
+const gateMat=new THREE.MeshStandardMaterial({color:0xc6d1cd,metalness:.4,roughness:.55});
+function gateBar(parent,x,y,z,w,h,d){
+ const bar=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),gateMat);bar.position.set(x,y,z);parent.add(bar);
+}
+for(const x of [-1.05,1.05]){
+ gateBar(gate,x,1.48,-1.8,.10,2.96,.10);
+ gateBar(gate,x,1.48,1.8,.10,2.96,.10);
+ for(const y of [.7,1.5,2.6])gateBar(gate,x,y,0,.08,.08,3.6);
+ const hinge=new THREE.Group();hinge.position.set(x,0,1.8);gate.add(hinge);
+ for(const y of [.65,1.4,2.1])gateBar(hinge,-Math.sign(x)*.50,y,0,1,.08,.08);
+ gateDoors.push({hinge,side:Math.sign(x)});
+}
+gateBar(gate,0,2.96,1.8,2.2,.12,.12);
+gateBar(gate,0,2.96,-1.8,2.2,.12,.12);
+function positionGate(){
+ if(!run)return;const p=runAt(run,0);
+ gate.position.set(p.x,p.y*relief+.04,p.z);gate.rotation.order='YXZ';
+ gate.rotation.set(-Math.atan(Math.tan(p.pitch)*relief),Math.atan2(p.tx,p.tz),0);
+}
+
 const DESIGN01_CACHE_KEY='official-meshy-blue-ribbon-original-geometry-gallop-v2-20261119';
 const CACHE_DB='race-lab-3d-model-local-cache';
 function openHorseCache(){
@@ -161,7 +182,9 @@ function updateHorse(dt=0){
  if(!run)return;
  const p=runAt(run,elapsed);travel=p.d;
  // Source GLB faces +Z, as in the approved Tokyo model.
- horseRoot.position.set(p.x,p.y*relief+.12,p.z);
+ horseRoot.position.set(p.x,p.y*relief+.08,p.z);
+ gate.visible=modelReady&&p.d<65;
+ for(const {hinge,side} of gateDoors)hinge.rotation.y=side*Math.min(1,elapsed/.18)*1.35;
  horseRoot.rotation.order='YXZ';horseRoot.rotation.set(-Math.atan(Math.tan(p.pitch)*relief),Math.atan2(p.tx,p.tz),0);
  if(mixer)mixer.setTime(p.length*1.42065/16);
  const close=['follow','front','rear'].includes(mode);
@@ -193,11 +216,11 @@ function reset(){playing=false;elapsed=0;travel=0;cameraSnap=true;$('play').text
 function rebuildRun(){
  const seed=Math.max(1,Math.min(999999,Math.floor(Number($('seed').value)||1)));$('seed').value=seed;
  run=buildRun(buildPath(route,lane),{risk:Number($('risk').value),seed});
- $('progress').max=route.distance;rebuild();reset();
+ $('progress').max=route.distance;rebuild();positionGate();reset();
 }
 $('distance').onchange=()=>{route=makeRoute(Number($('distance').value),railChoice);rebuildRun()};
 $('rail').onchange=()=>{railChoice=$('rail').value;route=makeRoute(Number($('distance').value),railChoice);$('venueTitle').textContent='中山競馬場｜芝'+railChoice+'コース';rebuildRun()};
-$('relief').onchange=()=>{relief=Number($('relief').value);rebuild();cameraSnap=true;updateHorse();update()};
+$('relief').onchange=()=>{relief=Number($('relief').value);rebuild();positionGate();cameraSnap=true;updateHorse();update()};
 $('lane').onchange=()=>{lane=$('lane').value==='center'?'center':Number($('lane').value);rebuildRun()};
 $('risk').onchange=rebuildRun;$('seed').onchange=rebuildRun;
 for(const name of ['overhead','angle','follow','front','rear'])$(name).onclick=()=>{setView(name);updateHorse()};
