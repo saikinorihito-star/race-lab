@@ -247,9 +247,16 @@ export async function startPrivateSync({capture,restore,safe,status,ui,applyAppe
      const applied=plan.received.length?applyAppearance(plan.received):true;
      // Advance the full-sync base only when the non-appearance server snapshot
      // was already acknowledged; otherwise preserve the original core conflict.
-     if(binding){
+     if(binding&&applied&&!plan.conflicts.length){
       let base=null;try{base=JSON.parse(binding.base)}catch{}
       if(validPayload(base)&&stable(withoutAppearance(base))===stable(withoutAppearance(saved.payload)))bind(saved);
+      else if(validPayload(base)){
+       // Remember only appearances that have converged; keep the old revision
+       // and other fields so ordinary synchronization cannot discard remote edits.
+       const current=capture(),byId=new Map(saved.payload.library.horses.map(h=>[h.id,h]));
+       for(const h of base.library.horses){const v=byId.get(h.id),l=current.library.horses.find(x=>x.id===h.id);if(v?.appearance&&l?.name===v.name&&stable(l.appearance)===stable(v.appearance))h.appearance=structuredClone(v.appearance)}
+       localStorage.setItem(BIND,JSON.stringify({...binding,base:stable(base)}));
+      }
      }
      say('外見同期：送信 '+plan.sent+'頭／受信 '+(applied?plan.received.length:0)+'頭・クラウド '+appearanceCount(saved.payload)+'頭'+(!applied?'（受信は編集終了後）':'')+(plan.conflicts.length?'／同じ馬の競合 '+plan.conflicts.length+'頭':''));
      return;
