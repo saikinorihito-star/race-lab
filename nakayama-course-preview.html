@@ -19,7 +19,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
-import {createRaceGate,stallCenter} from './jss50-race-gate.mjs?v=1';
+import {createRaceGate,stallCenter,measureGateHorseRear} from './jss50-race-gate.mjs?v=2';
 import {buildPath,buildRun,runAt,timeAtDistance,START_RISK} from './nakayama-single-run.mjs?v=1';
 import {SPEC,DISTANCES,ROUTE_LABELS,LOOPS,SECTIONS,at,widthAt,makeRoute,routeAt,gradeAt,laneAt,measureRoute,courseLandmarks,DIRT_SPEC,dirtAt,railSpec,railSections} from './nakayama-course.mjs?v=4';
 const $=id=>document.getElementById(id),stage=$('stage');
@@ -39,7 +39,7 @@ const course=new THREE.Group(),marks=new THREE.Group();scene.add(course,marks);
 const grass=new THREE.MeshStandardMaterial({color:0x237f29,roughness:.95,side:THREE.DoubleSide}),outerGrass=new THREE.MeshStandardMaterial({color:0x27862c,roughness:.95,side:THREE.DoubleSide}),rail=new THREE.LineBasicMaterial({color:0xffffff}),routeMat=new THREE.LineBasicMaterial({color:0xffdb42}),baseMat=new THREE.MeshStandardMaterial({color:0x929a9c,side:THREE.DoubleSide}),dirtMat=new THREE.MeshStandardMaterial({color:0xc7a472,roughness:1,side:THREE.DoubleSide}),bankMat=new THREE.MeshStandardMaterial({color:0x496842,roughness:1,side:THREE.DoubleSide});
 const horseRoot=new THREE.Group();scene.add(horseRoot);
 const gate=new THREE.Group(),gateDoors=[];scene.add(gate);
-let approvedRaceGate=null;const approvedGateRoot=new THREE.Group();scene.add(approvedGateRoot);approvedGateRoot.visible=false;
+let approvedRaceGate=null,approvedHorseRear=null;const approvedGateRoot=new THREE.Group();scene.add(approvedGateRoot);approvedGateRoot.visible=false;
 const gateMat=new THREE.MeshStandardMaterial({color:0xc6d1cd,metalness:.4,roughness:.55});
 function gateBar(parent,x,y,z,w,h,d){
  const bar=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),gateMat);bar.position.set(x,y,z);parent.add(bar);
@@ -91,8 +91,11 @@ async function loadApprovedHorse(buffer){
  const anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
  model.traverse(o=>{if(!o.isMesh)return;for(const mat of Array.isArray(o.material)?o.material:[o.material])for(const key of ['map','normalMap','metalnessMap','roughnessMap']){const tex=mat?.[key];if(tex?.isTexture){tex.anisotropy=Math.max(tex.anisotropy,anisotropy);tex.needsUpdate=true}}});
  if(loadedHorse){mixer?.stopAllAction();horseRoot.remove(loadedHorse)}
- loadedHorse=model;horseRoot.add(model);mixer=new THREE.AnimationMixer(model);
+ loadedHorse=model;mixer=new THREE.AnimationMixer(model);
  const action=mixer.clipAction(clip);action.setLoop(THREE.LoopRepeat,Infinity);action.play();
+ const restMinZ=bounds.min.z*scale+model.position.z;approvedHorseRear=restMinZ;
+ try{approvedHorseRear=measureGateHorseRear(THREE,model,mixer,restMinZ)}catch(e){console.warn('発馬機の尻尾余裕計測失敗、静止形状を使用',e)}
+ horseRoot.add(model);
  modelReady=true;$('play').disabled=false;$('modelFileLabel').hidden=true;
  $('modelStatus').textContent='正式Design01の読み込み完了。1頭走行できます。';
  reset();
@@ -193,6 +196,7 @@ function updateHorse(dt=0){
  horseRoot.position.set(p.x,p.y*relief+.08,p.z);
  gate.visible=modelReady&&p.d<65&&!approvedRaceGate;
  approvedGateRoot.visible=modelReady&&p.d<65&&!!approvedRaceGate;
+ approvedRaceGate?.fitHorseRear(approvedHorseRear);
  approvedRaceGate?.setDoors(Math.min(1,elapsed/.18),0);
  for(const {hinge,side} of gateDoors)hinge.rotation.y=side*Math.min(1,elapsed/.18)*1.35;
  horseRoot.rotation.order='YXZ';horseRoot.rotation.set(-Math.atan(Math.tan(p.pitch)*relief),Math.atan2(p.tx,p.tz),0);
