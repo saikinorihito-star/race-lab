@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>東京西側ターフビジョン｜外装試作1</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#112023;color:#edf3f1}*{box-sizing:border-box}body{margin:0}main{max-width:1200px;margin:auto;padding:14px}h1{font-size:21px;margin:0 0 8px}p{font-size:13px;line-height:1.55;color:#b8ceca}#stage{position:relative;height:52vh;min-height:260px;max-height:620px;background:#cadce5;border-radius:10px;overflow:hidden}#stage canvas{width:100%;height:100%;display:block;touch-action:none}#fallback{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}#fallback[hidden],svg[hidden]{display:none}#fallback svg{width:100%;height:100%;max-height:100%}.controls{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}button,select{font:inherit;color:#f0f8f4;background:#254844;padding:10px 13px;border:1px solid #6e918b;border-radius:8px;min-height:44px}button[aria-pressed=true]{background:#42736a}a{color:#c2e3f2}dl{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:650px;font-size:14px}dt{color:#b7c8c5}dd{margin:0;text-align:right}#status{color:#c1dfd5}.tag{display:inline-block;font-size:12px;color:#a8c6bb;margin-bottom:10px}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script></head>
+<body><main><h1>東京競馬場｜西側ターフビジョン</h1><span class="tag">外装試作1・2022年更新仕様</span>
+<div id="stage">
+<div id="fallback">
+<svg id="frontView" viewBox="0 0 820 380" role="img" aria-label="正面外観の設計図"><defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#c5dce7"/><stop offset="1" stop-color="#e6ebeb"/></linearGradient><linearGradient id="panel" x2="0" y2="1"><stop stop-color="#35444a"/><stop offset="1" stop-color="#131d23"/></linearGradient></defs><rect width="820" height="380" fill="url(#sky)"/><rect y="254" width="820" height="126" fill="#739744"/><path d="M0 293H820M0 331H820" stroke="#87a951" stroke-width="15"/><rect x="63" y="268" width="694" height="11" rx="1" fill="#858b87"/><rect x="68" y="138" width="684" height="130" fill="#64727a"/><rect x="73.2" y="142.3" width="673.6" height="113.6" fill="#111a20"/><rect class="fallback-lit" x="73.2" y="142.3" width="673.6" height="113.6" fill="url(#panel)"/><g class="fallback-lit" fill="#e5ede9" text-anchor="middle"><text x="265" y="195" font-size="20" font-weight="700">TOKYO RACECOURSE</text><text x="265" y="218" font-size="10" letter-spacing="2">VIDEO AREA / TEST</text><text x="562" y="198" font-size="17" font-weight="700">RACE LAB</text><text x="562" y="217" font-size="9">SUB SCREEN / TEST</text><path d="M657 145V254M460 145V254" stroke="#5c777b" stroke-width="1"/><text x="701" y="158" fill="#e6c971" font-size="10">着順 SAMPLE</text><text x="701" y="176" fill="#f3db85" font-size="14">1　 6</text><text x="701" y="193" font-size="14">2　 3</text><text x="701" y="210" font-size="14">3　12</text><text x="701" y="239" font-size="10">0:00.0</text></g><g stroke="#334e53" stroke-width="1" opacity=".6"><path d="M68 262H752M68 140H752"/><path d="M101 138v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4m33-4v4"/></g><g fill="#243d43" font-size="12" text-anchor="middle"><path d="M73 119H747M73 114V125M747 114V125" stroke="#243d43"/><text x="410" y="110">表示面 66.4 m</text><path d="M775 142V256M770 142H780M770 256H780" stroke="#243d43"/><text transform="translate(790 199) rotate(-90)">11.2 m</text></g><text x="410" y="360" fill="#203b24" text-anchor="middle" font-size="12">正面設計図・3D未読込時の表示</text></svg>
+<svg id="rearView" viewBox="0 0 820 380" role="img" aria-label="背面設計図" hidden><rect width="820" height="380" fill="#cbdde6"/><rect y="255" width="820" height="125" fill="#739744"/><rect x="63" y="268" width="694" height="11" fill="#858b87"/><rect x="68" y="138" width="684" height="130" fill="#67757a"/><rect x="72" y="142" width="676" height="122" fill="#97c4ce"/><path d="M72 236Q200 185 330 222T600 210T748 211V264H72Z" fill="#8aae81"/><path d="M195 248Q410 27 625 248" fill="none" stroke="#e9c790" stroke-width="13"/><path d="M195 248Q410 48 625 248" fill="none" stroke="#9fc8ce" stroke-width="10"/><text x="410" y="183" text-anchor="middle" font-size="21" fill="#31565d" font-weight="bold">TOKYO RACECOURSE</text><text x="410" y="360" font-size="12" text-anchor="middle" fill="#203b24">背面イラストはオリジナルの仮デザイン（実物とは異なります）</text></svg>
+<svg id="sideView" viewBox="0 0 820 380" role="img" aria-label="側面設計図" hidden><rect width="820" height="380" fill="#cbdde6"/><rect y="305" width="820" height="75" fill="#739744"/><rect x="361" y="295" width="98" height="13" fill="#858b87"/><rect x="373" y="49" width="74" height="246" fill="#64727a"/><rect x="442" y="61" width="6" height="213" fill="#1e2b30"/><rect x="388" y="248" width="25" height="40" stroke="#2f464a" fill="#6f7c81"/><rect x="390" y="207" width="28" height="28" fill="#303d41"/><path d="M391 211h26m-26 4h26m-26 4h26m-26 4h26m-26 4h26m-26 4h26" stroke="#8b989a"/><text x="410" y="33" text-anchor="middle" font-size="14" fill="#243d43">筐体奥行き（推定） 2.45m</text><text x="410" y="358" text-anchor="middle" font-size="12" fill="#203b24">側面設計図・保守扉・換気口は仮設計</text></svg>
+</div></div>
+<div class="controls" aria-label="視点"><button id="front" aria-pressed="true">正面</button><button id="angle" aria-pressed="false">斜め前</button><button id="rear" aria-pressed="false">背面</button><button id="side" aria-pressed="false">側面</button><button id="off" aria-pressed="false">画面消灯</button></div>
+<p id="status" role="status">設計図表示中。3D読込が完了するとドラッグで回転・ピンチで拡大できます。</p>
+<dl><dt>公表画面寸法</dt><dd>66.4 × 11.2 m</dd><dt>実機画素数</dt><dd>5,312 × 896</dd><dt>モデル筐体幅（推定）</dt><dd>67.44 m</dd><dt>モデル地上高（推定）</dt><dd>12.77 m</dd><dt>画面表示</dt><dd>デザイン確認用サンプル</dd></dl>
+<p>正面は2022年メーカー写真を参考に制作。筐体奥行き、基礎、保守扉などは近似。背面は実物の絵の複製ではなく仮の配色・図柄。現時点ではレース本編の映像とは連動しません。</p><p>出典：<a href="https://www.mitsubishielectric.co.jp/ja/pr/2022/pdf/1006.pdf">三菱電機 2022年10月6日</a> ／ <a href="https://www.jra.go.jp/facilities/race/tokyo/rcmap/">JRA東京競馬場施設案内</a> ／ <a href="https://www.yoshida-senden.co.jp/topics/88">背面グラフィック施工資料</a></p>
+</main>
+<script>
+const preview={view:'front',off:false},ids=['front','angle','rear','side'];
+function syncFallback(){for(const id of ids)document.getElementById(id).setAttribute('aria-pressed',String(id===preview.view));for(const [id,view] of [['frontView','front'],['rearView','rear'],['sideView','side']])document.getElementById(id).hidden=view!==(preview.view==='angle'?'front':preview.view);for(const el of document.querySelectorAll('.fallback-lit'))el.style.display=preview.off?'none':'';const b=document.getElementById('off');b.setAttribute('aria-pressed',String(preview.off));b.textContent=preview.off?'画面点灯':'画面消灯'}
+for(const id of ids)document.getElementById(id).addEventListener('click',()=>{preview.view=id;syncFallback()});
+document.getElementById('off').addEventListener('click',()=>{preview.off=!preview.off;syncFallback()});
+syncFallback();
+</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {createTurfVision} from './turf-vision-model.mjs?v=1';
+const $=id=>document.getElementById(id),stage=$('stage');
+try{
+ function texture(canvas){const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t}
+ function demoScreen(){
+  const c=document.createElement('canvas');c.width=2048;c.height=346;
+  const x=c.getContext('2d');const grad=x.createLinearGradient(0,0,0,c.height);grad.addColorStop(0,'#213c44');grad.addColorStop(1,'#0c1821');x.fillStyle=grad;x.fillRect(0,0,c.width,c.height);
+  x.fillStyle='#263c48';x.fillRect(0,0,2048,37);x.fillStyle='#dbe9e3';x.font='bold 24px sans-serif';x.fillText('TOKYO RACECOURSE    芝 2400m',22,27);
+  for(const [left,width,label] of [[16,1120,'MAIN VIDEO AREA'],[1148,620,'SUB VIDEO AREA']]){
+   const g=x.createLinearGradient(0,42,0,315);g.addColorStop(0,'#385961');g.addColorStop(.6,'#294b3a');g.addColorStop(1,'#152c22');x.fillStyle=g;x.fillRect(left,46,width,270);x.strokeStyle='#77958a';x.lineWidth=2;x.strokeRect(left,46,width,270);
+   x.fillStyle='#e3eee7';x.font='bold 36px sans-serif';x.textAlign='center';x.fillText(label,left+width/2,174);x.font='20px sans-serif';x.fillText('表示テスト・映像未接続',left+width/2,209);x.textAlign='left';
+  }
+  x.fillStyle='#090e16';x.fillRect(1780,0,268,346);x.fillStyle='#dfc572';x.font='bold 24px sans-serif';x.fillText('着順 SAMPLE',1798,30);
+  for(const [i,num] of [6,3,12,8,1].entries()){const y=68+i*45;x.fillStyle=['#237f4c','#a62f34','#1c55a1','#c4a324','#d7dbd6'][i];x.fillRect(1797,y-25,40,36);x.fillStyle=i===4?'#20262b':'#f4f4eb';x.font='bold 24px sans-serif';x.textAlign='center';x.fillText(String(num),1817,y+1);x.textAlign='left';x.fillStyle='#e3c976';x.fillText(String(i+1)+' 着',1852,y+1)}
+  x.font='bold 27px sans-serif';x.fillText('0:00.0',1799,322);x.fillStyle='#a8bfc4';x.font='15px sans-serif';x.fillText('RACE LAB • DEMONSTRATION',17,337);return texture(c)
+ }
+ function rearArt(){
+  const c=document.createElement('canvas');c.width=2048;c.height=376;const x=c.getContext('2d');const g=x.createLinearGradient(0,0,0,376);g.addColorStop(0,'#b7d6e2');g.addColorStop(1,'#e2e5c9');x.fillStyle=g;x.fillRect(0,0,2048,376);
+  x.fillStyle='#8caf80';x.beginPath();x.moveTo(0,270);x.bezierCurveTo(440,155,660,322,1000,225);x.bezierCurveTo(1370,130,1750,290,2048,206);x.lineTo(2048,376);x.lineTo(0,376);x.fill();
+  for(const [i,color] of ['#d6a38b','#e7c48f','#e7df9a','#a8caab','#9ac2d1'].entries()){x.strokeStyle=color;x.lineWidth=12;x.beginPath();x.moveTo(310,345);x.quadraticCurveTo(1024,-225+i*25,1738,345);x.stroke()}
+  x.fillStyle='#386269';x.textAlign='center';x.font='bold 62px sans-serif';x.fillText('TOKYO RACECOURSE',1024,210);x.font='23px sans-serif';x.fillText('背面仮デザイン',1024,250);return texture(c)
+ }
+ const display=demoScreen(),art=rearArt();
+ const model=createTurfVision(THREE,{screenTexture:display,rearTexture:art});
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xc8dbe6);scene.add(model.root,new THREE.HemisphereLight(0xf4faff,0x627252,2.4));
+ const sun=new THREE.DirectionalLight(0xfff4df,2.3);sun.position.set(-30,45,30);scene.add(sun);
+ const lawn=new THREE.Mesh(new THREE.PlaneGeometry(500,500),new THREE.MeshStandardMaterial({color:0x72974b,roughness:1}));lawn.rotation.x=-Math.PI/2;lawn.position.y=-.025;scene.add(lawn);
+ const paving=new THREE.Mesh(new THREE.BoxGeometry(76,.035,6.5),new THREE.MeshStandardMaterial({color:0xa7ada7,roughness:.98}));paving.position.set(0,-.005,0);scene.add(paving);
+ const camera=new THREE.PerspectiveCamera(36,1,.1,900),renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;
+ stage.append(renderer.domElement);const orbit=new OrbitControls(camera,renderer.domElement);orbit.target.set(0,6.3,0);orbit.enableDamping=true;orbit.minDistance=6;orbit.maxDistance=360;orbit.maxPolarAngle=Math.PI*.49;
+ function resize(){const w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+ function view(id){const w=model.dimensions.outerWidth,h=model.dimensions.outerHeight;const vertical=Math.tan(THREE.MathUtils.degToRad(camera.fov/2)),horizontal=vertical*camera.aspect;
+  const dist=Math.max(w*.56/horizontal,h*.76/vertical);const target=orbit.target;target.set(0,h*.48,0);
+  if(id==='side'){camera.position.set(26,h*.59,0)}
+  else if(id==='rear'){camera.position.set(0,h*.56,-dist)}
+  else if(id==='angle'){camera.position.set(dist*.63,h*.48+dist*.11,dist*.91)}
+  else camera.position.set(0,h*.56,dist);
+  orbit.update();
+ }
+ resize();view(preview.view);new ResizeObserver(resize).observe(stage);
+ for(const id of ids)$(id).addEventListener('click',()=>view(id));
+ $('off').addEventListener('click',()=>model.setScreenTexture(preview.off?null:display));
+ model.setScreenTexture(preview.off?null:display);
+ renderer.render(scene,camera);$('fallback').hidden=true;$('status').textContent='3D読込完了｜ドラッグで回転・ピンチで拡大｜画面は表示テスト';
+ renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();$('fallback').hidden=false;renderer.domElement.hidden=true;$('status').textContent='3D表示が停止したため、設計図表示に切り替えました。'});
+ renderer.setAnimationLoop(()=>{orbit.update();renderer.render(scene,camera)});
+}catch(e){$('status').textContent='3D表示できないため設計図を表示しています。';console.warn(e)}
+</script></body></html>
