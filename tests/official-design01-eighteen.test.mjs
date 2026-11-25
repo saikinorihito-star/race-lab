@@ -35,8 +35,8 @@ function sim(distance,variant='actual',overrides={}){
   "for(let tick=0;tick<32000&&raceFinished.length<18;tick++){",
   "const before=raceHorses.map(h=>({d:h.distance,l:h.lane,p:h.postDistance||0,f:h.finished,steering:h.smoothedSideSpeed??0}));",
   "stepOfficialPair(1/60);",
-  "for(const h of raceHorses){if(h.distance>0&&release[h.idx]===null)release[h.idx]=raceElapsed-1/60;if(raceElapsed<=h.startDelay+1e-9)delayedDrift=Math.max(delayedDrift,Math.abs(h.lane-initialLanes[h.idx]),h.distance);}
-  const lead=Math.max(...raceHorses.map(h=>h.distance));",
+  "for(const h of raceHorses){if(h.distance>0&&release[h.idx]===null)release[h.idx]=raceElapsed-1/60;if(raceElapsed<=h.startDelay+1e-9)delayedDrift=Math.max(delayedDrift,Math.abs(h.lane-initialLanes[h.idx]),h.distance);}",
+  "const lead=Math.max(...raceHorses.map(h=>h.distance));",
   "for(const m of [45,100,200,300])if(!marks[m]&&lead>=m){",
   "const inside=fourHorseInnerLane(fieldCenterAt(activePlan,lead).width);",
   "marks[m]={spread:lead-Math.min(...raceHorses.map(h=>h.distance)),near:raceHorses.filter(h=>inside-h.lane<=6.7).length};",
