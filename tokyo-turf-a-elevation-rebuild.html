@@ -572,7 +572,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
    <button id="libraryRename" type="button">入力した名前に変更</button>
    <button id="libraryDelete" type="button">控え馬を削除する</button>
   </div>
-  <p>18頭の枠は固定です。出走枠の馬と交代しても登録馬の名前・10能力・脚質を維持します。レース中は出走馬を変更できません。</p>
+  <p>18頭の枠は固定です。出走枠の馬と交代しても登録馬の名前・11項目の能力・脚質を維持します。レース中は出走馬を変更できません。</p>
   <p id="libraryStatus" role="status" aria-live="polite"></p>
  </div>
 </details>
@@ -591,10 +591,10 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  </div>
 </details>
 <details id="horseAbilityEditor" hidden>
- <summary>🐎 18頭の能力設定（10能力・10段階＋脚質）</summary>
+ <summary>🐎 18頭の能力設定（11項目・10段階＋脚質）</summary>
  <div class="abilityForm">
   <label>編集する馬 <select id="abilityHorseSelect" aria-label="能力を編集する馬"></select></label>
-  <p class="abilityHint">数値能力はすべて1〜10の10段階、5が以前の50に相当する標準値です。保存済みの0〜100は自動的に引き継ぎます。脚質は5種類から選択します。</p>
+  <p class="abilityHint">通常の能力は1〜10で5が標準です。出遅れやすさは高いほど出遅れる確率が高くなります（初期値1）。保存済みの0〜100は自動的に引き継ぎます。脚質は5種類から選択します。</p>
   <p id="abilityDistanceHint" class="abilityHint">距離適性は得意距離から離れた距離への対応力、コース適性は東京芝Aへの適性です。得意距離は1000〜4000m、50m単位です。</p>
   <div class="abilityRow"><label for="abilitySpeed">速度</label><input id="abilitySpeed" type="range" min="1" max="10" step="1" value="5"/><output id="abilitySpeedValue" for="abilitySpeed">5</output></div>
   <div class="abilityRow"><label for="abilityStamina">スタミナ</label><input id="abilityStamina" type="range" min="1" max="10" step="1" value="5"/><output id="abilityStaminaValue" for="abilityStamina">5</output></div>
@@ -606,6 +606,8 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <div class="abilityRow"><label for="abilityGoing">馬場状態適性</label><input id="abilityGoing" type="range" min="1" max="10" step="1" value="5"/><output id="abilityGoingValue" for="abilityGoing">5</output></div>
   <div class="abilityRow"><label for="abilityHill">坂適性</label><input id="abilityHill" type="range" min="1" max="10" step="1" value="5"/><output id="abilityHillValue" for="abilityHill">5</output></div>
   <div class="abilityRow"><label for="abilityStart">スタート能力</label><input id="abilityStart" type="range" min="1" max="10" step="1" value="5"/><output id="abilityStartValue" for="abilityStart">5</output></div>
+  <div class="abilityRow"><label for="abilityStartRisk">出遅れやすさ</label><input id="abilityStartRisk" type="range" min="1" max="10" step="1" value="1" aria-describedby="startRiskHint"/><output id="abilityStartRiskValue" for="abilityStartRisk">1</output></div>
+  <p id="startRiskHint" class="abilityHint">1＝出遅れなし。5＝10%、10＝60%（シミュレーション上の設定）。出遅れた馬はゲートが開いてから0.25〜1.50秒遅れて発走します。固定展開は同じ結果、展開番号を変えると抽選結果が変わります。スタート能力は発走後の加速に作用します。</p>
   <label>得意距離（m） <input id="abilityPreferredDistance" type="number" min="1000" max="4000" step="50" inputmode="numeric" aria-describedby="abilityDistanceHint"/></label>
   <label>脚質 <select id="abilityRole">
    <option value="逃げ">逃げ</option><option value="先行">先行</option>
@@ -637,7 +639,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 </details>
 <details id="balanceAuditPanel" hidden>
  <summary>⚖️ 10能力の自動バランス検証・補正</summary>
- <p>選んだ出走馬の各能力を5と10に設定して、2つの展開番号で計40走の比較を行います。対象馬のほかの能力は5に固定し、他の17頭の登録設定は変えません。現在の距離と馬場状態で検証します（良馬場では「馬場状態適性」の差は出ません）。結果は架空のAIモデルに対する感度検査です。</p>
+ <p>選んだ出走馬の各能力を5と10に設定して、2つの展開番号で計40走の比較を行います。対象馬のほかの能力は5に固定し、他の17頭の登録設定は変えません。出遅れやすさは独立した確率設定のため、この10能力の補正対象外です。現在の距離と馬場状態で検証します（良馬場では「馬場状態適性」の差は出ません）。結果は架空のAIモデルに対する感度検査です。</p>
  <div class="balanceActions">
   <label>検証する馬 <select id="balanceHorse"></select></label>
   <button type="button" id="balanceRun">10能力を自動検証</button>
@@ -2339,7 +2341,7 @@ function seekRaceSeconds(delta){
  }
  raceAccumulator=0;
  travel=Math.max(...raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>h.distance));
- gateOpening=travel>0?1:0;updateGateDoors();gateRoot.visible=travel<105;
+ gateOpening=(isOfficialEighteenTest?raceElapsed>0:travel>0)?1:0;updateGateDoors();gateRoot.visible=travel<105;
  clearRaceResults();
  const completed=raceFinished.length===OFFICIAL_TEST_COUNT;
  if(completed)renderRaceResults();
@@ -2485,7 +2487,7 @@ function renderRaceResults(){
   for(const value of [
    String(index+1)+'着',
    horse.number+'番 '+name+'（'+horse.role+'・余力'+Math.round(
-    (horse.energy??1)*100)+'%）',
+    (horse.energy??1)*100)+'%）'+((horse.startDelay??0)>0?'｜出遅れ '+horse.startDelay.toFixed(2)+'秒':''),
    horse.finishTime.toFixed(2)+'秒',
    Number.isFinite(horse.last600StartTime)?
     (horse.finishTime-horse.last600StartTime).toFixed(2)+'秒':'―',
@@ -2613,6 +2615,7 @@ function initRaceHorses(){
    h.slot=i;h.nextLaneReviewTime=0;
    if(isOfficialEighteenTest){
     h.raceProfile=effectiveEighteenProfile(i);
+    h.startDelay=sampleStartDelay(h.raceProfile.startRisk,raceFlowAtStart.mode==='varied'?raceFlowAtStart.seed:1,horseIdentityBySlot[i]);
     h.raceFlow=raceFlowAtStart.mode==='varied'?
      runnerFlow(raceFlowAtStart.seed,horseIdentityBySlot[i]):null;
     h.last600StartTime=null;
@@ -3006,7 +3009,7 @@ function storeBalanceWeights(next){
 
 function defaultHorseAbility(index){
  return {speed:5,stamina:5,acceleration:5,course:5,
-  distance:5,composure:5,traffic:5,going:5,hill:5,start:5,
+  distance:5,composure:5,traffic:5,going:5,hill:5,start:5,startRisk:1,
   role:baseForRegisteredHorse(index).role,
   preferredDistance:baseForRegisteredHorse(index).preferredDistance};
 }
@@ -3018,6 +3021,8 @@ function normalizeHorseAbility(raw,index){
   if(typeof val==='number'&&Number.isFinite(val))
    result[key]=THREE.MathUtils.clamp(Math.round(val),1,10);
  }
+ if(typeof raw.startRisk==='number'&&Number.isFinite(raw.startRisk))
+  result.startRisk=THREE.MathUtils.clamp(Math.round(raw.startRisk),1,10);
  if(HORSE_ROLE_OPTIONS.includes(raw.role))result.role=raw.role;
  if(typeof raw.preferredDistance==='number'&&Number.isFinite(raw.preferredDistance))
   result.preferredDistance=THREE.MathUtils.clamp(Math.round(raw.preferredDistance/50)*50,1000,4000);
@@ -3131,6 +3136,16 @@ function flowHash(seed,id,salt){
  x^=x>>>15;x=Math.imul(x,0x846ca68b);x^=x>>>16;
  return (x>>>0)/4294967296;
 }
+// Independent deterministic gate reaction; no frame-based randomness.
+function startRiskProbability(level){
+ const n=Number.isFinite(level)?Math.max(1,Math.min(10,Math.round(level))):1;
+ return [0,0,.02,.04,.06,.10,.15,.22,.32,.45,.60][n];
+}
+function sampleStartDelay(level,seed,id){
+ const probability=startRiskProbability(level);
+ if(!probability||flowHash(seed,id,31)>=probability)return 0;
+ return Math.ceil((.25+1.25*flowHash(seed,id,32))*60-1e-9)/60;
+}
 function runnerFlow(seed,id){
  return {early:(flowHash(seed,id,1)-.5)*.46,
   middle:(flowHash(seed,id,2)-.5)*.28,
@@ -3188,6 +3203,7 @@ function effectiveEighteenProfile(index,overrideAbility=null){
   goingAbility:v.going,
   hillAbility:v.hill,
   startAbility:v.start,
+   startRisk:v.startRisk??1,
   early:b.early+(v.speed-5)*.10*balanceWeights.speed,
   accel:b.accel*(1+(v.acceleration-5)*.09*balanceWeights.acceleration),
   endurance:THREE.MathUtils.clamp(b.endurance*
@@ -3358,12 +3374,15 @@ function initHorseAbilityEditor(){
   traffic:document.querySelector('#abilityTraffic'),
   going:document.querySelector('#abilityGoing'),
   hill:document.querySelector('#abilityHill'),
-  start:document.querySelector('#abilityStart')
+  start:document.querySelector('#abilityStart'),
+   startRisk:document.querySelector('#abilityStartRisk')
  };
  for(let i=0;i<18;i++)selector.add(new Option((i+1)+'番 '+officialRunnerNames[i],String(i)));
  refreshReserveAbilityOptions();
  const updateLabels=()=>{for(const range of Object.values(ranges))
-  document.querySelector('#'+range.id+'Value').textContent=range.value;};
+  document.querySelector('#'+range.id+'Value').textContent=range.value;
+   document.querySelector('#abilityStartRiskValue').textContent=ranges.startRisk.value+'（'+Math.round(startRiskProbability(Number(ranges.startRisk.value))*100)+'%）';
+  };
  const loadSelected=()=>{
   const text=String(selector.value),slot=Number(text);
   const identity=text.startsWith('reserve:')?Number(text.slice(8)):
@@ -3447,7 +3466,7 @@ function balanceTrial(slot,key,level,seed,starterSnapshot){
     passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,
     passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,
     smoothedSideSpeed:0,pathDistance:0,pathExtraMeters:0,curveTravel:0,last600StartTime:null,
-    raceProfile:profile,raceFlow:runnerFlow(seed,horseIdentityBySlot[h.idx])};
+    raceProfile:profile,startDelay:sampleStartDelay(profile.startRisk,seed,horseIdentityBySlot[h.idx]),raceFlow:runnerFlow(seed,horseIdentityBySlot[h.idx])};
   });
   raceFinished=[];raceElapsed=0;raceAccumulator=0;raceContactWarnings=0;
   raceFlowAtStart={mode:'varied',seed,tempo:(flowHash(seed,0,21)-.5)*.30};
@@ -3680,11 +3699,11 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
    desiredSpeed=Math.min(desiredSpeed,other.speed+Math.max(-1.25,(ahead-4.6)*.72));
   }
  }
- // One simultaneous gate release: individual speeds diverge after 12m.
+ // All gates release together; delayed horses enter this step later.
  const commonLaunch=h.distance<12;
  if(commonLaunch)desiredSpeed=15.8;
  const profile=h.raceProfile||EIGHTEEN_PACE_PROFILES[h.idx];
- // Shared first 12m preserves synchronous launch; runners then separate.
+ // First 12m after each horse reacts preserves the existing acceleration model.
  const launchPhase=commonLaunch?0:
   1-THREE.MathUtils.smoothstep(h.distance,12,110);
  desiredSpeed+=((profile.startAbility??5)-5)*.10*balanceWeights.start*launchPhase;
@@ -3905,6 +3924,11 @@ function stepOfficialPair(tick){
    }else{
     h.postDistance=Math.min(24,h.postDistance+12*tick);
    }
+   continue;
+  }
+  // All gates open together; a delayed horse stays in its stall until reaction.
+  if(isOfficialEighteenTest&&raceElapsed-tick+1e-9<(h.startDelay??0)){
+   h.speed=0;h.sideSpeed=0;h.smoothedSideSpeed=0;
    continue;
   }
   if(!isOfficialMultiTest){
@@ -6700,7 +6724,7 @@ function animate(time){
  renderRaceWatchUI(time);
  let pairTracking=false;
  if(fieldMode.value!=='single'){
-  gateOpening=travel>0?Math.min(1,gateOpening+dt*(isOfficialEighteenTest?15:4)):0;updateGateDoors();
+  gateOpening=(isOfficialEighteenTest?raceElapsed>0:travel>0)?Math.min(1,gateOpening+dt*(isOfficialEighteenTest?15:4)):0;updateGateDoors();
   // After the launch the starting machine is behind the horses and is
   // hidden to save hundreds of draw calls; reappears on race reset.
   if(isOfficialEighteenTest)gateRoot.visible=travel<105;
@@ -6956,7 +6980,7 @@ if(isOfficialEighteenTest){
   if(!api.validRaceArchive(archive())){say('保存済みレースの形式が不正です。上書きせず保持しています。');throw Error('不正なレース保存データ');}
   refresh(archive().activeId);
  }
- import('./race-cloud-sync.mjs?v=2').then(api=>{
+ import('./race-cloud-sync.mjs?v=3').then(api=>{
   initRacePresets(api);
   return api.startPrivateSync({
   capture:captureSharedPayload,restore:restoreCloudPayload,safe:safeCloudReceive,status:byId('cloudSyncStatus'),
