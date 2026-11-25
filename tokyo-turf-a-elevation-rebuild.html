@@ -526,6 +526,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 <details id="cloudSyncPanel" hidden style="margin:8px 12px;padding:12px;border:1px solid #527c79;border-radius:8px">
  <summary>☁ iPhone・Mac データ共有</summary>
  <p id="cloudSyncStatus" role="status" aria-live="polite">端末に保存しています</p>
+ <p style="font-size:12px;opacity:.8">外見同期対応 v5｜両端末を最新版に更新してください。</p>
  <div id="cloudAuth" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
   <label>メール <input id="cloudEmail" type="email" autocomplete="email" placeholder="メールアドレス"/></label>
   <label>パスワード <input id="cloudPassword" type="password" autocomplete="current-password" minlength="8"/></label>
@@ -6873,6 +6874,7 @@ function initHorseAppearanceEditor(){
   if(!persistHorseLibrary()){horse.appearance=old;status.textContent='保存に失敗しました。';return}
   for(let i=0;i<officialPair.length;i++)syncHorseAppearance(i);
   show();status.textContent=horse.name+'：外見を保存しました。';
+  document.dispatchEvent(new Event('race-lab:appearance-saved'));
  }
  picker.addEventListener('change',show);
  panel.addEventListener('toggle',()=>{if(panel.open){refreshAppearancePicker();show()}});
@@ -7047,7 +7049,7 @@ if(isOfficialEighteenTest){
   if(!api.validRaceArchive(archive())){say('保存済みレースの形式が不正です。上書きせず保持しています。');throw Error('不正なレース保存データ');}
   refresh(archive().activeId);
  }
- import('./race-cloud-sync.mjs?v=4').then(api=>{
+ import('./race-cloud-sync.mjs?v=5').then(api=>{
   initRacePresets(api);
   return api.startPrivateSync({
   capture:captureSharedPayload,restore:restoreCloudPayload,safe:safeCloudReceive,status:byId('cloudSyncStatus'),
