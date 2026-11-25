@@ -621,6 +621,21 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <p id="abilityStatus" role="status" aria-live="polite"></p>
  </div>
 </details>
+<details id="horseAppearancePanel" hidden style="margin:9px 12px;padding:12px;background:#142b36;border:1px solid #537c80;border-radius:11px">
+ <summary>🐴 馬の外見設定（毛色・サイズ・馬具）</summary>
+ <div class="abilityForm" style="display:grid;gap:12px;margin-top:12px">
+  <label>編集する馬 <select id="appearanceHorse" style="min-height:44px;width:100%"></select></label>
+  <label>毛色 <select id="appearanceCoat" style="min-height:44px;width:100%"><option value="original">元のDesign 01</option><option value="bay">鹿毛</option><option value="darkBay">黒鹿毛</option><option value="brown">青鹿毛</option><option value="black">青毛</option><option value="chestnut">栗毛</option><option value="darkChestnut">栃栗毛</option><option value="gray">芦毛</option><option value="white">白毛</option></select></label>
+  <label>馬体サイズ <select id="appearanceSize" style="min-height:44px;width:100%"><option value="small">小型（94%）</option><option value="standard">標準（100%）</option><option value="large">大型（104%）</option></select></label>
+  <strong>馬具（複数選択可）</strong>
+  <label><input id="appearanceHood" type="checkbox"/> メンコ</label>
+  <label><input id="appearanceBlinkers" type="checkbox"/> ブリンカー</label>
+  <label><input id="appearanceNoseband" type="checkbox"/> 鼻革</label>
+  <div class="abilityActions"><button type="button" id="appearanceSave">外見を保存</button><button type="button" id="appearanceReset">元の外見に戻す</button></div>
+  <p id="appearanceStatus" role="status" aria-live="polite"></p>
+  <p class="abilityHint">外見のみ変更します。能力・脚質・接触判定は変わりません。元の馬具は残し、追加馬具は頭部表面の簡易描画です。サイズは一体モデルの高さ・長さを調整（幅は固定）。発走前に編集してください。</p>
+ </div>
+</details>
 <details id="raceAnalysisPanel" hidden>
  <summary>📈 レース展開を検証（選んだ馬の順位推移・追尾映像）</summary>
  <div class="analysisActions">
@@ -711,6 +726,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createRaceVisionSystem} from './turf-vision-race.mjs?v=4';
 import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance.mjs?v=2';
+import {normalizeHorseAppearance,SIZE_FACTORS,prepareHeadZone,createAppearanceUniforms,applyAppearanceUniforms,APPEARANCE_FRAGMENT} from './horse-appearance.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
@@ -778,7 +794,7 @@ function loadHorseLibrary(){
    new Set(data.lineup).size!==18||
    !data.lineup.every(id=>horses.some(h=>h.id===id)))return null;
   return {horses:horses.map(h=>({id:h.id,name:h.name.trim().slice(0,24),
-   ability:h.ability&&typeof h.ability==='object'?h.ability:null})),
+   ability:h.ability&&typeof h.ability==='object'?h.ability:null,...(h.appearance?{appearance:normalizeHorseAppearance(h.appearance)}:{})})),
    lineup:data.lineup.slice(),nextId:Math.max(
     Number.isSafeInteger(data.nextId)?data.nextId:18,
     ...horses.map(h=>h.id+1))};
@@ -811,7 +827,7 @@ function persistHorseLibrary(){
    version:1,nextId:nextHorseLibraryId,lineup:horseIdentityBySlot,
    horses:horseLibrary.map(h=>({
     id:h.id,name:h.name,
-    ability:horseAbilities[h.id]||h.ability||null
+    ability:horseAbilities[h.id]||h.ability||null,...(h.appearance?{appearance:normalizeHorseAppearance(h.appearance)}:{})
    }))
   }));
   return true;
@@ -855,6 +871,7 @@ function refreshRunnerSelectors(){
   option.textContent=(slot<0?'控え':'出走'+(slot+1)+'番')+
    '：'+horse.name;
  }
+ refreshAppearancePicker();
 }
 function initRunnerGateSwap(){
  if(!isOfficialEighteenTest)return;
@@ -4378,7 +4395,8 @@ function syncApprovedRaceGate(){
  approvedGateRoot.visible=ready&&gateRoot.visible;
  if(ready){
   approvedGateRoot.position.copy(gateRoot.position);approvedGateRoot.quaternion.copy(gateRoot.quaternion);
-  approvedRaceGate.fitHorseBounds(approvedHorseBounds);
+  const factor=Math.max(1,...horseIdentityBySlot.map(id=>SIZE_FACTORS[normalizeHorseAppearance(libraryHorse(id)?.appearance).size]));
+  approvedRaceGate.fitHorseBounds(approvedHorseBounds?{minZ:approvedHorseBounds.minZ*factor,maxZ:approvedHorseBounds.maxZ*factor}:null);
   approvedRaceGate.setDoors(gateOpening,0);
  }
 }
@@ -4428,7 +4446,7 @@ function prepareOriginalFrameZones(source){
  source.traverse(node=>{
   if(!node.isSkinnedMesh||!node.geometry?.getAttribute('position'))return;
   const geo=node.geometry;
-  if(geo.getAttribute('raceTintZone'))return;
+  if(geo.getAttribute('raceTintZone')){prepareHeadZone(THREE,node);return;}
   const positions=geo.getAttribute('position'),data=new Uint8Array(positions.count);
   for(let i=0;i<positions.count;i++){
    const x=positions.getX(i),y=positions.getY(i),z=positions.getZ(i);
@@ -4440,6 +4458,7 @@ function prepareOriginalFrameZones(source){
    if(hat||cloth)count++;
   }
   geo.setAttribute('raceTintZone',new THREE.Uint8BufferAttribute(data,1,true));
+  prepareHeadZone(THREE,node);
  });
  return count;
 }
@@ -4460,7 +4479,7 @@ function makeOfficialSaddleNumberTexture(horseNumber){
  return texture;
 }
 function tintOriginalHelmetAndCloth(model,horseNumber,numberTexture){
- const tint=new THREE.Color(RACE_FRAME_COLORS[officialFrameIndex(horseNumber)].hex);
+ const tint=new THREE.Color(RACE_FRAME_COLORS[officialFrameIndex(horseNumber)].hex),appearanceUniforms=[];
  model.traverse(node=>{
   if(!node.isSkinnedMesh||!node.geometry?.getAttribute('raceTintZone'))return;
   const old=node.material;
@@ -4468,19 +4487,22 @@ function tintOriginalHelmetAndCloth(model,horseNumber,numberTexture){
   // Material cloning keeps the original shared 36.7MB GLB untouched. The
   // geometry remains shared; only this horse's colour uniform differs.
   const mat=old.clone();
+  const u=createAppearanceUniforms(THREE,prepareHeadZone(THREE,node));appearanceUniforms.push(u);
   mat.onBeforeCompile=(shader)=>{
+   Object.assign(shader.uniforms,u);
    shader.uniforms.raceFrameTint={value:tint};
    shader.uniforms.raceNumberMap={value:numberTexture};
    shader.vertexShader=shader.vertexShader.replace(
     '#include <common>',
-    '#include <common>\nattribute float raceTintZone;\nvarying float vRaceTintZone;\nvarying vec3 vRaceBindPos;')
+    '#include <common>\nattribute float raceTintZone;\nattribute float raceHeadZone;\nvarying float vRaceHeadZone;\nvarying float vRaceTintZone;\nvarying vec3 vRaceBindPos;')
     .replace('#include <begin_vertex>',
-    '#include <begin_vertex>\nvRaceTintZone=raceTintZone;\nvRaceBindPos=position;');
+    '#include <begin_vertex>\nvRaceTintZone=raceTintZone;\nvRaceHeadZone=raceHeadZone;\nvRaceBindPos=position;');
    shader.fragmentShader=shader.fragmentShader.replace(
     '#include <common>',
-    '#include <common>\nuniform vec3 raceFrameTint;\nuniform sampler2D raceNumberMap;\nvarying float vRaceTintZone;\nvarying vec3 vRaceBindPos;')
+    '#include <common>\nuniform vec3 raceFrameTint;\nuniform sampler2D raceNumberMap;\nuniform vec3 raceCoat;\nuniform float raceCoatEnabled;\nuniform vec4 raceHeadBounds;\nuniform float raceHeadWidth;\nuniform float raceGearAvailable;\nuniform vec3 raceGear;\nvarying float vRaceHeadZone;\nvarying float vRaceTintZone;\nvarying vec3 vRaceBindPos;')
     .replace('#include <color_fragment>',`#include <color_fragment>
-    if(vRaceTintZone>.30){
+    ${APPEARANCE_FRAGMENT}
+     if(vRaceTintZone>.30){
      // Recolour the complete cap area of the approved GLB's shared atlas.
      // Exposed rider skin is protected by a red-dominant material guard.
      float originalBlue=diffuseColor.b-max(diffuseColor.r,diffuseColor.g);
@@ -4508,10 +4530,11 @@ function tintOriginalHelmetAndCloth(model,horseNumber,numberTexture){
      diffuseColor.rgb=numColor;
     }`);
   };
-  mat.customProgramCacheKey=()=> 'race-skinned-number-v3';
+  mat.customProgramCacheKey=()=> 'race-skinned-number-appearance-v4';
   mat.needsUpdate=true;
   node.material=mat;
  });
+ return appearanceUniforms;
 }
 function improveApprovedHorseTextureSampling(source){
  // The approved GLB's three 2048x2048 maps stay byte-for-byte unchanged.
@@ -4547,9 +4570,10 @@ async function initializeOfficialPair(source,clip){
   // ジオメトリやテクスチャは共有し、スキンとボーンだけ独立させる。
   const model=cloneSkeleton(source);
   const group=new THREE.Group();group.add(model);
+  let appearanceUniforms=[];
   if(isOfficialEighteenTest){
    const numberTexture=makeOfficialSaddleNumberTexture(i+1);
-   tintOriginalHelmetAndCloth(model,i+1,numberTexture);
+   appearanceUniforms=tintOriginalHelmetAndCloth(model,i+1,numberTexture);
   }
   pairRoot.add(group);
   const mixer=new THREE.AnimationMixer(model);
@@ -4563,8 +4587,9 @@ async function initializeOfficialPair(source,clip){
    if(node.isSkinnedMesh&&node.geometry?.getAttribute('position')?.count===484459)
     jockeyMesh=node;
   });
-  officialPair.push({group,mixer,jockeyMesh,
+  officialPair.push({group,mixer,jockeyMesh,appearanceUniforms,
    labelBounds:source.userData.raceLabelBounds});
+  if(isOfficialEighteenTest)syncHorseAppearance(i);
   if(isOfficialEighteenTest&&(i+1)%3===0&&i+1<OFFICIAL_TEST_COUNT){
    document.querySelector('#officialPairStatus').textContent=
     '正式Design 01を準備中：'+(i+1)+' / '+OFFICIAL_TEST_COUNT+'頭';
@@ -4578,6 +4603,7 @@ function updateOfficialPair(dt){
  for(let i=0;i<OFFICIAL_TEST_COUNT;i++){
   const h=officialPair[i],state=officialPairVisualState(i);
   if(!h||!state)continue;
+  if(isOfficialEighteenTest)syncHorseAppearance(i);
   // Both the official model and following camera use this same render-time pose.
   const a=raceHorsePosition(state);
   h.group.position.copy(a.p);
@@ -6810,6 +6836,51 @@ function animate(time){
   maxFrameMs=0;slowFrames=0;
  }
 }
+function syncHorseAppearance(i){
+ const h=officialPair[i];if(!h)return;
+ const id=horseIdentityBySlot[i],raw=libraryHorse(id)?.appearance;
+ if(h.appearanceId===id&&h.appearanceRaw===raw)return;
+ const a=normalizeHorseAppearance(raw),factor=SIZE_FACTORS[a.size];
+ h.appearanceId=id;h.appearanceRaw=raw;
+ h.group.scale.set(1,factor,factor);
+ for(const u of h.appearanceUniforms||[])applyAppearanceUniforms(u,a);
+}
+function refreshAppearancePicker(){
+ const picker=document.querySelector('#appearanceHorse');
+ if(!picker||!picker.dataset.ready)return;
+ const saved=picker.value;picker.replaceChildren();
+ for(const h of horseLibrary){
+  const slot=horseIdentityBySlot.indexOf(h.id);
+  picker.add(new Option((slot<0?'控え':(slot+1)+'番')+'：'+h.name,String(h.id)));
+ }
+ if(horseLibrary.some(h=>String(h.id)===saved))picker.value=saved;
+}
+function initHorseAppearanceEditor(){
+ if(!isOfficialEighteenTest)return;
+ const el=id=>document.getElementById(id),panel=el('horseAppearancePanel'),picker=el('appearanceHorse'),status=el('appearanceStatus');
+ const coat=el('appearanceCoat'),size=el('appearanceSize'),hood=el('appearanceHood'),blinkers=el('appearanceBlinkers'),noseband=el('appearanceNoseband');
+ picker.dataset.ready='1';refreshAppearancePicker();
+ const selected=()=>libraryHorse(Number(picker.value));
+ function show(){
+  const a=normalizeHorseAppearance(selected()?.appearance);
+  coat.value=a.coat;size.value=a.size;hood.checked=!!(a.gear&1);blinkers.checked=!!(a.gear&2);noseband.checked=!!(a.gear&4);
+  status.textContent='発走前に外見を変更できます。';
+ }
+ function save(reset){
+  if(playing||raceElapsed!==0||balanceAuditBusy){status.textContent='発馬機へ戻してから保存してください。';return}
+  const horse=selected();if(!horse)return;const old=horse.appearance;
+  horse.appearance=normalizeHorseAppearance(reset?null:{coat:coat.value,size:size.value,gear:(hood.checked?1:0)|(blinkers.checked?2:0)|(noseband.checked?4:0)});
+  if(!persistHorseLibrary()){horse.appearance=old;status.textContent='保存に失敗しました。';return}
+  for(let i=0;i<officialPair.length;i++)syncHorseAppearance(i);
+  show();status.textContent=horse.name+'：外見を保存しました。';
+ }
+ picker.addEventListener('change',show);
+ panel.addEventListener('toggle',()=>{if(panel.open){refreshAppearancePicker();show()}});
+ for(const e of [coat,size,hood,blinkers,noseband])e.addEventListener('change',()=>{status.textContent='未保存：外見を保存してください。'});
+ el('appearanceSave').addEventListener('click',()=>save(false));el('appearanceReset').addEventListener('click',()=>save(true));
+ panel.hidden=false;show();
+}
+initHorseAppearanceEditor();
 setupRaceWatchUI();
 animate(0);
 // Optional cloud sync is isolated from the existing physics/render loop.
@@ -6829,7 +6900,7 @@ if(isOfficialEighteenTest){
  function captureSharedPayload(){
   return {version:1,library:{version:1,nextId:nextHorseLibraryId,lineup:horseIdentityBySlot.slice(),
    horses:horseLibrary.map(h=>({id:h.id,name:horseIdentityBySlot.includes(h.id)?officialRunnerNames[horseIdentityBySlot.indexOf(h.id)]:h.name,
-    ability:normalizeHorseAbility(horseAbilities[h.id]||h.ability,h.id)}))},
+    ability:normalizeHorseAbility(horseAbilities[h.id]||h.ability,h.id),...(h.appearance?{appearance:normalizeHorseAppearance(h.appearance)}:{})}))},
    settings:captureSharedSettings()};
  }
  function loadSharedSettings(s){
@@ -6872,6 +6943,7 @@ if(isOfficialEighteenTest){
   const editing=active?.matches('input:not([type=button]):not([type=checkbox]),textarea,select');
   return !playing&&raceElapsed===0&&!balanceAuditBusy&&!editing&&
    !document.querySelector('#abilityStatus')?.textContent.startsWith('未保存')&&
+   !document.querySelector('#appearanceStatus')?.textContent.startsWith('未保存')&&
    !document.querySelector('#libraryName')?.value.trim()&&
    !document.querySelector('#racePresetName')?.value.trim();
  }
@@ -6881,7 +6953,7 @@ if(isOfficialEighteenTest){
   const set=(key,value)=>value===null?localStorage.removeItem(key):localStorage.setItem(key,value);
   try{
    const library={...payload.library,horses:payload.library.horses.map(h=>({
-    id:h.id,name:h.name.trim(),ability:normalizeHorseAbility(h.ability,h.id)}))};
+    id:h.id,name:h.name.trim(),ability:normalizeHorseAbility(h.ability,h.id),...(h.appearance?{appearance:normalizeHorseAppearance(h.appearance)}:{})}))};
    localStorage.setItem(SHARED_SETTINGS,JSON.stringify(payload.settings));
    localStorage.setItem(RUNNER_LIBRARY_KEY,JSON.stringify(library));
    bind();
@@ -6916,7 +6988,7 @@ if(isOfficialEighteenTest){
   const safeEdit=()=>{
    // Blur the race name field first, but never discard unsaved horse edits.
    if(playing||raceElapsed!==0||balanceAuditBusy||
-    byId('abilityStatus')?.textContent.startsWith('未保存')||byId('libraryName')?.value.trim())
+    byId('abilityStatus')?.textContent.startsWith('未保存')||byId('appearanceStatus')?.textContent.startsWith('未保存')||byId('libraryName')?.value.trim())
     throw Error('発馬機に戻り、馬名・能力の編集中の内容を保存してください。');
    if(restoringSnapshot)throw Error('レースを読み込み中です。');
   };
@@ -6975,7 +7047,7 @@ if(isOfficialEighteenTest){
   if(!api.validRaceArchive(archive())){say('保存済みレースの形式が不正です。上書きせず保持しています。');throw Error('不正なレース保存データ');}
   refresh(archive().activeId);
  }
- import('./race-cloud-sync.mjs?v=3').then(api=>{
+ import('./race-cloud-sync.mjs?v=4').then(api=>{
   initRacePresets(api);
   return api.startPrivateSync({
   capture:captureSharedPayload,restore:restoreCloudPayload,safe:safeCloudReceive,status:byId('cloudSyncStatus'),
