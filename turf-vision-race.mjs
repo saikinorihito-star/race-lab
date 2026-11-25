@@ -1,4 +1,4 @@
-import {createTurfVision,visionDimensions} from './turf-vision-model.mjs?v=2';
+import {createTurfVision,visionDimensions} from './turf-vision-model.mjs?v=3';
 // One live 16:9 feed per race, shared by all boards; no GPU readback.
 export const VISION_PLACEMENTS=Object.freeze({
  // JRA venue map: both boards beside the home-straight side of the infield.
@@ -117,10 +117,12 @@ export function createRaceVisionSystem(THREE,{scene,renderer,venue,mobile=false,
   const canFeed=!!target&&!feedFailed&&state.ready&&typeof aim==='function';
   let hasFeed=false;
   if(canFeed){
-   const oldTarget=renderer.getRenderTarget(),oldVisible=groups.map(g=>g.visible);
-   try{aim(feedCamera);groups.forEach(g=>g.visible=false);renderer.setRenderTarget(target);renderer.clear();renderer.render(scene,feedCamera);hasFeed=true}
+   // Only the live render-target planes must be hidden to avoid recursive sampling.
+   // Static housings, rear murals and foundations remain present in both camera passes.
+   const oldTarget=renderer.getRenderTarget(),oldVisible=boards.map(b=>b.mesh.visible);
+   try{aim(feedCamera);boards.forEach(b=>b.mesh.visible=false);renderer.setRenderTarget(target);renderer.clear();renderer.render(scene,feedCamera);hasFeed=true}
    catch(e){feedFailed=true;console.warn('ターフビジョン映像の描画失敗：順位・時刻表示へ切替',e)}
-   finally{renderer.setRenderTarget(oldTarget);groups.forEach((g,i)=>g.visible=oldVisible[i])}
+   finally{renderer.setRenderTarget(oldTarget);boards.forEach((b,i)=>b.mesh.visible=oldVisible[i])}
   }
   for(const b of boards){b.mesh.visible=hasFeed;paint(b,state,rank,hasFeed)}
   lastPaint=time;lastKey=key;lastVisible=true;return true;
