@@ -709,7 +709,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {createRaceVisionSystem} from './turf-vision-race.mjs?v=2';
+import {createRaceVisionSystem} from './turf-vision-race.mjs?v=3';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
 import {clone as cloneSkeleton} from 'three/addons/utils/SkeletonUtils.js';
@@ -1669,7 +1669,7 @@ label3D('東京ダート｜幅25m',dirtLabelPos.x,dirtLabelPos.y+11,dirtLabelPos
  label3D('芝 Aコース｜左回り',-5,35,0,16,'#1c665c');
 // 黄色い進行方向の矢印は表示しない。
 // 大型モニターに現在進行中の3Dレースを専用カメラで生中継する。
-const raceVision=createRaceVisionSystem(THREE,{scene,renderer,venue:'tokyo',mobile:matchMedia('(pointer:coarse)').matches,live:true});
+const raceVision=createRaceVisionSystem(THREE,{scene,renderer,venue:'tokyo',mobile:matchMedia('(pointer:coarse)').matches,live:true,trackBaseY:ELEVATION_BASE});
 const turfVisionGroups=raceVision.groups;
 
 // カメラが模型の内部に入った場合の閉塞を防ぐため、スタンド外形を登録。
