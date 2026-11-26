@@ -23,7 +23,7 @@ export function tacticalRaceTarget(h,profile,context,distance){
  // Stable per-runner pacing character; independent of the gate when identity is available.
  const identity=profile.identity??h.idx??0;
  const phase=((Math.imul(identity+1,1103515245)^Math.imul(context.seed||1,2654435761))>>>0)/4294967296;
- const personal=(phase-.5)*170;
+ const personal=(phase-.5)*170+(h.raceFlow?.releaseShift??0);
  const finishStart=clamp((style.start+personal)*Math.sqrt(D/2000)+Math.max(0,context.tempo)*190,340,D*.60);
  const release=smooth(finishStart-r,0,Math.max(150,finishStart*.65));
  const settle=smooth(d,35,240);
@@ -40,7 +40,7 @@ export function tacticalRaceTarget(h,profile,context,distance){
  const surge=(.58+2.80*saved)*release*(.82+.24*(profile.finishStrength??1))+urgency;
  const mid=smooth(d,130,360)*(1-release);
  const rhythm=.22*Math.sin((d/D)*Math.PI*4+phase*Math.PI*2)*mid;
- const form=context.varied?(phase-.5)*.26:0;
+ const form=context.varied?(phase-.5)*.26+(h.raceFlow?.form??0):0;
  return {target:profile.early+style.early*(1-settle) +paceBias+correction+surge+rhythm+form-fatigue+(fit-.5)*.70+(profile.courseBonus??0),closing:release,fit,energy:e};
 }
 export function tacticalEnergyCost({h,profile,context,snapshot,distance,physicalStep,forward,tick,composure}){
@@ -51,5 +51,5 @@ export function tacticalEnergyCost({h,profile,context,snapshot,distance,physical
  const exposed=h.distance>90&&context.leader.distance-h.distance<6;
  const hardPace=clamp((forward/tick-context.fieldPace+.12)/1.1,0,1);
  const burden=1+(exposed?(.045+.20*hardPace+.55*context.contest+.30*Math.max(0,context.tempo))*(1-.55*progress):0)-(drafting?.17:0);
- return physicalStep/Math.max(1,distance)*(.29+.32*effort*effort)*load/Math.max(.65,profile.endurance)*composure*burden;
+ return physicalStep/Math.max(1,distance)*(.29+.32*effort*effort)*load/Math.max(.65,profile.endurance)*composure*burden*(h.raceFlow?.efficiency??1);
 }
