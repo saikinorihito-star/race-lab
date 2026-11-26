@@ -519,12 +519,14 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
 </div>
 <div class="tools" id="raceFlowControls" hidden>
  <label>レース展開 <select id="raceFlowMode">
-  <option value="standard" selected>固定（従来どおり）</option>
-  <option value="varied">展開が変化</option>
+  <option value="real" selected>リアル（標準・毎回変化）</option>
+  <option value="standard">固定（従来どおり）</option>
+  <option value="varied">番号指定（従来の展開）</option>
+  <option value="chaos">波乱（変動大）</option>
  </select></label>
  <label>展開番号 <input id="raceFlowSeed" type="number" min="1" max="999999" step="1" value="1"/></label>
  <button type="button" id="raceFlowNext">別の展開を試す</button>
- <span id="raceFlowStatus">同じ条件で同じ走行になります。</span>
+ <span id="raceFlowStatus">発走ごとに展開が変化します。</span>
 </div>
 <div class="tools" id="officialPairTools" hidden>
  <strong id="officialGroupHeading">正式Design 01｜2頭走行テスト</strong>
@@ -737,7 +739,7 @@ import {createRaceVisionSystem} from './turf-vision-race.mjs?v=4';
 import {planVenueScenery,installVenueScenery} from './race-venue-scenery.mjs?v=1';
 import {addRaceDayStandDetail} from './race-stand-crowd.mjs?v=1';
 import {installDistantTown} from './race-distant-town.mjs?v=1';
-import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance.mjs?v=3';
+import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance.mjs?v=4';
 import {normalizeHorseAppearance,SIZE_FACTORS,prepareHeadZone,createAppearanceUniforms,applyAppearanceUniforms,APPEARANCE_FRAGMENT} from './horse-appearance.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
@@ -2449,7 +2451,11 @@ function seekRaceSeconds(delta){
   raceHorses=structuredClone(checkpoint.horses);raceElapsed=checkpoint.time;
   raceFinished=[...checkpoint.finished];raceContactWarnings=checkpoint.warnings;
   raceAnalysisSnapshots=structuredClone(checkpoint.analysis);
- }else initRaceHorses();
+ }else if(lockedRaceStart){
+  raceHorses=structuredClone(lockedRaceStart.horses);raceElapsed=0;raceFinished=[];raceContactWarnings=0;
+  raceFlowAtStart={...lockedRaceStart.flow};raceGoingAtStart=lockedRaceStart.going;raceWeatherAtStart=lockedRaceStart.weather;
+  clearRaceAnalysis();
+ }else prepareFreshRaceFlow();
  let ticks=0;
  while(raceElapsed+RACE_TICK/2<target&&raceFinished.length<OFFICIAL_TEST_COUNT&&ticks<15000){
   stepOfficialPair(RACE_TICK);saveRaceSeekState();ticks++;
@@ -2621,7 +2627,7 @@ function renderRaceResults(){
  const trafficSeconds=finishers.reduce((v,h)=>v+(h.trafficSeconds||0),0);
  const averageEnergy=finishers.reduce((v,h)=>v+(h.energy??1),0)/finishers.length;
  raceTacticsSummary.textContent='展開：'+
-  (raceFlowAtStart.mode==='varied'?'番号'+raceFlowAtStart.seed:'固定')+
+  (raceFlowAtStart.mode==='varied'?({real:'リアル',chaos:'波乱',varied:'番号指定'}[raceFlowAtStart.kind]||'番号指定')+' '+raceFlowAtStart.seed:'固定')+
   '｜芝馬場：'+({good:'良',slightlyHeavy:'稍重',heavy:'重',bad:'不良'}[raceGoingAtStart]||'良')+
   '｜架空の展開モデル｜進路変更判断 '+passDecisions+
   '回（内 '+insideDecisions+'／外 '+outsideDecisions+'）'+
@@ -2701,10 +2707,7 @@ function initRaceHorses(){
   applyTurfGoingVisual(raceGoingAtStart);
   applyRaceWeatherVisual(raceWeatherAtStart);
   syncRaceConditionControls();
-  const mode=raceFlowModeInput.value==='varied'?'varied':'standard',
-   seed=validFlowSeed(raceFlowSeedInput.value);
-  raceFlowAtStart={mode,seed,tempo:mode==='varied'?
-   (flowHash(seed,0,21)-.5)*.30:0};
+  raceFlowAtStart=makeRaceFlow(raceFlowModeInput.value,validFlowSeed(raceFlowSeedInput.value));
  }
  const width=activePlan?fieldCenterAt(activePlan,0).width:31;
  raceHorses=Array.from({length:FIELD_COUNT},(_,i)=>({
@@ -2732,7 +2735,7 @@ function initRaceHorses(){
     h.raceProfile=effectiveEighteenProfile(i);
     h.startDelay=sampleStartDelay(h.raceProfile.startRisk,raceFlowAtStart.mode==='varied'?raceFlowAtStart.seed:1,horseIdentityBySlot[i]);
     h.raceFlow=raceFlowAtStart.mode==='varied'?
-     runnerFlow(raceFlowAtStart.seed,horseIdentityBySlot[i]):null;
+     runnerFlow(raceFlowAtStart.seed,horseIdentityBySlot[i],raceFlowAtStart.kind):null;
     h.last600StartTime=null;
    }
    h.role=isOfficialEighteenTest?h.raceProfile.role:
@@ -2742,6 +2745,7 @@ function initRaceHorses(){
     h.energy=1;h.blockedFor=0;h.trafficSeconds=0;
     h.passGoal=null;h.passUntil=0;h.passCooldown=0;h.passAttempts=0;
     h.passOpponentIdx=null;h.outsideHoldUntil=0;h.outsideHoldMax=0;
+    h.failedPassOpponentIdx=null;h.failedPassRetryDistance=0;
     h.smoothedSideSpeed=0;
     h.pathDistance=0;h.pathExtraMeters=0;h.curveTravel=0;
     h.insidePassAttempts=0;h.outsidePassAttempts=0;
@@ -3241,6 +3245,26 @@ const raceFlowModeInput=document.querySelector('#raceFlowMode'),
  raceFlowSeedInput=document.querySelector('#raceFlowSeed'),
  raceFlowStatus=document.querySelector('#raceFlowStatus');
 let raceFlowAtStart={mode:'standard',seed:1,tempo:0};
+let raceFlowStarted=false,lockedRaceStart=null;
+function makeRaceFlow(kind,seed){
+ const mode=kind==='standard'?'standard':'varied';
+ return {mode,kind,seed:validFlowSeed(seed),tempo:mode==='varied'?
+  (flowHash(seed,0,21)-.5)*(kind==='chaos'?.95:kind==='real'?.60:.30):0};
+}
+function nextRaceSeed(previous,random=Math.random){
+ const old=validFlowSeed(previous),n=1+Math.floor(Math.max(0,Math.min(.999999999,random()))*999999);
+ return n===old?old%999999+1:n;
+}
+function prepareFreshRaceFlow(){
+ if(!isOfficialEighteenTest||raceFlowStarted)return;
+ const kind=raceFlowModeInput.value;
+ if(kind==='real'||kind==='chaos')raceFlowSeedInput.value=String(nextRaceSeed(raceFlowSeedInput.value));
+ initRaceHorses();raceFlowStarted=true;
+ lockedRaceStart={horses:structuredClone(raceHorses),flow:{...raceFlowAtStart},going:raceGoingAtStart,weather:raceWeatherAtStart};
+ refreshFlowStatus();
+}
+function resetRaceFlowSession(){raceFlowStarted=false;lockedRaceStart=null;}
+
 function validFlowSeed(v){
  return THREE.MathUtils.clamp(Number.isFinite(Number(v))?
   Math.floor(Number(v)):1,1,999999);
@@ -3261,23 +3285,31 @@ function sampleStartDelay(level,seed,id){
  if(!probability||flowHash(seed,id,31)>=probability)return 0;
  return Math.ceil((.25+1.25*flowHash(seed,id,32))*60-1e-9)/60;
 }
-function runnerFlow(seed,id){
- return {early:(flowHash(seed,id,1)-.5)*.46,
-  middle:(flowHash(seed,id,2)-.5)*.28,
-  late:(flowHash(seed,id,3)-.5)*.62,
-  trafficPatience:(flowHash(seed,id,4)-.5)*.26};
+function runnerFlow(seed,id,kind='varied'){
+ const scale=kind==='chaos'?2.10:kind==='real'?1.25:1;
+ const enhanced=kind==='real'||kind==='chaos';
+ return {early:(flowHash(seed,id,1)-.5)*.46*scale,
+  middle:(flowHash(seed,id,2)-.5)*.28*scale,
+  late:(flowHash(seed,id,3)-.5)*.62*scale,
+  trafficPatience:(flowHash(seed,id,4)-.5)*.26*scale,
+  form:enhanced?(flowHash(seed,id,5)-.5)*.52*scale:0,
+  releaseShift:enhanced?(flowHash(seed,id,6)-.5)*150*scale:0,
+  efficiency:enhanced?1+(flowHash(seed,id,7)-.5)*.12*scale:1};
 }
 function refreshFlowStatus(){
  if(!isOfficialEighteenTest)return;
- raceFlowStatus.textContent=raceFlowModeInput.value==='standard'?
-  '固定：以前と同じ展開（番号は使用しません）。':
-  '展開番号'+validFlowSeed(raceFlowSeedInput.value)+
-  '：同じ馬・同じ番号・同じ条件なら再現できます。';
+ const kind=raceFlowModeInput.value,seed=validFlowSeed(raceFlowSeedInput.value);
+ const label=kind==='real'?'リアル':kind==='chaos'?'波乱':kind==='varied'?'番号指定':'固定';
+ raceFlowSeedInput.disabled=kind!=='varied';
+ raceFlowStatus.textContent=kind==='standard'?'固定：同じ条件なら同じ展開。':
+  kind==='varied'?'番号'+seed+'：従来の番号指定展開を再現。':
+  label+'：発走ごとに自動変化。'+(raceFlowStarted?'今回の番号 '+raceFlowAtStart.seed:'次の発走で番号更新。');
+ if(raceFlowStarted&&kind!==raceFlowAtStart.kind)raceFlowStatus.textContent+='（変更は次のレースから）';
 }
 function applyFlowBeforeStart(){
  // Race-condition changes are committed only while at the starting gate.
  // Once the first physics tick runs, this race's scenario stays frozen.
- if(!playing&&raceElapsed===0&&activePlan)initRaceHorses();
+ if(!playing&&raceElapsed===0&&activePlan&&!raceFlowStarted)initRaceHorses();
 }
 if(isOfficialEighteenTest){
  document.querySelector('#raceFlowControls').hidden=false;
@@ -6009,7 +6041,7 @@ function selectRace(){
  activeDistance=Number(raceSelector.value);
  activePlan=racePlan(activeDistance);
  showPocketRailing(activeDistance);
- playing=false;travel=0;gateOpening=0;initRaceHorses();
+ playing=false;travel=0;gateOpening=0;if(isOfficialEighteenTest)resetRaceFlowSession();initRaceHorses();
  if(isOfficialEighteenTest){
   camera18LatestAnchor=null;camera18FixedAnchor=null;camera18Follow.value='auto';
  }
@@ -6048,7 +6080,7 @@ document.querySelector('#raceCourseVenue').addEventListener('change',event=>{
 fieldMode.addEventListener('change',()=>{selectRace();updateDesign01Panel();if(fieldMode.value!=='single')setView('start')});
 document.querySelector('#startView').addEventListener('click',()=>setView('start'));
 function resetDemo(){
- travel=0;playing=false;gateOpening=0;initRaceHorses();updateGateDoors();
+ travel=0;playing=false;gateOpening=0;if(isOfficialEighteenTest)resetRaceFlowSession();initRaceHorses();updateGateDoors();
  if(isOfficialEighteenTest)gateRoot.visible=true;
  demoBtn.textContent=initialDemoText();
  document.querySelector('#raceOrder').textContent=isOfficialPairTest?
@@ -6066,11 +6098,12 @@ demoBtn.addEventListener('click',()=>{
  if(isOfficialEighteenTest&&!playing){unlockHoofAudio();playRaceBgmFromGesture()}
  if(isOfficialPairTest?raceFinished.length>=OFFICIAL_TEST_COUNT:
  (travel>=activePlan.distance||fieldMode.value==='race18'&&raceFinished.length===FIELD_COUNT)){
-  travel=0;gateOpening=0;initRaceHorses();updateGateDoors();positionFieldHorses();
+  travel=0;gateOpening=0;if(isOfficialEighteenTest)resetRaceFlowSession();initRaceHorses();updateGateDoors();positionFieldHorses();
   if(isOfficialEighteenTest)gateRoot.visible=true;
   if(isOfficialPairTest)setView(isOfficialEighteenTest?'broadcast':'field');
   else if(fieldMode.value!=='single')setView('start');
  }
+ if(isOfficialEighteenTest&&!playing&&!raceFlowStarted)prepareFreshRaceFlow();
  playing=!playing;
  demoBtn.textContent=playing?'一時停止':'再開';
  if(playing&&fieldMode.value==='single'&&view==='start')setView('chase');
@@ -7143,7 +7176,7 @@ if(isOfficialEighteenTest){
   if([1400,1600,1800,2000,2300,2400,2500,2600,3400].includes(s.distance))raceSelector.value=String(s.distance);
   if(['sunny','cloudy','rain'].includes(s.weather))setRaceCondition('weather',s.weather);
   if(['good','slightlyHeavy','heavy','bad'].includes(s.going))setRaceCondition('going',s.going);
-  if(['standard','varied'].includes(s.flowMode))raceFlowModeInput.value=s.flowMode;
+  if(['standard','varied','real','chaos'].includes(s.flowMode))raceFlowModeInput.value=s.flowMode;
   if(Number.isFinite(s.flowSeed))raceFlowSeedInput.value=String(validFlowSeed(s.flowSeed));
   if([1,1.5,2,3].includes(s.playback))setRacePlaybackSpeed(s.playback);
   if(Number.isFinite(s.bgmVolume))raceBgmVolume.value=String(THREE.MathUtils.clamp(s.bgmVolume,0,100));
