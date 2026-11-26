@@ -316,6 +316,14 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
  .watchHorseFrame{height:15px}
 }
 
+/* Keep race gestures inside the viewer instead of chaining to the browser.
+   The settings editor remains scrollable, and native host UI is not controlled here. */
+@media(pointer:coarse){
+ html.race-touch-guard,html.race-touch-guard body{overscroll-behavior-y:none}
+ .official18 #stage,.official18 #stage > canvas.race-webgl-canvas,
+ .official18 #watchOverviewFrame,.official18 #raceWatchRoster{touch-action:none;overscroll-behavior:none}
+ .official18 #cameraAdjustPanel{overscroll-behavior:contain}
+}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}</script>
 </head>
@@ -748,6 +756,46 @@ const isOfficialFourTest=isDesign01Review&&qs.get('group')==='4';
 const isOfficialEightTest=isDesign01Review&&qs.get('group')==='8';
 const isOfficialEighteenTest=isDesign01Review&&qs.get('group')==='18';
 if(isOfficialEighteenTest)document.body.classList.add('official18');
+// iOS may cancel pointermove after recognizing a native scroll. Prevent
+// the cancelable touchmove default too, without suppressing taps or settings.
+function raceTouchPolicy({inStage,inPortraitWatch,interactive,inScrollable,scrollTop,scrollHeight,clientHeight,dy}){
+ if(interactive)return false;
+ if(inScrollable){
+  const max=Math.max(0,scrollHeight-clientHeight);
+  return max<=1||(dy>0&&scrollTop<=1)||(dy<0&&scrollTop>=max-1);
+ }
+ return inStage||inPortraitWatch;
+}
+function installRaceTouchGuard(){
+ document.documentElement.classList.add('race-touch-guard');
+ const lastY=new Map();
+ document.addEventListener('touchstart',event=>{
+  for(const t of event.changedTouches)lastY.set(t.identifier,t.clientY);
+ },{capture:true,passive:true});
+ document.addEventListener('touchmove',event=>{
+  const el=event.target?.closest?event.target:event.target?.parentElement;
+  if(!el)return;
+  let dy=0;
+  for(const t of event.changedTouches){
+   dy+=t.clientY-(lastY.get(t.identifier)??t.clientY);lastY.set(t.identifier,t.clientY);
+  }
+  const body=document.body;
+  const inStage=!!el.closest('#stage');
+  const inPortraitWatch=body.classList.contains('race-watch-portrait')&&!body.classList.contains('race-watch-editing');
+  const interactive=!!el.closest('input,select,textarea,[contenteditable="true"]');
+  const panel=el.closest('#cameraAdjustPanel,#raceBgmControls,.resultTableWrap');
+  // Only genuinely scrollable settings regions may scroll; don't allow
+  // the gesture to chain out of either end. Normal editor scroll is untouched.
+  if(!inStage&&!inPortraitWatch&&!panel)return;
+  if(event.cancelable&&raceTouchPolicy({inStage,inPortraitWatch,interactive,
+   inScrollable:!!panel,scrollTop:panel?.scrollTop??0,scrollHeight:panel?.scrollHeight??0,
+   clientHeight:panel?.clientHeight??0,dy}))event.preventDefault();
+ },{capture:true,passive:false});
+ const finish=event=>{for(const t of event.changedTouches)lastY.delete(t.identifier);};
+ for(const type of ['touchend','touchcancel'])document.addEventListener(type,finish,{capture:true,passive:true});
+ window.addEventListener('blur',()=>lastY.clear());
+}
+if(isOfficialEighteenTest)installRaceTouchGuard();
 const isOfficialMultiTest=isOfficialFourTest||isOfficialEightTest||isOfficialEighteenTest;
 const isOfficialPairTest=isDesign01Review&&(qs.get('pair')==='1'||isOfficialMultiTest);
 const OFFICIAL_TEST_COUNT=isOfficialEighteenTest?18:isOfficialEightTest?8:isOfficialFourTest?4:2;
