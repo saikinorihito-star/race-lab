@@ -726,7 +726,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createRaceVisionSystem} from './turf-vision-race.mjs?v=4';
-import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance.mjs?v=2';
+import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance.mjs?v=3';
 import {normalizeHorseAppearance,SIZE_FACTORS,prepareHeadZone,createAppearanceUniforms,applyAppearanceUniforms,APPEARANCE_FRAGMENT} from './horse-appearance.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
@@ -3135,7 +3135,7 @@ function effectiveEighteenProfile(index,overrideAbility=null){
  const customized=modified||HORSE_ABILITY_KEYS.some(key=>v[key]!==5);
  const kickByRole={逃げ:.18,先行:.18,中団:.31,差し:.52,追込:.76};
  const timingByRole={逃げ:.72,先行:.72,中団:.72,差し:.29,追込:.37};
- return {...b,role,customized,baseEarly:b.early,
+ return {...b,identity,role,customized,baseEarly:b.early,
   courseBonus:(v.course-5)*.055*balanceWeights.course,
   preferredDistance:v.preferredDistance??b.preferredDistance,
   baseAccel:b.accel,
@@ -3628,7 +3628,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   for(const other of snapshot){
    if(other.idx===h.idx||other.finished)continue;
    const ahead=other.distance-h.distance,sideGap=Math.abs(other.lane-h.lane);
-   if(sideGap<3.3&&ahead<8&&ahead>-.5&&(ahead>.002||h.idx>other.idx)){
+   if(sideGap<2.45&&ahead<8&&ahead>-.5&&(ahead>.002||h.idx>other.idx)){
     const pace=other.speed+THREE.MathUtils.clamp((ahead-4.9)*.5,-1.3,.8);
     desiredSpeed=Math.min(desiredSpeed,pace);
    }
@@ -3707,13 +3707,12 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  // On a bend, a trapped runner checks an inside gap first. If it is not
  // open, it uses the existing outside passing option. A tight corridor is
  // never crossed instantaneously, even when it is the shorter path.
- if(h.distance>105&&h.distance<activePlan.distance-90&&
+ if(h.distance>105&&h.distance<activePlan.distance-20&&
     h.blockedFor>THREE.MathUtils.clamp(
-     .9-((h.raceProfile?.trafficAbility??5)-5)*.10*balanceWeights.traffic+
-      (h.raceFlow?.trafficPatience??0),.50,1.45)&&
+     .68-((h.raceProfile?.trafficAbility??5)-5)*.08*balanceWeights.traffic+
+      (h.raceFlow?.trafficPatience??0),.38,1.12)&&
     h.passUntil<=h.distance&&h.passCooldown<=h.distance&&
-    !holdingOutside&&
-    h.passAttempts<(activePlan.distance>=2600?3:2)){
+    !holdingOutside){
   const bend=cornerDataAt(h.distance);
   // Compare safe inside/outside choices and 0.65s predicted congestion.
   // The path-length advantage of the inside lane matters most on bends.
@@ -3725,13 +3724,13 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   // Require sustained obstruction by a specific slower horse directly ahead.
   // Merely detecting congestion somewhere in the pack is insufficient.
   const blockingHorse=snapshot.filter(o=>o.idx!==h.idx&&!o.finished&&
-   o.distance-h.distance>1.5&&o.distance-h.distance<10.5&&
-   Math.abs(o.lane-h.lane)<1.85&&
-   targetSpeed>o.speed+.60&&h.speed>o.speed-.65)
+   o.distance-h.distance>2.8&&o.distance-h.distance<13&&
+   Math.abs(o.lane-h.lane)<2.3&&
+   targetSpeed/cornerPathFactor(h.distance,h.lane)>o.speed+.32&&h.speed>o.speed-1.0)
    .sort((a,b)=>a.distance-b.distance)[0];
   const outsideAllowed=Boolean(blockingHorse)&&h.blockedFor>=THREE.MathUtils.clamp(
-    1.65-((h.raceProfile?.trafficAbility??5)-5)*.07*balanceWeights.traffic,1.3,2.0)&&
-   h.distance>140&&h.distance<activePlan.distance-110;
+    1.05-((h.raceProfile?.trafficAbility??5)-5)*.07*balanceWeights.traffic,.70,1.45)&&
+   h.distance>140&&h.distance<activePlan.distance-25;
   const congestionAt=destination=>snapshot.reduce((total,o)=>{
    if(o.idx===h.idx||o.finished)return total;
    const gap=o.distance+o.speed*.65-(h.distance+Math.max(h.speed,13)*.65);
@@ -3741,22 +3740,22 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
     (o.speed<h.speed+.3?1.25:.52);
   },0);
   const currentCongestion=congestionAt(railHoldingLane);
-  const choices=[railHoldingLane+2.85,railHoldingLane-2.75].map(destination=>{
+  const choices=[railHoldingLane+3.1,railHoldingLane-3.1].map(destination=>{
    if(destination>insideLimit||destination<outsideLimit)return null;
    const unsafe=snapshot.some(o=>{
     if(o.idx===h.idx||o.finished)return false;
-    const longitudinal=o.distance+o.speed*dt-distance;
-    return Math.abs(longitudinal)<9&&
-     Math.abs(o.lane-destination)<2.70;
+    const longitudinal=o.distance-h.distance, future=longitudinal+(o.speed-h.speed)*.8;
+    const closest=longitudinal*future<=0?0:Math.min(Math.abs(longitudinal),Math.abs(future));
+    return closest<6.0&&Math.abs(o.lane-destination)<2.45;
    });
    if(unsafe)return null;
    const congestion=congestionAt(destination);
    // A lane change is justified by a real congestion benefit,
    // not solely by a corner bonus or an arbitrary lateral preference.
    const benefit=currentCongestion-congestion;
-   if(benefit<.30)return null;
+   if(benefit<.20)return null;
    const isInside=destination>railHoldingLane;
-   if(!isInside&&(!outsideAllowed||benefit<.65))return null;
+   if(!isInside&&(!outsideAllowed||benefit<.33))return null;
    const bendPreference=THREE.MathUtils.clamp(bend.kappa*105,0,1);
    const score=benefit+
     (isInside?.24:0)+(isInside?.70:-.12)*bendPreference-
@@ -3768,8 +3767,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   const chosen=choices.find(c=>c.isInside)||choices.find(c=>!c.isInside);
   if(chosen){
    const {destination}=chosen;
-   h.passGoal=destination;h.passUntil=h.distance+42;
-   h.passCooldown=h.distance+(activePlan.distance>=2600?180:205);
+   h.passGoal=destination;h.passUntil=h.distance+30;
+   h.passCooldown=h.distance+38;
    h.blockedFor=0;h.passAttempts++;
    if(destination>railHoldingLane){
     h.insidePassAttempts++;
@@ -3778,8 +3777,8 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
     h.outsidePassAttempts++;
     h.passOpponentIdx=blockingHorse.idx;
     // Hold a committed pass until clear, but do not cruise outside forever.
-    h.outsideHoldUntil=h.distance+42;
-    h.outsideHoldMax=h.distance+105;
+    h.outsideHoldUntil=h.distance+20;
+    h.outsideHoldMax=h.distance+125;
    }
   }
  }
@@ -3797,8 +3796,10 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   const clear=snapshot.every(o=>{
    if(o.idx===h.idx||o.finished)return true;
    const longitudinal=o.distance+o.speed*dt-distance;
-   return Math.abs(longitudinal)>7.5||
-    o.lane<low-1.6||o.lane>high+1.6;
+   // The horse directly ahead is the reason to leave this lane. It must
+   // not veto moving AWAY from itself while a safe longitudinal gap exists.
+   if(o.idx===h.passOpponentIdx&&longitudinal>3.7&&Math.abs(h.passGoal-o.lane)>Math.abs(railHoldingLane-o.lane)+1.0)return true;
+   return Math.abs(longitudinal)>5.5||o.lane<low-1.6||o.lane>high+1.6;
   });
   if(clear){
    const sign=Math.sign(h.passGoal-railHoldingLane);
