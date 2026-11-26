@@ -727,6 +727,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createRaceVisionSystem} from './turf-vision-race.mjs?v=4';
 import {planVenueScenery,installVenueScenery} from './race-venue-scenery.mjs?v=1';
+import {addRaceDayStandDetail} from './race-stand-crowd.mjs?v=1';
 import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance.mjs?v=3';
 import {normalizeHorseAppearance,SIZE_FACTORS,prepareHeadZone,createAppearanceUniforms,applyAppearanceUniforms,APPEARANCE_FRAGMENT} from './horse-appearance.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
@@ -1750,6 +1751,11 @@ function stadiumStand(name,x,len,backZ,height,color,accent){
 const standBack=TURN_RADIUS+105;
 stadiumStand('FUJI VIEW STAND｜フジビュー',35,440,standBack,42,0x879da6,0xb9c8c3);
 stadiumStand('MEMORIAL 60｜メモリアル60',-290,145,standBack+1,32,0x6f858e,0x94a9ae);
+if(isOfficialEighteenTest){
+ // Optional scenery must never prevent the main simulation from starting.
+ try{console.info('観客・スタンド装飾',addRaceDayStandDetail(THREE,stadiumGroups));}
+ catch(e){console.warn('スタンド装飾を省略',e);}
+}
 // Public promenade and a symbolic paddock behind stands
 addBox(scene,-40,-.2,TURN_RADIUS+187,900,.6,66,0xa8a99c);
 const paddock=new THREE.Mesh(new THREE.TorusGeometry(36,2.1,7,58),new THREE.MeshStandardMaterial({color:0xabb5ab}));
