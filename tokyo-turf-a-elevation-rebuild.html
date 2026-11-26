@@ -3679,6 +3679,14 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   if(h.passGoal!==null&&h.passGoal<railHoldingLane)h.passGoal=null;
  }
  const stillAlongside=passedHorse&&!clearOfPassed&&h.distance<(h.outsideHoldMax||0);
+ // A failed attempt is not a reason to keep stepping outward against the
+ // same opponent. Return toward the rail when safe, and retry later.
+ if(passedHorse&&!clearOfPassed&&h.distance>=(h.outsideHoldMax||0)){
+  h.failedPassOpponentIdx=passedHorse.idx;
+  h.failedPassRetryDistance=h.distance+80;
+  h.passOpponentIdx=null;h.outsideHoldUntil=0;h.outsideHoldMax=0;
+  if(h.passGoal!==null&&h.passGoal<railHoldingLane)h.passGoal=null;
+ }
  const holdingOutside=h.distance<(h.outsideHoldUntil||0)||stillAlongside;
  const stableInner=fourHorseInnerLane(widthAtNext)-.05;
  // Check the entire inward corridor in rail-relative coordinates, including
@@ -3728,7 +3736,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
    Math.abs(o.lane-h.lane)<2.3&&
    targetSpeed/cornerPathFactor(h.distance,h.lane)>o.speed+.32&&h.speed>o.speed-1.0)
    .sort((a,b)=>a.distance-b.distance)[0];
-  const outsideAllowed=Boolean(blockingHorse)&&h.blockedFor>=THREE.MathUtils.clamp(
+  const outsideAllowed=Boolean(blockingHorse)&&!(blockingHorse.idx===h.failedPassOpponentIdx&&h.distance<(h.failedPassRetryDistance||0))&&h.blockedFor>=THREE.MathUtils.clamp(
     1.05-((h.raceProfile?.trafficAbility??5)-5)*.07*balanceWeights.traffic,.70,1.45)&&
    h.distance>140&&h.distance<activePlan.distance-25;
   const congestionAt=destination=>snapshot.reduce((total,o)=>{
@@ -3768,7 +3776,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   if(chosen){
    const {destination}=chosen;
    h.passGoal=destination;h.passUntil=h.distance+30;
-   h.passCooldown=h.distance+38;
+   h.passCooldown=h.distance+(activePlan.distance>=2600?65:42);
    h.blockedFor=0;h.passAttempts++;
    if(destination>railHoldingLane){
     h.insidePassAttempts++;
