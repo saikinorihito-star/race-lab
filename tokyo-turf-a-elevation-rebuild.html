@@ -728,6 +728,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createRaceVisionSystem} from './turf-vision-race.mjs?v=4';
 import {planVenueScenery,installVenueScenery} from './race-venue-scenery.mjs?v=1';
 import {addRaceDayStandDetail} from './race-stand-crowd.mjs?v=1';
+import {installDistantTown} from './race-distant-town.mjs?v=1';
 import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance.mjs?v=3';
 import {normalizeHorseAppearance,SIZE_FACTORS,prepareHeadZone,createAppearanceUniforms,applyAppearanceUniforms,APPEARANCE_FRAGMENT} from './horse-appearance.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
@@ -2116,6 +2117,15 @@ if(isOfficialEighteenTest){
  const sceneryPlan=planVenueScenery({stands:stadiumGroups,boards:raceVision.boards,surfaceAt:venueScenerySurface()});
  installVenueScenery(THREE,scene,sceneryPlan,raceTreeOcclusionRecords);
  console.info('競馬場周辺設備',sceneryPlan.counts);
+}
+
+// A distant suburban backdrop outside the entire original course footprint.
+// Optional visual detail: failure cannot stop the race.
+if(isOfficialEighteenTest){
+ try{
+  const town=installDistantTown(THREE,scene);
+  console.info('遠景の街並み',town.userData.buildingCount,'棟');
+ }catch(e){console.warn('遠景の街並みを省略',e);}
 }
 
 // Turf palettes use the existing shaders and meshes, with no extra draw calls.
