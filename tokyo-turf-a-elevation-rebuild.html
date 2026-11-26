@@ -4955,6 +4955,24 @@ markerFocus.addEventListener('change',inspectMarker);
 const groupCameraOffset={yaw:0,pitch:0,zoom:1};
 const camera18={yaw:0,pitch:0,zoom:1,pan:0,lift:0};
 let camera18CutPending=false; // Avoid passing through black 3D objects between views.
+// A gesture during the broadcast is temporary, not a permanent camera selection.
+// RAF time and performance.now() share the same monotonic clock.
+const CAMERA_AUTO_RETURN_MS=3500;
+let camera18Temporary=false,camera18LastInput=-Infinity,camera18PointerCount=0;
+function noteCamera18Input(now=performance.now()){
+ camera18LastInput=now;
+}
+function updateCamera18AutoReturn(now){
+ if(!isOfficialEighteenTest||!playing||!activePlan||!installedDesign01||camera18PointerCount>0)return false;
+ const baseElevation=view==='field'?.34:view==='chase'?.16:view==='front3q'?.09:0;
+ const highManual=pairTrackingView(view)&&view!=='broadcast'&&baseElevation+camera18.pitch>.92;
+ const staticView=!pairTrackingView(view);
+ if(!(camera18Temporary||highManual||staticView)||now-camera18LastInput<CAMERA_AUTO_RETURN_MS)return false;
+ camera18Temporary=false;
+ camera18Follow.value='auto';camera18FixedAnchor=null;
+ resetCamera18();setView('broadcast');
+ return true;
+}
 const broadcastCameraLabel=document.querySelector('#broadcastCameraLabel');
 let lastBroadcastShotId=null,lastBroadcastFocusNumbers=[];
 let broadcastTransition=null,broadcastTransitionCanvas=null,broadcastTracking=null;
@@ -5136,9 +5154,13 @@ function resetCamera18(){
  syncCamera18Controls();
 }
 function leaveBroadcastForManualCamera(){
- if(isOfficialEighteenTest&&view==='broadcast'){
+ if(!isOfficialEighteenTest)return;
+ noteCamera18Input();
+ if(view==='broadcast'||!pairTrackingView(view)){
   resetCamera18();
   setView('field');
+  // Explicit manual camera buttons still select a persistent view.
+  camera18Temporary=true;
  }
 }
 function adjustGroupCamera(kind){
@@ -5165,7 +5187,7 @@ function adjustGroupCamera(kind){
 if(isOfficialPairTest){
  if(isOfficialEighteenTest){
   document.querySelector('#cameraAdjustHint').textContent=
-   '1本指：360°回転と上下角度｜2本指：つまんで拡大縮小、動かして注視点移動';
+   '1本指：360°回転と上下角度｜2本指：拡大縮小・注視点移動｜レース中の一時操作・上空視点は操作終了後に自動中継へ戻ります';
   for(const [name,control] of Object.entries(camera18Inputs)){
    control.addEventListener('input',()=>{
     leaveBroadcastForManualCamera();
@@ -5188,6 +5210,7 @@ if(isOfficialPairTest){
   });
   for(const btn of document.querySelectorAll('[data-cam18-view]')){
    btn.addEventListener('click',()=>{
+    camera18Temporary=false;noteCamera18Input();
     resetCamera18();
     setView(btn.dataset.cam18View);
    });
@@ -5214,6 +5237,7 @@ if(isOfficialPairTest){
    pan:isOfficialEighteenTest&&event.pointerType==='mouse'&&
     (event.button===2||event.shiftKey)
   });
+  if(isOfficialEighteenTest){camera18PointerCount=pointers.size;noteCamera18Input();}
   try{canvas.setPointerCapture(event.pointerId)}catch(_){}
  });
  canvas.addEventListener('pointermove',event=>{
@@ -5269,10 +5293,18 @@ if(isOfficialPairTest){
       groupCameraOffset.zoom*before/after,.5,2.5);
    }
   }
-  pointers.set(event.pointerId,current);
+  pointers.set(event.pointerId,{...current,pan:previous.pan});
  });
  for(const eventName of ['pointerup','pointercancel','lostpointercapture']){
-  canvas.addEventListener(eventName,event=>pointers.delete(event.pointerId));
+  canvas.addEventListener(eventName,event=>{
+   const removed=pointers.delete(event.pointerId);
+   if(isOfficialEighteenTest&&removed){camera18PointerCount=pointers.size;noteCamera18Input();}
+  });
+ }
+ if(isOfficialEighteenTest){
+  const releaseCameraPointers=()=>{pointers.clear();camera18PointerCount=0;noteCamera18Input();};
+  window.addEventListener('blur',releaseCameraPointers);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseCameraPointers();});
  }
 }
 // Mac mouse-wheel and trackpad zoom for the persistent 18-runner camera.
@@ -5797,8 +5829,11 @@ function fieldCameraShot(){
  return {eye,target};
 }
 function setView(which){
+ const changedView=view!==which;
  view=which;
  if(isOfficialEighteenTest){
+  if(changedView){camera18Temporary=false;noteCamera18Input();}
+  if(which==='broadcast')camera18Temporary=false;
   if(pairTrackingView(which))camera18CutPending=true;
   syncCamera18Controls();
   broadcastCameraLabel.hidden=which!=='broadcast';
@@ -5868,7 +5903,7 @@ function setView(which){
  updateSceneLabelVisibility();
 }
 document.querySelectorAll('#views button').forEach(button=>button.addEventListener('click',()=>{
- if(isOfficialEighteenTest&&pairTrackingView(button.dataset.view))resetCamera18();
+ if(isOfficialEighteenTest){camera18Temporary=false;noteCamera18Input();if(pairTrackingView(button.dataset.view))resetCamera18();}
  setView(button.dataset.view);
 }));
 function syncStageStartButton(){
@@ -6883,6 +6918,7 @@ function animate(time){
  renderRaceAnalysis(time);
  renderRaceWatchUI(time);
  let pairTracking=false;
+ if(isOfficialEighteenTest)updateCamera18AutoReturn(time);
  if(fieldMode.value!=='single'){
   gateOpening=(isOfficialEighteenTest?raceElapsed>0:travel>0)?Math.min(1,gateOpening+dt*(isOfficialEighteenTest?15:4)):0;updateGateDoors();
   // After the launch the starting machine is behind the horses and is
