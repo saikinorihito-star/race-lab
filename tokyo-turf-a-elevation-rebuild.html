@@ -726,6 +726,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createRaceVisionSystem} from './turf-vision-race.mjs?v=4';
+import {planVenueScenery,installVenueScenery} from './race-venue-scenery.mjs?v=1';
 import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance.mjs?v=3';
 import {normalizeHorseAppearance,SIZE_FACTORS,prepareHeadZone,createAppearanceUniforms,applyAppearanceUniforms,APPEARANCE_FRAGMENT} from './horse-appearance.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
@@ -2071,6 +2072,44 @@ if(isOfficialEighteenTest){
  planting.userData.bedCount=bedSites.length;planting.userData.shrubCount=n;
  scene.add(planting);
  console.info('背景植栽',raceForest.userData.treeCount,'trees,',n,'shrubs');
+}
+
+// Validate new equipment against actual model boundaries, including both pockets.
+function venueScenerySurface(){
+ const outside=[],inside=[];
+ for(let i=0;i<720;i++){
+  const station=LAP*i/720,a=positionAt(station);
+  outside.push({p:offsetAt(station,MEASURE_OFFSET-renderedTurfWidthAt(station)),normal:a.inward});
+  inside.push({p:dirtPoint(station,DIRT_INNER_OFFSET),normal:a.inward});
+ }
+ const pockets=[...POCKETS.values()].flatMap(p=>Array.from({length:121},(_,i)=>({p:p.curve.getPointAt(i/120),half:p.distance===1800?12:14})));
+ const nearest=(points,x,z)=>{let best=null,d=Infinity;for(const entry of points){
+  const dx=x-entry.p.x,dz=z-entry.p.z,ds=dx*dx+dz*dz;
+  if(ds<d){best={entry,signed:dx*entry.normal.x+dz*entry.normal.z};d=ds;}
+ }return best};
+ return (zone,x,z,radius)=>{
+  if(pockets.some(q=>Math.hypot(x-q.p.x,z-q.p.z)<q.half+radius+6))return null;
+  if(zone==='stand'){
+   const hit=nearest(outside,x,z);
+   const gap=-hit.signed;if(gap<radius+5)return null;
+   const height=g=>g>=29?.12:g<=3?hit.entry.p.y:lerp(hit.entry.p.y,.12,(g-3)/26);
+   return Math.max(0,height(gap),height(gap-Math.min(radius,6)));
+  }
+  if(zone==='vision'){
+   const hit=nearest(inside,x,z);
+   if(hit.signed<Math.min(radius,6)+15)return null;
+   if(radius>10&&[x-radius,x+radius].some(xx=>nearest(inside,xx,z).signed<18))return null;
+   if(Math.abs(x)+Math.min(radius,6)>338||Math.abs(z)+Math.min(radius,6)>84)return null;
+   const gap=hit.signed;
+   return Math.max(.445,gap>=31?.12:lerp(hit.entry.p.y,.12,Math.max(0,gap)/31));
+  }
+  return null;
+ };
+}
+if(isOfficialEighteenTest){
+ const sceneryPlan=planVenueScenery({stands:stadiumGroups,boards:raceVision.boards,surfaceAt:venueScenerySurface()});
+ installVenueScenery(THREE,scene,sceneryPlan,raceTreeOcclusionRecords);
+ console.info('競馬場周辺設備',sceneryPlan.counts);
 }
 
 // Turf palettes use the existing shaders and meshes, with no extra draw calls.
