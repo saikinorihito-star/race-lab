@@ -1806,89 +1806,6 @@ const raceTreeOcclusionRecords=[];
 const raceTreeHiddenMatrix=new THREE.Matrix4().makeTranslation(0,-10000,0);
 let lastTreeOcclusionCheck=-Infinity;
 let lastTreeOcclusionView=null,lastTreeOcclusionShot=null;
-if(isOfficialEighteenTest){
- // Hide the older single broadleaf rows ONLY in the approved 18 test.
- trunks.visible=false;crowns.visible=false;caps.visible=false;
- const trunkGeoRace=new THREE.CylinderGeometry(.42,.68,1,7);
- const trunkMatRace=new THREE.MeshStandardMaterial({color:0x6a5040,roughness:.96});
- const forestDummy=new THREE.Object3D();
- const perType=36;
- for(let type=0;type<RACE_TREE_TYPES.length;type++){
-  const spec=RACE_TREE_TYPES[type];
-  const lowerGeo=type===1?new THREE.ConeGeometry(4.0,7.4,8):
-   new THREE.IcosahedronGeometry(1,1);
-  const upperGeo=type===1?new THREE.ConeGeometry(3.1,6.5,8):
-   new THREE.IcosahedronGeometry(1,1);
-  const leafMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,flatShading:true});
-  const trunkMesh=new THREE.InstancedMesh(trunkGeoRace,trunkMatRace,perType);
-  const lower=new THREE.InstancedMesh(lowerGeo,leafMat,perType);
-  const upper=new THREE.InstancedMesh(upperGeo,leafMat,perType);
-  trunkMesh.name=spec.name+'_trunks';
-  lower.name=spec.name+'_canopy';
-  upper.name=spec.name+'_top';
-  for(let i=0;i<perType;i++){
-   const segment=i%RACE_TREE_SITES.length,[start,end]=RACE_TREE_SITES[segment];
-   const indexWithin=Math.floor(i/RACE_TREE_SITES.length);
-   const fraction=(indexWithin+.30+((i*7+type*3)%5)*.09)/12;
-   const station=start+(end-start)*Math.min(.98,fraction);
-   const outside=90+((i+type*3)%5)*8; // Background trees only, no foreground occlusion
-   const p=offsetAt(station,MEASURE_OFFSET-renderedTurfWidthAt(station)-outside);
-   // Outside the elevated rail embankment the scenery ground is a flat
-   // mesh at y=0. Using p.y (track elevation, 0.35–8.45m) made trees FLOAT.
-   const sceneryGroundY=0;
-   const scale=.82+((i*11+type*7)%9)*.055;
-   forestDummy.rotation.set(0,(i*2.2+type*.9)%6.28,0);
-   forestDummy.position.set(p.x,sceneryGroundY+spec.trunk*scale/2,p.z);
-   forestDummy.scale.set(scale,spec.trunk*scale,scale);
-   forestDummy.updateMatrix();trunkMesh.setMatrixAt(i,forestDummy.matrix);
-   if(type===0){
-    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+1.7)*scale,p.z);
-    forestDummy.scale.set(5.8*scale,4.2*scale,5.3*scale);
-   }else if(type===1){
-    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+1.25)*scale,p.z);
-    forestDummy.scale.set(scale,scale,scale);
-   }else{
-    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+2.15)*scale,p.z);
-    forestDummy.scale.set(4.25*scale,6.2*scale,3.8*scale);
-   }
-   forestDummy.updateMatrix();lower.setMatrixAt(i,forestDummy.matrix);
-   if(type===0){
-    forestDummy.position.set(p.x+1.1*scale,sceneryGroundY+(spec.trunk+4.6)*scale,p.z-.5*scale);
-    forestDummy.scale.set(4.3*scale,3.5*scale,4.3*scale);
-   }else if(type===1){
-    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+5.5)*scale,p.z);
-    forestDummy.scale.set(.84*scale,.85*scale,.84*scale);
-   }else{
-    forestDummy.position.set(p.x-.8*scale,sceneryGroundY+(spec.trunk+5.9)*scale,p.z+.4*scale);
-    forestDummy.scale.set(3.5*scale,4.7*scale,3.45*scale);
-   }
-   forestDummy.updateMatrix();upper.setMatrixAt(i,forestDummy.matrix);
-   const meshes=[trunkMesh,lower,upper];
-   const originalMatrices=meshes.map(mesh=>{
-    const original=new THREE.Matrix4();
-    mesh.getMatrixAt(i,original);
-    return original;
-   });
-   raceTreeOcclusionRecords.push({
-    meshes,index:i,originalMatrices,hidden:false,holdUntil:0,
-    center:new THREE.Vector3(p.x,sceneryGroundY+(spec.trunk+4.2)*scale,p.z),
-    radius:(type===1?8.5:11)*scale
-   });
-   const palette=type===0?[0x357344,0x427c46,0x508652]:
-    type===1?[0x245d3c,0x2e7044,0x386d41]:
-    [0x5b8746,0x66914c,0x51814c];
-   lower.setColorAt(i,new THREE.Color(palette[i%palette.length]));
-   upper.setColorAt(i,new THREE.Color(palette[(i+1)%palette.length]));
-  }
-  for(const mesh of [trunkMesh,lower,upper]){
-   mesh.instanceMatrix.needsUpdate=true;
-   if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
-   mesh.frustumCulled=false;
-   raceForest.add(mesh);
-  }
- }
- scene.add(raceForest);
-}
 
 
 // Do not show trees in front of the horses, regardless of camera angle.
@@ -2005,6 +1922,157 @@ function makePocket(spec){
  return {...spec,curve,length,remaining,start:curve.getPointAt(0),turfMesh:turf};
 }
 const POCKETS=new Map(POCKET_DATA.map(x=>[x.distance,makePocket(x)]));
+if(isOfficialEighteenTest){
+ // Hide the older single broadleaf rows ONLY in the approved 18 test.
+ trunks.visible=false;crowns.visible=false;caps.visible=false;
+ const trunkGeoRace=new THREE.CylinderGeometry(.42,.68,1,7);
+ const trunkMatRace=new THREE.MeshStandardMaterial({color:0x6a5040,roughness:.96});
+ const forestDummy=new THREE.Object3D();
+ // Clustered scenery, placed only after both start pockets have been built.
+ // All vegetation is outside the racing surface, or on the low infield.
+ const sites=[[],[],[]],used=[];
+ let seed=261126;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+ const pocketSamples=[...POCKETS.values()].flatMap(p=>Array.from({length:81},(_,i)=>p.curve.getPointAt(i/80)));
+ function addSite(x,z,type,scale,minGap=10){
+  if(Math.abs(x)>910||Math.abs(z)>435)return;
+  if(pocketSamples.some(p=>Math.hypot(p.x-x,p.z-z)<36+scale*8))return;
+  if(stadiumGroups.some(g=>Math.abs(x-g.x)<g.len/2+24&&Math.abs(z-g.backZ)<48))return;
+  if(Math.hypot(x+290,z-(TURN_RADIUS+265))<48)return;
+  if(used.some(p=>Math.hypot(p.x-x,p.z-z)<minGap))return;
+  const site={x,z,scale};used.push(site);sites[type].push(site);
+ }
+ // Groups of six, alternating nearer and farther rows; don't make a uniform fence.
+ for(let segment=0;segment<RACE_TREE_SITES.length;segment++){
+  const [start,end]=RACE_TREE_SITES[segment];
+  for(let cluster=0;cluster<12;cluster++){
+   const station=start+(end-start)*(cluster+.5)/12;
+   const outside=cluster%2===0?74+random()*16:128+random()*24;
+   for(let member=0;member<6;member++){
+    const d=station+(member%3-1)*13+(random()-.5)*5;
+    const o=outside+Math.floor(member/3)*15+(random()-.5)*5;
+    const p=offsetAt(d,MEASURE_OFFSET-renderedTurfWidthAt(d)-o);
+    addSite(p.x,p.z,(cluster+member+segment)%3,.82+random()*.40);
+   }
+  }
+ }
+ // Distant, muted woodland behind the stands and beyond the back straight.
+ // Keep the paddock, stand and start-pocket space clear.
+ for(let row=0;row<4;row++){
+  const z=[-344,-405,365,415][row];
+  for(let i=0;i<27;i++){
+   const x=-780+i*60+(random()-.5)*19;
+   addSite(x,z+(random()-.5)*17,(i+row)%3,1.02+random()*.36,12);
+  }
+ }
+ raceForest.userData.treeCount=used.length;
+ for(let type=0;type<RACE_TREE_TYPES.length;type++){
+  const perType=sites[type].length;
+  const spec=RACE_TREE_TYPES[type];
+  const lowerGeo=type===1?new THREE.ConeGeometry(4.0,7.4,8):
+   new THREE.IcosahedronGeometry(1,1);
+  const upperGeo=type===1?new THREE.ConeGeometry(3.1,6.5,8):
+   new THREE.IcosahedronGeometry(1,1);
+  const leafMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,flatShading:true});
+  const trunkMesh=new THREE.InstancedMesh(trunkGeoRace,trunkMatRace,perType);
+  const lower=new THREE.InstancedMesh(lowerGeo,leafMat,perType);
+  const upper=new THREE.InstancedMesh(upperGeo,leafMat,perType);
+  trunkMesh.name=spec.name+'_trunks';
+  lower.name=spec.name+'_canopy';
+  upper.name=spec.name+'_top';
+  for(let i=0;i<perType;i++){
+   const p=sites[type][i];
+   const sceneryGroundY=0;
+   const scale=p.scale;
+   forestDummy.rotation.set(0,(i*2.2+type*.9)%6.28,0);
+   forestDummy.position.set(p.x,sceneryGroundY+spec.trunk*scale/2,p.z);
+   forestDummy.scale.set(scale,spec.trunk*scale,scale);
+   forestDummy.updateMatrix();trunkMesh.setMatrixAt(i,forestDummy.matrix);
+   if(type===0){
+    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+1.7)*scale,p.z);
+    forestDummy.scale.set(5.8*scale,4.2*scale,5.3*scale);
+   }else if(type===1){
+    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+1.25)*scale,p.z);
+    forestDummy.scale.set(scale,scale,scale);
+   }else{
+    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+2.15)*scale,p.z);
+    forestDummy.scale.set(4.25*scale,6.2*scale,3.8*scale);
+   }
+   forestDummy.updateMatrix();lower.setMatrixAt(i,forestDummy.matrix);
+   if(type===0){
+    forestDummy.position.set(p.x+1.1*scale,sceneryGroundY+(spec.trunk+4.6)*scale,p.z-.5*scale);
+    forestDummy.scale.set(4.3*scale,3.5*scale,4.3*scale);
+   }else if(type===1){
+    forestDummy.position.set(p.x,sceneryGroundY+(spec.trunk+5.5)*scale,p.z);
+    forestDummy.scale.set(.84*scale,.85*scale,.84*scale);
+   }else{
+    forestDummy.position.set(p.x-.8*scale,sceneryGroundY+(spec.trunk+5.9)*scale,p.z+.4*scale);
+    forestDummy.scale.set(3.5*scale,4.7*scale,3.45*scale);
+   }
+   forestDummy.updateMatrix();upper.setMatrixAt(i,forestDummy.matrix);
+   const meshes=[trunkMesh,lower,upper];
+   const originalMatrices=meshes.map(mesh=>{
+    const original=new THREE.Matrix4();
+    mesh.getMatrixAt(i,original);
+    return original;
+   });
+   raceTreeOcclusionRecords.push({
+    meshes,index:i,originalMatrices,hidden:false,holdUntil:0,
+    center:new THREE.Vector3(p.x,sceneryGroundY+(spec.trunk+4.2)*scale,p.z),
+    radius:(type===1?8.5:11)*scale
+   });
+   const palette=type===0?[0x357344,0x427c46,0x508652]:
+    type===1?[0x245d3c,0x2e7044,0x386d41]:
+    [0x5b8746,0x66914c,0x51814c];
+   const distant=Math.abs(p.z)>330;
+   const tint=hex=>{const c=new THREE.Color(hex);return distant?c.lerp(new THREE.Color(0x76917d),.27):c;};
+   lower.setColorAt(i,tint(palette[i%palette.length]));
+   upper.setColorAt(i,tint(palette[(i+1)%palette.length]));
+  }
+  for(const mesh of [trunkMesh,lower,upper]){
+   mesh.instanceMatrix.needsUpdate=true;
+   if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+   mesh.frustumCulled=false;
+   raceForest.add(mesh);
+  }
+ }
+ scene.add(raceForest);
+ // Low planted islands break up the uniform infield without obscuring racing.
+ const bedSites=[];
+ for(const z of [-43,24])for(const x of [-245,-170,-85,0,85,170,245]){
+  bedSites.push({x:x+(random()-.5)*8,z:z+(random()-.5)*5});
+ }
+ const beds=new THREE.InstancedMesh(new THREE.CylinderGeometry(1,1,.08,24),
+  new THREE.MeshStandardMaterial({color:0x597f43,roughness:1}),bedSites.length);
+ const shrubs=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),
+  new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,flatShading:true}),bedSites.length*5);
+ const planting=new THREE.Group();planting.name='LowInfieldPlanting';
+ let n=0;
+ for(let i=0;i<bedSites.length;i++){
+  const {x,z}=bedSites[i];
+  forestDummy.rotation.set(0,0,0);forestDummy.position.set(x,.50,z);
+  forestDummy.scale.set(13,1,3.6);forestDummy.updateMatrix();beds.setMatrixAt(i,forestDummy.matrix);
+  for(let j=0;j<5;j++){
+   const px=x+(j-2)*4.7,pz=z+(random()-.5)*1.5,scale=.8+random()*.35;
+   forestDummy.rotation.set(0,random()*6.28,0);
+   forestDummy.position.set(px,.48+.78*scale,pz);
+   forestDummy.scale.set(2.65*scale,.92*scale,1.8*scale);
+   forestDummy.updateMatrix();shrubs.setMatrixAt(n,forestDummy.matrix);
+   shrubs.setColorAt(n,new THREE.Color([0x2f6436,0x45783d,0x557f40][(i+j)%3]));
+   const original=new THREE.Matrix4();shrubs.getMatrixAt(n,original);
+   raceTreeOcclusionRecords.push({meshes:[shrubs],index:n,originalMatrices:[original],hidden:false,holdUntil:0,
+    center:new THREE.Vector3(px,1.3,pz),radius:3.1*scale});
+   n++;
+  }
+ }
+ for(const mesh of [beds,shrubs]){
+  mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+  mesh.frustumCulled=false;planting.add(mesh);
+ }
+ planting.userData.bedCount=bedSites.length;planting.userData.shrubCount=n;
+ scene.add(planting);
+ console.info('背景植栽',raceForest.userData.treeCount,'trees,',n,'shrubs');
+}
+
 // Turf palettes use the existing shaders and meshes, with no extra draw calls.
 const TURF_GOING_PALETTE={
  good:{name:'良',description:'乾いた芝',ring:0xffffff,ground:0x3d824b,
