@@ -4063,7 +4063,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  for(const other of snapshot){
   if(other.idx===h.idx||other.finished)continue;
   const predictedOtherDistance=other.distance+Math.max(0,other.speed)*dt;
-  if(Math.abs(distance-predictedOtherDistance)>3)continue;
+  if(Math.abs(distance-predictedOtherDistance)>3.6)continue;
   const otherWidth=fieldCenterAt(activePlan,other.distance).width;
   const otherNextWidth=fieldCenterAt(activePlan,predictedOtherDistance).width;
   let otherLane=other.lane+(otherNextWidth-otherWidth)*.5;
@@ -4075,8 +4075,16 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   }
   let longitudinal=distance-predictedOtherDistance;
   let side=lane-otherLane;
-  const clearance=1.10; // 18 narrow gates start 1.12–1.15m apart
-  if(Math.hypot(longitudinal,side)>=clearance)continue;
+  // Approximate dynamic body envelope (not a mesh collision test).
+  // Retain narrow-stall clearance at launch; then account for the
+  // elongated body and its lateral projection while steering.
+  const envelope=THREE.MathUtils.smoothstep(Math.min(h.distance,other.distance),12,30);
+  const ownYaw=Math.atan(THREE.MathUtils.clamp((h.smoothedSideSpeed??0)/Math.max(.5,speed),-.30,.30));
+  const otherYaw=Math.atan(THREE.MathUtils.clamp((other.sideSpeed??0)/Math.max(.5,other.speed),-.30,.30));
+  const length=1.10+envelope*(3.20-1.10);
+  const breadth=1.10+envelope*(.05+1.60*(Math.abs(Math.sin(ownYaw))+Math.abs(Math.sin(otherYaw))));
+  const sideRequired=x=>Math.hypot(longitudinal/length,x/breadth)<1;
+  if(!sideRequired(side))continue;
   const originalSide=railHoldingLane-otherLane;
   if(Math.abs(originalSide)>Math.abs(side)+.001){
    lane=railHoldingLane;
@@ -4085,9 +4093,9 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
   }
   // The runner behind yields. If a side route is already clear no braking
   // is applied. A sub-centimetre tolerance avoids oscillatory deadlocks.
-  if(Math.hypot(longitudinal,side)<clearance&&
-    other.distance>h.distance+.10&&Math.abs(side)<clearance){
-   const required=Math.sqrt(Math.max(0,clearance*clearance-side*side));
+  if(sideRequired(side)&&
+    other.distance>h.distance+.10&&Math.abs(side)<breadth){
+   const required=length*Math.sqrt(Math.max(0,1-(side/breadth)**2));
    const safe=predictedOtherDistance-required-.005;
    // Do not freeze a runner at the gate or due to an already-close pack.
    // The earlier pace matching and rejected lateral move remain active.
@@ -4111,7 +4119,7 @@ function stepOfficialPair(tick){
  if(!activePlan||raceFinished.length>=OFFICIAL_TEST_COUNT)return;
  const previous=raceHorses.slice(0,OFFICIAL_TEST_COUNT).map(h=>({
   idx:h.idx,identity:h.raceProfile?.identity??h.idx,distance:h.distance,lane:h.lane,speed:h.speed,finished:h.finished,
-  passGoal:h.passGoal,passUntil:h.passUntil
+  passGoal:h.passGoal,passUntil:h.passUntil,sideSpeed:h.smoothedSideSpeed??0
  }));
  const tactics=isOfficialEighteenTest?raceTacticalContext(previous,raceHorses.slice(0,OFFICIAL_TEST_COUNT),raceFlowAtStart):null;
  raceElapsed+=tick;
