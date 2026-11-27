@@ -9,7 +9,25 @@ function fn(name){
  assert.ok(p>=0&&e>p,'Missing actual function '+name);
  return html.slice(p,e+2);
 }
-function sim(distance,variant='actual',overrides={},pace='middle',mode='real',seed=1,going='good',geometry='flat'){
+// Extract the app's main-course shape, including its approximate altitude
+// profile. Track mode is intentionally restricted to non-pocket distances.
+function makeTrack(D){
+ if([1800,2000].includes(D))throw Error('Pocket geometry is not included in this track fixture');
+ const constants=html.slice(html.indexOf('const LAP=2083.1'),html.indexOf('const TRACK='));
+ const elev=html.slice(html.indexOf('const profile=['),html.indexOf('function widthAt('));
+ const geom=html.slice(html.indexOf('const LEFT_START_X='),html.indexOf('function offsetAt('));
+ const g=Function(constants+'\nconst DISPLAY_RELIEF=1,ELEVATION_BASE=3.05;const THREE={Vector3:class {constructor(x,y,z){Object.assign(this,{x,y,z})}}};\n'+elev+'\n'+geom+'\nreturn {positionAt,MEASURE_OFFSET,FINISH_DISTANCE,LAP};')();
+ const station=((g.FINISH_DISTANCE-D)%g.LAP+g.LAP)%g.LAP;
+ const p=d=>g.positionAt(station+Math.max(0,Math.min(D+90,d)));
+ const profile=Array.from({length:Math.ceil(D/5)+1},(_,i)=>{
+  const d=Math.min(D,i*5),lo=Math.max(0,d-5),hi=Math.min(D,d+5),a=p(lo).t,b=p(hi).t,t=p(d).t;
+  return {kappa:Math.max(-.013,Math.min(.013,((b.x-a.x)*t.z-(b.z-a.z)*t.x)/Math.max(1,hi-lo))),referenceLane:(36+5*Math.sin((station+d)/g.LAP*Math.PI*2+.5))/2-g.MEASURE_OFFSET};
+ });
+ const heights=Array.from({length:Math.ceil((D+90)*2)+1},(_,i)=>p(i/2).p.y);
+ const height=d=>{const x=Math.max(0,Math.min(heights.length-1,d*2)),i=Math.floor(x);return heights[i]+((heights[i+1]??heights[i])-heights[i])*(x-i)};
+ return {profile,height};
+}
+function sim(distance,variant='actual',overrides={},pace='middle',mode='real',seed=1,going='good',geometry='flat',lineup=null){
  const p4=html.match(/const FOUR_PACE_PROFILES=\[[\s\S]*?\];/)?.[0];
  const p8=html.match(/const EIGHT_PACE_PROFILES=\[[\s\S]*?\];/)?.[0];
  const p18=html.match(/const EIGHTEEN_PACE_PROFILES=Array\.from\([\s\S]*?\n\}\);/)?.[0];
@@ -25,12 +43,12 @@ function sim(distance,variant='actual',overrides={},pace='middle',mode='real',se
   html.match(/const HORSE_ABILITY_KEYS=\[[\s\S]*?\];/)[0],
   ...['baseForRegisteredHorse','defaultHorseAbility','effectiveEighteenProfile','validFlowSeed','flowHash','startRiskProbability','sampleStartDelay','runnerFlow','makeRaceFlow'].map(fn),
   // Flat synthetic track profile: this fixture tests lane/pace mechanics, not real 3D course geometry.
-  "const EIGHTEEN_CORNER_STEP=5,DISPLAY_RELIEF=1;const eighteenCornerProfile=geometry==='flat'?[]:Array.from({length:Math.ceil(distance/5)+1},(_,i)=>{const p=i*5/distance;return {kappa:p>.22&&p<.75?.0045:0,referenceLane:15}});const balanceWeights={distance:1,going:1,hill:1,start:1,traffic:1,composure:1,course:1,speed:1,stamina:1,acceleration:1};const horseIdentityBySlot=Array.from({length:18},(_,i)=>i),horseAbilities=[];const GOING_SEVERITY={good:0,slightlyHeavy:.3,heavy:.7,bad:1},raceGoingAtStart=going,raceFlowAtStart=makeRaceFlow(mode,seed,pace);function captureRaceAnalysis(){}",
+  "const EIGHTEEN_CORNER_STEP=5,DISPLAY_RELIEF=1;const eighteenCornerProfile=geometry==='track'?trackProfile:geometry==='flat'?[]:Array.from({length:Math.ceil(distance/5)+1},(_,i)=>{const p=i*5/distance;return {kappa:p>.22&&p<.75?.0045:0,referenceLane:15}});const balanceWeights={distance:1,going:1,hill:1,start:1,traffic:1,composure:1,course:1,speed:1,stamina:1,acceleration:1};const horseIdentityBySlot=identityLineup??Array.from({length:18},(_,i)=>i),horseAbilities=[];const GOING_SEVERITY={good:0,slightlyHeavy:.3,heavy:.7,bad:1},raceGoingAtStart=going,raceFlowAtStart=makeRaceFlow(mode,seed,pace);function captureRaceAnalysis(){}",
   "const LAP=2083.1,FINISH_DISTANCE=525.9,startStation=((FINISH_DISTANCE-distance)%LAP+LAP)%LAP;",
   "const activePlan={distance};",
-  "const fieldCenterAt=(_p,d)=>({p:{y:geometry==='flat'?0:2.5*Math.sin(d/180)},width:variant==='actual'?widthAt(startStation+d):variant==='pocket24'?(d<250?24:d<310?24+12*(d-250)/60:36):(d<250?28:d<310?28+8*(d-250)/60:36)});",
+  "const fieldCenterAt=(_p,d)=>({p:{y:geometry==='track'?trackHeight(d):geometry==='flat'?0:2.5*Math.sin(d/180)},width:variant==='actual'?widthAt(startStation+d):variant==='pocket24'?(d<250?24:d<310?24+12*(d-250)/60:36):(d<250?28:d<310?28+8*(d-250)/60:36)});",
   "let raceElapsed=0,raceFinished=[];const firstWidth=fieldCenterAt(activePlan,0).width;",
-  "const raceHorses=Array.from({length:18},(_,i)=>({idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,slot:i,lane:eighteenStartLane(firstWidth,i),energy:1,startDelay:overrides[i]?.startDelay??sampleStartDelay(overrides[i]?.startRisk??1,mode==='standard'?1:seed,i,overrides[i]?.start??5,mode),raceFlow:mode==='standard'?null:runnerFlow(seed,i,mode),passGoal:null,passUntil:0,passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,blockedFor:0,last600StartTime:null,raceProfile:effectiveEighteenProfile(i,{...defaultHorseAbility(i),...overrides[i]})}));",
+  "const raceHorses=Array.from({length:18},(_,i)=>({idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,slot:i,lane:eighteenStartLane(firstWidth,i),energy:1,startDelay:overrides[i]?.startDelay??sampleStartDelay(overrides[i]?.startRisk??1,mode==='standard'?1:seed,horseIdentityBySlot[i],overrides[i]?.start??5,mode),raceFlow:mode==='standard'?null:runnerFlow(seed,horseIdentityBySlot[i],mode),passGoal:null,passUntil:0,passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,blockedFor:0,last600StartTime:null,raceProfile:effectiveEighteenProfile(i,{...defaultHorseAbility(i),...overrides[i]})}));",
   "let rail=Infinity,outer=Infinity,minSep=Infinity,stops=0,postStops=0,sideOnly=0,stacked=0,maxSteeringError=0;",
   "const marks={},release=Array(18).fill(null),initialLanes=raceHorses.map(h=>h.lane);let delayedDrift=0,nonFinite=0,backwards=0,closeTicks=0,postGateMin=Infinity,leadChanges=0,previousLeader=null,exhausted=new Set(),totalPasses=0;",
   "for(let tick=0;tick<32000&&raceFinished.length<18;tick++){",
@@ -60,7 +78,8 @@ function sim(distance,variant='actual',overrides={},pace='middle',mode='real',se
   "}",
   "return {nonFinite,backwards,closeTicks,postGateMin,leadChanges,exhausted:exhausted.size,release,delayedDrift,done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks,maxSteeringError,results:raceHorses.map(h=>({idx:h.idx,time:h.finishTime,energy:h.energy,role:h.role??h.raceProfile.role,passAttempts:h.passAttempts}))};"
  ].join('\n');
- return new Function('distance','variant','overrides','pace','mode','seed','going','geometry','raceTacticalContext','tacticalRaceTarget','tacticalEnergyCost',source)(distance,variant,overrides,pace,mode,seed,going,geometry,...tactics);
+ const {profile,height}=geometry==='track'?makeTrack(distance):{profile:[],height:()=>0};
+ return new Function('trackProfile','trackHeight','identityLineup','distance','variant','overrides','pace','mode','seed','going','geometry','raceTacticalContext','tacticalRaceTarget','tacticalEnergyCost',source)(profile,height,lineup,distance,variant,overrides,pace,mode,seed,going,geometry,...tactics);
 }
 
 const distances=[1400,1600,1800,2000,2300,2400,2500,2600,3400];
@@ -75,10 +94,15 @@ function mixed(D,seed,extreme=false){
 }
 export function auditBatch(batch){
  const cases=[];
- if(batch==='matrix'){
-  for(let i=0;i<distances.length;i++)for(let j=0;j<4;j++){
+ if(['matrix','matrix-first','matrix-second'].includes(batch)){
+  for(let i=0;i<distances.length;i++)for(let j=batch==='matrix-second'?2:0;j<(batch==='matrix-first'?2:4);j++){
    const d=distances[i],seed=101+i*11+j;
    cases.push({label:'matrix',d,variant:variants[(i+j)%3],pace:paces[j],mode:j%2?'chaos':'real',seed,going:goings[(i+j)%4],geometry:(i+j)%2?'curve':'flat',overrides:mixed(d,seed,j===3)});
+  }
+ }else if(batch==='track'||batch==='track-reversed'){
+  for(let seed=1;seed<=6;seed++){
+   const d=2400;
+   cases.push({label:batch,d,variant:'actual',pace:'auto',mode:'real',seed,going:'good',geometry:'track',lineup:batch==='track-reversed'?Array.from({length:18},(_,i)=>17-i):null,overrides:Array.from({length:18},(_,i)=>({...base(d,i),role:'先行'}))});
   }
  }else if(batch==='real'||batch==='chaos'){
   for(let seed=1;seed<=24;seed++){
@@ -95,8 +119,8 @@ export function auditBatch(batch){
   const d=2400,seed=831;for(let i=0;i<2;i++)cases.push({label:'replay',d,variant:'actual',pace:'auto',mode:'real',seed,going:'heavy',geometry:'curve',overrides:mixed(d,seed)});
  }else throw Error('unknown batch');
  return cases.map(c=>{
-  const {label,d,variant,pace,mode,seed,going,geometry,overrides}=c;
-  const r=sim(d,variant,overrides,pace,mode,seed,going,geometry);
+  const {label,d,variant,pace,mode,seed,going,geometry,overrides,lineup}=c;
+  const r=sim(d,variant,overrides,pace,mode,seed,going,geometry,lineup);
   const sorted=r.results.slice().sort((a,b)=>a.time-b.time);
   return {label,d,variant,pace,mode,seed,going,geometry,done:r.done,stops:r.stops,postStops:r.postStops,sideOnly:r.sideOnly,rail:r.rail,outer:r.outer,minSep:r.minSep,postGateMin:r.postGateMin,closeTicks:r.closeTicks,nonFinite:r.nonFinite,backwards:r.backwards,delayedDrift:r.delayedDrift,leadChanges:r.leadChanges,exhausted:r.exhausted,near200:r.marks[200]?.near,spread200:r.marks[200]?.spread,winner:sorted[0]?.idx+1,winTime:sorted[0]?.time,rank9:sorted.findIndex(x=>x.idx===8)+1,time9:r.results[8]?.time,order:sorted.map(x=>x.idx+1),meanEnergy:r.results.reduce((v,x)=>v+x.energy,0)/18,passes:r.results.reduce((v,x)=>v+(x.passAttempts||0),0)};
  });
