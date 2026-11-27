@@ -524,6 +524,7 @@ body.official18.race-watch-portrait.race-watch-editing #raceWatchSlope{display:n
   <option value="varied">番号指定（従来の展開）</option>
   <option value="chaos">波乱（変動大）</option>
  </select></label>
+ <label>ペース <select id="racePaceMode"><option value="auto" selected>自動（脚質・展開）</option><option value="high">ハイ</option><option value="middle">ミドル</option><option value="slow">スロー</option></select></label>
  <label>展開番号 <input id="raceFlowSeed" type="number" min="1" max="999999" step="1" value="1"/></label>
  <button type="button" id="raceFlowNext">別の展開を試す</button>
  <span id="raceFlowStatus">発走ごとに展開が変化します。</span>
@@ -739,7 +740,7 @@ import {createRaceVisionSystem} from './turf-vision-race.mjs?v=4';
 import {planVenueScenery,installVenueScenery} from './race-venue-scenery.mjs?v=1';
 import {addRaceDayStandDetail} from './race-stand-crowd.mjs?v=1';
 import {installDistantTown} from './race-distant-town.mjs?v=1';
-import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance-v5.mjs?v=1';
+import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance-v6.mjs?v=1';
 import {normalizeHorseAppearance,SIZE_FACTORS,prepareHeadZone,createAppearanceUniforms,applyAppearanceUniforms,APPEARANCE_FRAGMENT} from './horse-appearance.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
@@ -2707,7 +2708,7 @@ function initRaceHorses(){
   applyTurfGoingVisual(raceGoingAtStart);
   applyRaceWeatherVisual(raceWeatherAtStart);
   syncRaceConditionControls();
-  raceFlowAtStart=makeRaceFlow(raceFlowModeInput.value,validFlowSeed(raceFlowSeedInput.value));
+  raceFlowAtStart=makeRaceFlow(raceFlowModeInput.value,validFlowSeed(raceFlowSeedInput.value),racePaceModeInput.value);
  }
  const width=activePlan?fieldCenterAt(activePlan,0).width:31;
  raceHorses=Array.from({length:FIELD_COUNT},(_,i)=>({
@@ -2733,7 +2734,7 @@ function initRaceHorses(){
    h.slot=i;h.nextLaneReviewTime=0;
    if(isOfficialEighteenTest){
     h.raceProfile=effectiveEighteenProfile(i);
-    h.startDelay=sampleStartDelay(h.raceProfile.startRisk,raceFlowAtStart.mode==='varied'?raceFlowAtStart.seed:1,horseIdentityBySlot[i]);
+    h.startDelay=sampleStartDelay(h.raceProfile.startRisk,raceFlowAtStart.mode==='varied'?raceFlowAtStart.seed:1,horseIdentityBySlot[i],h.raceProfile.startAbility,raceFlowAtStart.kind);
     h.raceFlow=raceFlowAtStart.mode==='varied'?
      runnerFlow(raceFlowAtStart.seed,horseIdentityBySlot[i],raceFlowAtStart.kind):null;
     h.last600StartTime=null;
@@ -3243,13 +3244,14 @@ if(isOfficialEighteenTest){
 }
 const raceFlowModeInput=document.querySelector('#raceFlowMode'),
  raceFlowSeedInput=document.querySelector('#raceFlowSeed'),
+ racePaceModeInput=document.querySelector('#racePaceMode'),
  raceFlowStatus=document.querySelector('#raceFlowStatus');
 let raceFlowAtStart={mode:'standard',seed:1,tempo:0};
 let raceFlowStarted=false,lockedRaceStart=null;
-function makeRaceFlow(kind,seed){
+function makeRaceFlow(kind,seed,pace='auto'){
  const mode=kind==='standard'?'standard':'varied';
- return {mode,kind,seed:validFlowSeed(seed),tempo:mode==='varied'?
-  (flowHash(seed,0,21)-.5)*(kind==='chaos'?.95:kind==='real'?.60:.30):0};
+ return {mode,kind,seed:validFlowSeed(seed),pace,tempo:mode==='varied'?
+  (flowHash(seed,0,21)-.5)*(kind==='chaos'?1.10:kind==='real'?.76:.30):0};
 }
 function nextRaceSeed(previous,random=Math.random){
  const old=validFlowSeed(previous),n=1+Math.floor(Math.max(0,Math.min(.999999999,random()))*999999);
@@ -3280,21 +3282,26 @@ function startRiskProbability(level){
  const n=Number.isFinite(level)?Math.max(1,Math.min(10,Math.round(level))):1;
  return [0,0,.02,.04,.06,.10,.15,.22,.32,.45,.60][n];
 }
-function sampleStartDelay(level,seed,id){
- const probability=startRiskProbability(level);
- if(!probability||flowHash(seed,id,31)>=probability)return 0;
- return Math.ceil((.25+1.25*flowHash(seed,id,32))*60-1e-9)/60;
-}
-function runnerFlow(seed,id,kind='varied'){
- const scale=kind==='chaos'?2.10:kind==='real'?1.25:1;
+function sampleStartDelay(level,seed,id,startAbility=5,kind='varied'){
+  const probability=startRiskProbability(level);
+  const enhanced=kind==='real'||kind==='chaos';
+  const ability=THREE.MathUtils.clamp(startAbility,1,10);
+  const normal=enhanced?Math.max(.025,.13-(ability-5)*.016+
+   (flowHash(seed,id,33)-.5)*(kind==='chaos'?.23:.12)):0;
+  const late=probability&&flowHash(seed,id,31)<probability?
+   .25+1.25*flowHash(seed,id,32):0;
+  return Math.ceil((normal+late)*60-1e-9)/60;
+ }
+ function runnerFlow(seed,id,kind='varied'){
+ const scale=kind==='chaos'?1.80:kind==='real'?.85:1;
  const enhanced=kind==='real'||kind==='chaos';
  return {early:(flowHash(seed,id,1)-.5)*.46*scale,
   middle:(flowHash(seed,id,2)-.5)*.28*scale,
   late:(flowHash(seed,id,3)-.5)*.62*scale,
   trafficPatience:(flowHash(seed,id,4)-.5)*.26*scale,
-  form:enhanced?(flowHash(seed,id,5)-.5)*.52*scale:0,
-  releaseShift:enhanced?(flowHash(seed,id,6)-.5)*150*scale:0,
-  efficiency:enhanced?1+(flowHash(seed,id,7)-.5)*.12*scale:1};
+  form:enhanced?(flowHash(seed,id,5)-.5)*.48*scale:0,
+  releaseShift:enhanced?(flowHash(seed,id,6)-.5)*180*scale:0,
+  efficiency:enhanced?1+(flowHash(seed,id,7)-.5)*.16*scale:1};
 }
 function refreshFlowStatus(){
  if(!isOfficialEighteenTest)return;
@@ -3304,7 +3311,7 @@ function refreshFlowStatus(){
  raceFlowStatus.textContent=kind==='standard'?'固定：同じ条件なら同じ展開。':
   kind==='varied'?'番号'+seed+'：従来の番号指定展開を再現。':
   label+'：発走ごとに自動変化。'+(raceFlowStarted?'今回の番号 '+raceFlowAtStart.seed:'次の発走で番号更新。');
- if(raceFlowStarted&&kind!==raceFlowAtStart.kind)raceFlowStatus.textContent+='（変更は次のレースから）';
+ if(raceFlowStarted&&(kind!==raceFlowAtStart.kind||racePaceModeInput.value!==raceFlowAtStart.pace))raceFlowStatus.textContent+='（変更は次のレースから）';
 }
 function applyFlowBeforeStart(){
  // Race-condition changes are committed only while at the starting gate.
@@ -3316,7 +3323,8 @@ if(isOfficialEighteenTest){
  raceFlowModeInput.addEventListener('change',()=>{
   refreshFlowStatus();applyFlowBeforeStart();
  });
- raceFlowSeedInput.addEventListener('change',()=>{
+ racePaceModeInput.addEventListener('change',()=>{refreshFlowStatus();applyFlowBeforeStart();});
+  raceFlowSeedInput.addEventListener('change',()=>{
   raceFlowSeedInput.value=String(validFlowSeed(raceFlowSeedInput.value));
   refreshFlowStatus();applyFlowBeforeStart();
  });
@@ -3345,7 +3353,7 @@ function effectiveEighteenProfile(index,overrideAbility=null){
   baseAccel:3.26,
   accelerationAbility:v.acceleration,
   staminaAbility:v.stamina,
-  distanceAbility:v.distance,
+  distanceAbility:v.distance,distanceWeight:balanceWeights.distance,
   composureAbility:v.composure,
   trafficAbility:v.traffic,
   goingAbility:v.going,
@@ -3616,7 +3624,7 @@ function balanceTrial(slot,key,level,seed,starterSnapshot){
     raceProfile:profile,startDelay:sampleStartDelay(profile.startRisk,seed,horseIdentityBySlot[h.idx]),raceFlow:runnerFlow(seed,horseIdentityBySlot[h.idx])};
   });
   raceFinished=[];raceElapsed=0;raceAccumulator=0;raceContactWarnings=0;
-  raceFlowAtStart={mode:'varied',seed,tempo:(flowHash(seed,0,21)-.5)*.30};
+  raceFlowAtStart=makeRaceFlow('varied',seed,racePaceModeInput.value);
   const maxSteps=Math.min(36000,Math.ceil(activePlan.distance/8*60)+3600);
   for(let t=0;t<maxSteps&&raceFinished.length<18;t++)stepOfficialPair(RACE_TICK);
   if(raceFinished.length!==18)throw Error('完走しない馬がいます');
@@ -3854,7 +3862,7 @@ function eighteenHorseSafeStep(h,snapshot,dt,targetSpeed){
  const launchPhase=commonLaunch?0:
   1-THREE.MathUtils.smoothstep(h.distance,12,110);
  desiredSpeed+=((profile.startAbility??5)-5)*.10*balanceWeights.start*launchPhase;
- const acceleration=commonLaunch?3.32:
+ const acceleration=commonLaunch?3.32*(1+((profile.startAbility??5)-5)*.028*balanceWeights.start):
   THREE.MathUtils.lerp(profile.accel,profile.baseAccel??profile.accel,launchPhase)*
    (1+((profile.startAbility??5)-5)*.065*balanceWeights.start*launchPhase);
  let speed=h.speed+THREE.MathUtils.clamp(desiredSpeed-h.speed,
@@ -4130,7 +4138,7 @@ function stepOfficialPair(tick){
     const tactical=tacticalRaceTarget(h,profile,tactics,activePlan.distance),closing=tactical.closing,fit=tactical.fit;
     targetSpeed=tactical.target;
     // Resilience across distances beyond the runner's inherited preference.
-    targetSpeed+=((profile.distanceAbility??5)-5)*.095*balanceWeights.distance*(1-fit);
+    targetSpeed+=((profile.distanceAbility??5)-5)*.15*balanceWeights.distance*(1-fit);
      // Stamina affects fatigue; acceleration supplies the closing burst.
      targetSpeed+=((profile.staminaAbility??5)-5)*.16*(1-energy)*(balanceWeights.stamina??1);
      targetSpeed+=((profile.accelerationAbility??5)-5)*.085*closing*energy*(balanceWeights.acceleration??1);
@@ -4155,7 +4163,7 @@ function stepOfficialPair(tick){
       Math.max(.68,1-170/activePlan.distance));
      const pressure=profile.role==='逃げ'||profile.role==='先行'?1:.5;
      targetSpeed+=h.raceFlow.early*early+h.raceFlow.middle*mid+
-      h.raceFlow.late*lateRun+raceFlowAtStart.tempo*pressure*early;
+      h.raceFlow.late*lateRun;
     }
     // Settling and release now apply to every role, preserving the registered speed ability.
     const freeProgress=targetSpeed/cornerPathFactor(h.distance,h.lane);
@@ -7160,7 +7168,7 @@ if(isOfficialEighteenTest){
  let raceArchive=null,restoringSnapshot=false;
  function captureSharedSettings(){
   return {distance:Number(raceSelector.value),weather:raceWeatherSelect.value,
-   going:raceGoingSelect.value,flowMode:raceFlowModeInput.value,
+   going:raceGoingSelect.value,flowMode:raceFlowModeInput.value,paceMode:racePaceModeInput.value,
    flowSeed:validFlowSeed(raceFlowSeedInput.value),playback:Number(rate.value),
    bgmVolume:Number(raceBgmVolume.value),bgmEnabled:raceBgmEnabled,
    hoofVolume:Number(hoofSoundVolume.value),hoofEnabled:hoofSoundEnabled,
@@ -7179,6 +7187,7 @@ if(isOfficialEighteenTest){
   if(['sunny','cloudy','rain'].includes(s.weather))setRaceCondition('weather',s.weather);
   if(['good','slightlyHeavy','heavy','bad'].includes(s.going))setRaceCondition('going',s.going);
   if(['standard','varied','real','chaos'].includes(s.flowMode))raceFlowModeInput.value=s.flowMode;
+  if(['auto','high','middle','slow'].includes(s.paceMode))racePaceModeInput.value=s.paceMode;
   if(Number.isFinite(s.flowSeed))raceFlowSeedInput.value=String(validFlowSeed(s.flowSeed));
   if([1,1.5,2,3].includes(s.playback))setRacePlaybackSpeed(s.playback);
   if(Number.isFinite(s.bgmVolume))raceBgmVolume.value=String(THREE.MathUtils.clamp(s.bgmVolume,0,100));
