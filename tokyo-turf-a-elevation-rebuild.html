@@ -740,7 +740,7 @@ import {createRaceVisionSystem} from './turf-vision-race.mjs?v=4';
 import {planVenueScenery,installVenueScenery} from './race-venue-scenery.mjs?v=1';
 import {addRaceDayStandDetail} from './race-stand-crowd.mjs?v=1';
 import {installDistantTown} from './race-distant-town.mjs?v=1';
-import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost} from './race-tactics-balance-v6.mjs?v=1';
+import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost,resolveRacePace} from './race-tactics-balance-v6.mjs?v=2';
 import {normalizeHorseAppearance,SIZE_FACTORS,prepareHeadZone,createAppearanceUniforms,applyAppearanceUniforms,APPEARANCE_FRAGMENT} from './horse-appearance.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
@@ -3311,6 +3311,10 @@ function refreshFlowStatus(){
  raceFlowStatus.textContent=kind==='standard'?'固定：同じ条件なら同じ展開。':
   kind==='varied'?'番号'+seed+'：従来の番号指定展開を再現。':
   label+'：発走ごとに自動変化。'+(raceFlowStarted?'今回の番号 '+raceFlowAtStart.seed:'次の発走で番号更新。');
+ if(raceFlowStarted){
+  const pace=resolveRacePace(raceFlowAtStart,raceHorses.filter(h=>h.raceProfile?.role==='逃げ').length).kind;
+  raceFlowStatus.textContent+='｜今回：'+({high:'ハイ',middle:'ミドル',slow:'スロー'}[pace])+'ペース';
+ }
  if(raceFlowStarted&&(kind!==raceFlowAtStart.kind||racePaceModeInput.value!==raceFlowAtStart.pace))raceFlowStatus.textContent+='（変更は次のレースから）';
 }
 function applyFlowBeforeStart(){
