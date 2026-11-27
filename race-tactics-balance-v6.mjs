@@ -17,7 +17,7 @@ export function resolveRacePace(flow,nEscape){
  const pressure=clamp((nEscape-2)*.20+(flow.tempo||0),-.80,.80);
  const kind=['high','middle','slow'].includes(flow.pace)?flow.pace:
   pressure>.23?'high':pressure<-.23?'slow':'middle';
- return {kind,tempo:{high:.72,middle:0,slow:-.60}[kind]+clamp(pressure,-.22,.22)*.35};
+ return {kind,tempo:{high:.42,middle:0,slow:-.34}[kind]+clamp(pressure,-.22,.22)*.35};
 }
 export function raceTacticalContext(snapshot,horses,flow){
  const active=snapshot.filter(o=>!o.finished);
@@ -61,7 +61,7 @@ export function tacticalRaceTarget(h,profile,context,D){
  const urgency=clamp((gap-3)*.028,0,.56)*release*saved;
  const surge=(.28+(2.20+style.burst)*saved)*release+urgency;
  const rhythm=context.varied?.10*Math.sin(d/D*Math.PI*4+phase*Math.PI*2)*smooth(d,130,360)*(1-release):0;
- return {target:profile.early+pacing+paceBias+surge+rhythm+form-fatigue-(1-fit)*.85*(profile.distanceWeight??1)+(profile.courseBonus??0),closing:release,fit,energy:e};
+ return {target:profile.early+pacing+paceBias+surge+rhythm+form-fatigue+.35-(1-fit)*.85*(profile.distanceWeight??1)+(profile.courseBonus??0),closing:release,fit,energy:e};
 }
 export function tacticalEnergyCost({h,profile,context,snapshot,distance,physicalStep,forward,tick,composure}){
  const pace=forward/tick,effort=clamp((pace-13.7)/3.3,0,1.9);
