@@ -96,3 +96,15 @@ test('gate reactions and flow mode are deterministic and bounded',()=>{
   assert.ok(Math.abs(chaos.form)>=Math.abs(real.form));
  }
 });
+
+test('elongated envelope anticipates a close following horse',()=>{
+ const source=`const activePlan={distance:2400};const fieldCenterAt=()=>({width:36});const fourHorseInnerLane=w=>w/2-2.8;const cornerPathFactor=()=>1,cornerPacePenalty=()=>0,cornerDataAt=()=>({kappa:0});const FOUR_INWARD_RATE=4.4,FOUR_MAX_LATERAL_PER_FORWARD=.30,EIGHTEEN_SPACING_FROM=300,EIGHTEEN_MIN_ROLL_BASE=10.4;const balanceWeights={start:1,traffic:1};const THREE={MathUtils:{clamp:(x,a,b)=>Math.max(a,Math.min(b,x)),lerp:(a,b,t)=>a+(b-a)*t,smoothstep:(x,a,b)=>{let t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t)}}};`
+  +fn('eighteenHorseSafeStep')+';return eighteenHorseSafeStep;';
+ const step=Function(source)();
+ const h={idx:0,distance:100,lane:15.15,speed:16,raceProfile:{role:'先行',accel:3.26,startAbility:5},passGoal:null,passUntil:0,passCooldown:0,blockedFor:0,smoothedSideSpeed:0};
+ const o={idx:1,distance:103.23,lane:15.15,speed:13,sideSpeed:0,passGoal:null,finished:false};
+ const result=step({...h},[h,o],1/60,16);
+ assert.ok(o.distance+o.speed/60-result.distance>=3.2);
+ assert.ok(result.speed>8&&result.speed<16);
+ assert.ok(Math.abs(result.lane-h.lane)<1e-8);
+});
