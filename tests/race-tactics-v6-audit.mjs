@@ -50,7 +50,7 @@ function sim(distance,variant='actual',overrides={},pace='middle',mode='real',se
   "let raceElapsed=0,raceFinished=[];const firstWidth=fieldCenterAt(activePlan,0).width;",
   "const raceHorses=Array.from({length:18},(_,i)=>({idx:i,number:i+1,distance:0,postDistance:0,speed:0,finished:false,slot:i,lane:eighteenStartLane(firstWidth,i),energy:1,startDelay:overrides[i]?.startDelay??sampleStartDelay(overrides[i]?.startRisk??1,mode==='standard'?1:seed,horseIdentityBySlot[i],overrides[i]?.start??5,mode),raceFlow:mode==='standard'?null:runnerFlow(seed,horseIdentityBySlot[i],mode),passGoal:null,passUntil:0,passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,blockedFor:0,last600StartTime:null,raceProfile:effectiveEighteenProfile(i,{...defaultHorseAbility(i),...overrides[i]})}));",
   "let rail=Infinity,outer=Infinity,minSep=Infinity,stops=0,postStops=0,sideOnly=0,stacked=0,maxSteeringError=0;",
-  "const marks={},release=Array(18).fill(null),initialLanes=raceHorses.map(h=>h.lane);let delayedDrift=0,nonFinite=0,backwards=0,closeTicks=0,postGateMin=Infinity,leadChanges=0,previousLeader=null,exhausted=new Set(),totalPasses=0;",
+  "const marks={},release=Array(18).fill(null),initialLanes=raceHorses.map(h=>h.lane);let bodyTicks=0,delayedDrift=0,nonFinite=0,backwards=0,closeTicks=0,postGateMin=Infinity,leadChanges=0,previousLeader=null,exhausted=new Set(),totalPasses=0;",
   "for(let tick=0;tick<32000&&raceFinished.length<18;tick++){",
   "const before=raceHorses.map(h=>({d:h.distance,l:h.lane,p:h.postDistance||0,f:h.finished,steering:h.smoothedSideSpeed??0}));",
   "stepOfficialPair(1/60);",
@@ -72,11 +72,11 @@ function sim(distance,variant='actual',overrides={},pace='middle',mode='real',se
   "}",
   "for(let i=0;i<live.length;i++)for(let j=i+1;j<live.length;j++){",
   "const a=live[i],b=live[j],dx=Math.abs(a.distance-b.distance),dy=Math.abs(a.lane-b.lane);",
-  "const sep=Math.hypot(dx,dy);minSep=Math.min(minSep,sep);if(a.distance>20&&b.distance>20){postGateMin=Math.min(postGateMin,sep);if(sep<1.10)closeTicks++;}",
+  "const sep=Math.hypot(dx,dy);minSep=Math.min(minSep,sep);if(a.distance>20&&b.distance>20){postGateMin=Math.min(postGateMin,sep);if(sep<1.10)closeTicks++;if(a.distance>=30&&b.distance>=30&&dx<3.6&&dy<2.3){const yawA=Math.atan(Math.max(-.3,Math.min(.3,(a.sideSpeed||0)/Math.max(.5,a.speed)))),yawB=Math.atan(Math.max(-.3,Math.min(.3,(b.sideSpeed||0)/Math.max(.5,b.speed))));const width=1.15+1.6*(Math.abs(Math.sin(yawA))+Math.abs(Math.sin(yawB)));if(Math.hypot(dx/3.2,dy/width)<1)bodyTicks++;}}",
   "if(dy<2.35&&dx>4.8&&dx<20)stacked++;",
   "}",
   "}",
-  "return {nonFinite,backwards,closeTicks,postGateMin,leadChanges,exhausted:exhausted.size,release,delayedDrift,done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks,maxSteeringError,results:raceHorses.map(h=>({idx:h.idx,time:h.finishTime,energy:h.energy,role:h.role??h.raceProfile.role,passAttempts:h.passAttempts}))};"
+  "return {bodyTicks,nonFinite,backwards,closeTicks,postGateMin,leadChanges,exhausted:exhausted.size,release,delayedDrift,done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks,maxSteeringError,results:raceHorses.map(h=>({idx:h.idx,time:h.finishTime,energy:h.energy,role:h.role??h.raceProfile.role,passAttempts:h.passAttempts}))};"
  ].join('\n');
  const {profile,height}=geometry==='track'?makeTrack(distance):{profile:[],height:()=>0};
  return new Function('trackProfile','trackHeight','identityLineup','distance','variant','overrides','pace','mode','seed','going','geometry','raceTacticalContext','tacticalRaceTarget','tacticalEnergyCost',source)(profile,height,lineup,distance,variant,overrides,pace,mode,seed,going,geometry,...tactics);
@@ -126,6 +126,6 @@ export function auditBatch(batch){
   const {label,d,variant,pace,mode,seed,going,geometry,overrides,lineup}=c;
   const r=sim(d,variant,overrides,pace,mode,seed,going,geometry,lineup);
   const sorted=r.results.slice().sort((a,b)=>a.time-b.time);
-  return {label,d,variant,pace,mode,seed,going,geometry,done:r.done,stops:r.stops,postStops:r.postStops,sideOnly:r.sideOnly,rail:r.rail,outer:r.outer,minSep:r.minSep,postGateMin:r.postGateMin,closeTicks:r.closeTicks,nonFinite:r.nonFinite,backwards:r.backwards,delayedDrift:r.delayedDrift,leadChanges:r.leadChanges,exhausted:r.exhausted,near200:r.marks[200]?.near,spread200:r.marks[200]?.spread,winner:sorted[0]?.idx+1,winTime:sorted[0]?.time,rank9:sorted.findIndex(x=>x.idx===8)+1,time9:r.results[8]?.time,order:sorted.map(x=>x.idx+1),meanEnergy:r.results.reduce((v,x)=>v+x.energy,0)/18,passes:r.results.reduce((v,x)=>v+(x.passAttempts||0),0)};
+  return {label,d,variant,pace,mode,seed,going,geometry,done:r.done,stops:r.stops,postStops:r.postStops,sideOnly:r.sideOnly,rail:r.rail,outer:r.outer,minSep:r.minSep,postGateMin:r.postGateMin,closeTicks:r.closeTicks,bodyTicks:r.bodyTicks,nonFinite:r.nonFinite,backwards:r.backwards,delayedDrift:r.delayedDrift,leadChanges:r.leadChanges,exhausted:r.exhausted,near200:r.marks[200]?.near,spread200:r.marks[200]?.spread,winner:sorted[0]?.idx+1,winTime:sorted[0]?.time,rank9:sorted.findIndex(x=>x.idx===8)+1,time9:r.results[8]?.time,order:sorted.map(x=>x.idx+1),meanEnergy:r.results.reduce((v,x)=>v+x.energy,0)/18,passes:r.results.reduce((v,x)=>v+(x.passAttempts||0),0)};
  });
 }
