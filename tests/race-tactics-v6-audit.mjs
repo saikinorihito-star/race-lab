@@ -99,6 +99,10 @@ export function auditBatch(batch){
    const d=distances[i],seed=101+i*11+j;
    cases.push({label:'matrix',d,variant:variants[(i+j)%3],pace:paces[j],mode:j%2?'chaos':'real',seed,going:goings[(i+j)%4],geometry:(i+j)%2?'curve':'flat',overrides:mixed(d,seed,j===3)});
   }
+ }else if(batch==='track-sweep'||batch==='track-sweep-reversed'){
+  for(const [i,d] of [1400,1600,2300,2400,2500,2600,3400].entries()){
+   cases.push({label:batch,d,variant:'actual',pace:'auto',mode:'real',seed:i+1,going:'good',geometry:'track',lineup:batch==='track-sweep-reversed'?Array.from({length:18},(_,j)=>17-j):null,overrides:Array.from({length:18},(_,j)=>({...base(d,j),role:'先行'}))});
+  }
  }else if(batch==='track'||batch==='track-reversed'){
   for(let seed=1;seed<=6;seed++){
    const d=2400;
