@@ -35,7 +35,8 @@ export function validRacePreset(r){
   typeof r.name==='string'&&r.name.trim().length>0&&r.name.length<=60&&
   Array.isArray(r.horses)&&r.horses.length===18&&r.horses.every(validRaceHorse)&&
   new Set(r.horses.map(h=>h.id)).size===18&&s&&DISTANCES.includes(s.distance)&&
-  WEATHERS.includes(s.weather)&&GOINGS.includes(s.going)&&['standard','varied'].includes(s.flowMode)&&
+  WEATHERS.includes(s.weather)&&GOINGS.includes(s.going)&&['standard','varied','real','chaos'].includes(s.flowMode)&&
+  (!Object.hasOwn(s,'paceMode')||['auto','high','middle','slow'].includes(s.paceMode))&&
   Number.isInteger(s.flowSeed)&&s.flowSeed>=1&&s.flowSeed<=999999;
 }
 export function validRaceArchive(a){
@@ -49,7 +50,7 @@ export function makeRacePreset(id,name,payload){
   const h=l.horses.find(h=>h.id===id);
   if(!h)throw Error('出走馬のデータがありません');
   return {id:h.id,name:h.name,ability:structuredClone(h.ability),...(h.appearance?{appearance:structuredClone(h.appearance)}:{})};
- }),conditions:{distance:s.distance,weather:s.weather,going:s.going,flowMode:s.flowMode,flowSeed:s.flowSeed}};
+ }),conditions:{distance:s.distance,weather:s.weather,going:s.going,flowMode:s.flowMode,flowSeed:s.flowSeed,paceMode:s.paceMode??'auto'}};
  if(!validRacePreset(r))throw Error('レース名または出走馬・条件を確認してください');
  return r;
 }
