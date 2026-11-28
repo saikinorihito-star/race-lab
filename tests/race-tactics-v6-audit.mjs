@@ -113,6 +113,15 @@ export function auditBatch(batch){
    const d=2400;
    cases.push({label:batch,d,variant:'actual',pace:'auto',mode:batch,seed,going:'good',geometry:'flat',overrides:Array.from({length:18},(_,i)=>({...base(d,i),role:'先行'}))});
   }
+ }else if(batch.startsWith('single-')){
+  const group=batch.slice(7),sets={core:['speed','stamina','acceleration'],context:['course','distance','going','hill'],tactics:['composure','traffic','start']};
+  const list=sets[group]||[group];if(list.some(k=>!keys.includes(k)))throw Error('unknown ability');
+  for(const key of list)for(const level of [2,5,9]){
+   const d=key==='stamina'?3400:key==='start'?1400:2400,seed=47;
+   const overrides=Array.from({length:18},(_,i)=>({...base(d,i),role:roles[i%5]}));
+   overrides[8]={...overrides[8],[key]:level,preferredDistance:key==='distance'?1600:d};
+   cases.push({label:key+'-'+level,d,variant:'actual',pace:key==='stamina'?'high':'middle',mode:'real',seed,going:key==='going'?'bad':'good',geometry:['course','hill'].includes(key)?'track':'flat',overrides});
+  }
  }else if(batch==='ability'){
   for(let seed=1;seed<=12;seed++)for(const level of [2,9]){
    const d=2400,overrides=Array.from({length:18},(_,i)=>({...base(d,i),role:'先行'}));
