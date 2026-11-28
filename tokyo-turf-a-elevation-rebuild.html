@@ -740,7 +740,7 @@ import {createRaceVisionSystem} from './turf-vision-race.mjs?v=4';
 import {planVenueScenery,installVenueScenery} from './race-venue-scenery.mjs?v=1';
 import {addRaceDayStandDetail} from './race-stand-crowd.mjs?v=1';
 import {installDistantTown} from './race-distant-town.mjs?v=1';
-import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost,resolveRacePace} from './race-tactics-balance-v6.mjs?v=2';
+import {raceTacticalContext,tacticalRaceTarget,tacticalEnergyCost,resolveRacePace} from './race-tactics-balance-v6.mjs?v=3';
 import {normalizeHorseAppearance,SIZE_FACTORS,prepareHeadZone,createAppearanceUniforms,applyAppearanceUniforms,APPEARANCE_FRAGMENT} from './horse-appearance.mjs?v=1';
 import {loadApprovedGate} from './jss50-gate.mjs?v=2';
 import {createRaceGate,measureGateHorseBounds} from './jss50-race-gate.mjs?v=3';
@@ -2743,7 +2743,7 @@ function initRaceHorses(){
     isOfficialEightTest?EIGHT_PACE_PROFILES[i].role:['逃げ','先行','差し','追込'][i];
    h.prevDistance=h.distance;h.prevPostDistance=h.postDistance;
    if(isOfficialEighteenTest){
-    h.energy=1;h.blockedFor=0;h.trafficSeconds=0;
+    h.energy=1;h.fatigueDebt=0;h.blockedFor=0;h.trafficSeconds=0;
     h.passGoal=null;h.passUntil=0;h.passCooldown=0;h.passAttempts=0;
     h.passOpponentIdx=null;h.outsideHoldUntil=0;h.outsideHoldMax=0;
     h.failedPassOpponentIdx=null;h.failedPassRetryDistance=0;
@@ -3611,6 +3611,7 @@ function balanceTrial(slot,key,level,seed,starterSnapshot){
  balanceDiagnosticsRunning=true;
  try{
   const id=horseIdentityBySlot[slot],ability=defaultHorseAbility(id);
+  const trialFlow=makeRaceFlow(raceFlowModeInput.value,seed,racePaceModeInput.value);
   ability.role=(horseAbilities[id]||ability).role;
   ability.preferredDistance=(horseAbilities[id]||ability).preferredDistance;
   ability[key]=level;
@@ -3621,14 +3622,14 @@ function balanceTrial(slot,key,level,seed,starterSnapshot){
    return {...h,lane,prevLane:lane,targetLane:lane,role:profile.role,
     distance:0,prevDistance:0,postDistance:0,prevPostDistance:0,
     speed:0,sideSpeed:0,postSpeed:null,finished:false,finishTime:null,
-    energy:1,blockedFor:0,trafficSeconds:0,passGoal:null,passUntil:0,
+    energy:1,fatigueDebt:0,blockedFor:0,trafficSeconds:0,passGoal:null,passUntil:0,
     passCooldown:0,passAttempts:0,insidePassAttempts:0,outsidePassAttempts:0,
     passOpponentIdx:null,outsideHoldUntil:0,outsideHoldMax:0,
     smoothedSideSpeed:0,pathDistance:0,pathExtraMeters:0,curveTravel:0,last600StartTime:null,
-    raceProfile:profile,startDelay:sampleStartDelay(profile.startRisk,seed,horseIdentityBySlot[h.idx]),raceFlow:runnerFlow(seed,horseIdentityBySlot[h.idx])};
+    raceProfile:profile,startDelay:sampleStartDelay(profile.startRisk,trialFlow.mode==='varied'?trialFlow.seed:1,horseIdentityBySlot[h.idx],profile.startAbility,trialFlow.kind),raceFlow:trialFlow.mode==='varied'?runnerFlow(trialFlow.seed,horseIdentityBySlot[h.idx],trialFlow.kind):null};
   });
   raceFinished=[];raceElapsed=0;raceAccumulator=0;raceContactWarnings=0;
-  raceFlowAtStart=makeRaceFlow('varied',seed,racePaceModeInput.value);
+  raceFlowAtStart=trialFlow;
   const maxSteps=Math.min(36000,Math.ceil(activePlan.distance/8*60)+3600);
   for(let t=0;t<maxSteps&&raceFinished.length<18;t++)stepOfficialPair(RACE_TICK);
   if(raceFinished.length!==18)throw Error('完走しない馬がいます');
@@ -4229,7 +4230,11 @@ function stepOfficialPair(tick){
     const earlyShare=Math.max(0,1-(h.distance/activePlan.distance)/.70);
     const composure=1-((profile.composureAbility??5)-5)*.06*balanceWeights.composure*earlyShare;
     const cost=tacticalEnergyCost({h,profile,context:tactics,snapshot:previous,distance:activePlan.distance,physicalStep,forward,tick,composure});
-    h.energy=THREE.MathUtils.clamp((h.energy??1)-cost,.02,1);
+    // Exhausted horses continue to accumulate fatigue instead of being
+    // protected forever by the previous artificial 2% reserve floor.
+    const nextEnergy=(h.energy??1)-cost;
+    h.fatigueDebt=Math.min(.30,(h.fatigueDebt??0)+Math.max(0,-nextEnergy));
+    h.energy=THREE.MathUtils.clamp(nextEnergy,0,1);
    }
    // Compare the old and new widths BEFORE committing the new distance.
    // A shift of the lane coordinate origin is not a real steering motion.
