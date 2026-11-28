@@ -76,7 +76,7 @@ function sim(distance,variant='actual',overrides={},pace='middle',mode='real',se
   "if(dy<2.35&&dx>4.8&&dx<20)stacked++;",
   "}",
   "}",
-  "return {bodyTicks,nonFinite,backwards,closeTicks,postGateMin,leadChanges,exhausted:exhausted.size,release,delayedDrift,done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks,maxSteeringError,results:raceHorses.map(h=>({idx:h.idx,time:h.finishTime,energy:h.energy,debt:h.fatigueDebt??0,role:h.role??h.raceProfile.role,passAttempts:h.passAttempts}))};"
+  "return {bodyTicks,nonFinite,backwards,closeTicks,postGateMin,leadChanges,exhausted:exhausted.size,release,delayedDrift,done:raceFinished.length,firstWidth,rail,outer,minSep,stops,postStops,sideOnly,stacked,marks,maxSteeringError,results:raceHorses.map(h=>({idx:h.idx,time:h.finishTime,energy:h.energy,debt:h.fatigueDebt??0,traffic:h.trafficSeconds??0,role:h.role??h.raceProfile.role,passAttempts:h.passAttempts}))};"
  ].join('\n');
  const {profile,height}=geometry==='track'?makeTrack(distance):{profile:[],height:()=>0};
  return new Function('trackProfile','trackHeight','identityLineup','distance','variant','overrides','pace','mode','seed','going','geometry','raceTacticalContext','tacticalRaceTarget','tacticalEnergyCost',source)(profile,height,lineup,distance,variant,overrides,pace,mode,seed,going,geometry,...tactics);
@@ -92,7 +92,7 @@ const base=(D,i)=>({...Object.fromEntries(keys.map(k=>[k,5])),preferredDistance:
 function mixed(D,seed,extreme=false){
  return Array.from({length:18},(_,i)=>({...base(D,i),...Object.fromEntries(keys.map((k,j)=>[k,extreme?1+9*((i+j+seed)%2):1+((Math.imul(i+11,seed+17)+j*7)%10+10)%10])),preferredDistance:Math.max(1000,Math.min(4000,D+((i*7+seed)%9-4)*250)),startRisk:1+(i+seed)%10}));
 }
-export function auditBatch(batch){
+export function auditBatch(batch,sensitivitySeed=47){
  const cases=[];
  if(['matrix','matrix-first','matrix-second'].includes(batch)){
   for(let i=0;i<distances.length;i++)for(let j=batch==='matrix-second'?2:0;j<(batch==='matrix-first'?2:4);j++){
@@ -117,7 +117,7 @@ export function auditBatch(batch){
   const group=batch.slice(7),sets={core:['speed','stamina','acceleration'],context:['course','distance','going','hill'],tactics:['composure','traffic','start']};
   const list=sets[group]||[group];if(list.some(k=>!keys.includes(k)))throw Error('unknown ability');
   for(const key of list)for(const level of [2,5,9]){
-   const d=key==='stamina'?3400:key==='start'?1400:2400,seed=47;
+   const d=key==='stamina'?3400:key==='start'?1400:2400,seed=sensitivitySeed;
    const overrides=Array.from({length:18},(_,i)=>({...base(d,i),role:roles[i%5]}));
    overrides[8]={...overrides[8],[key]:level,preferredDistance:key==='distance'?1600:d};
    cases.push({label:key+'-'+level,d,variant:'actual',pace:key==='stamina'?'high':'middle',mode:'real',seed,going:key==='going'?'bad':'good',geometry:['course','hill'].includes(key)?'track':'flat',overrides});
@@ -135,6 +135,6 @@ export function auditBatch(batch){
   const {label,d,variant,pace,mode,seed,going,geometry,overrides,lineup}=c;
   const r=sim(d,variant,overrides,pace,mode,seed,going,geometry,lineup);
   const sorted=r.results.slice().sort((a,b)=>a.time-b.time);
-  return {label,d,variant,pace,mode,seed,going,geometry,done:r.done,stops:r.stops,postStops:r.postStops,sideOnly:r.sideOnly,rail:r.rail,outer:r.outer,minSep:r.minSep,postGateMin:r.postGateMin,closeTicks:r.closeTicks,bodyTicks:r.bodyTicks,nonFinite:r.nonFinite,backwards:r.backwards,delayedDrift:r.delayedDrift,leadChanges:r.leadChanges,exhausted:r.exhausted,near200:r.marks[200]?.near,spread200:r.marks[200]?.spread,winner:sorted[0]?.idx+1,winTime:sorted[0]?.time,rank9:sorted.findIndex(x=>x.idx===8)+1,time9:r.results[8]?.time,energy9:r.results[8]?.energy,debt9:r.results[8]?.debt,maxDebt:Math.max(...r.results.map(h=>h.debt)),order:sorted.map(x=>x.idx+1),meanEnergy:r.results.reduce((v,x)=>v+x.energy,0)/18,passes:r.results.reduce((v,x)=>v+(x.passAttempts||0),0)};
+  return {label,d,variant,pace,mode,seed,going,geometry,done:r.done,stops:r.stops,postStops:r.postStops,sideOnly:r.sideOnly,rail:r.rail,outer:r.outer,minSep:r.minSep,postGateMin:r.postGateMin,closeTicks:r.closeTicks,bodyTicks:r.bodyTicks,nonFinite:r.nonFinite,backwards:r.backwards,delayedDrift:r.delayedDrift,leadChanges:r.leadChanges,exhausted:r.exhausted,near200:r.marks[200]?.near,spread200:r.marks[200]?.spread,winner:sorted[0]?.idx+1,winTime:sorted[0]?.time,rank9:sorted.findIndex(x=>x.idx===8)+1,time9:r.results[8]?.time,energy9:r.results[8]?.energy,debt9:r.results[8]?.debt,traffic9:r.results[8]?.traffic,pass9:r.results[8]?.passAttempts,maxDebt:Math.max(...r.results.map(h=>h.debt)),order:sorted.map(x=>x.idx+1),meanEnergy:r.results.reduce((v,x)=>v+x.energy,0)/18,passes:r.results.reduce((v,x)=>v+(x.passAttempts||0),0)};
  });
 }
