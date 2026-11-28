@@ -108,3 +108,21 @@ test('elongated envelope anticipates a close following horse',()=>{
  assert.ok(result.speed>8&&result.speed<16);
  assert.ok(Math.abs(result.lane-h.lane)<1e-8);
 });
+
+test('fatigue continues after reserve reaches zero without changing positive-reserve pace',()=>{
+ const context={leader:{distance:2400},paceSetter:{distance:2400},fieldPace:16,tempo:0,varied:false,contest:0};
+ const profile={role:'先行',identity:8,early:16,preferredDistance:2400,distanceWeight:1,courseBonus:0,endurance:1};
+ const target=(energy,fatigueDebt)=>tacticalRaceTarget({idx:8,distance:2390,energy,fatigueDebt},profile,context,2400).target;
+ assert.ok(target(.2,0)>target(0,0));
+ assert.ok(target(0,0)>target(0,.08));
+ assert.ok(target(0,.08)>target(0,.16));
+ assert.equal(target(0,.16),target(0,.30));
+ assert.ok(target(0,.30)>8);
+});
+test('18-horse finishers keep distinct stations beyond the old 90m display cap',()=>{
+ const source=`const isOfficialEighteenTest=true;const MEASURE_OFFSET=1;const widthAt=()=>36;const offsetAt=s=>({x:s,y:0,z:0});const positionAt=()=>({t:{x:1,y:0,z:0}});`+fn('fieldCenterAt')+';return fieldCenterAt;';
+ const pos=Function(source)(),plan={distance:2400,startStation:100,pocket:null};
+ assert.equal(pos(plan,2490).p.x,2590);
+ assert.equal(pos(plan,2510).p.x,2610);
+ assert.equal(pos(plan,2580).p.x,2680);
+});
