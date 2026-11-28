@@ -56,7 +56,7 @@ export function tacticalRaceTarget(h,profile,context,D){
  const pacing=(style.launch*opening+roleControl*settle-style.conserve*(1-opening))*(1-release);
  const paceBias=context.tempo*(1-release)*(role==='逃げ'?1.22:role==='先行'?1.08:.88);
  // The energy penalty is continuous, becoming steeper near exhaustion.
- const fatigue=(1-e)*.42+1.25*smooth(.44-e,0,.39)+1.85*smooth(.22-e,0,.20);
+ const fatigue=(1-e)*.42+1.25*smooth(.44-e,0,.39)+1.85*smooth(.22-e,0,.20)+.95*smooth(h.fatigueDebt??0,0,.16);
  const saved=smooth(e,.055,.66);
  const urgency=clamp((gap-3)*.028,0,.56)*release*saved;
  const surge=(.28+(2.20+style.burst)*saved)*release+urgency;
