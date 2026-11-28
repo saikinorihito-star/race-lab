@@ -92,7 +92,7 @@ const base=(D,i)=>({...Object.fromEntries(keys.map(k=>[k,5])),preferredDistance:
 function mixed(D,seed,extreme=false){
  return Array.from({length:18},(_,i)=>({...base(D,i),...Object.fromEntries(keys.map((k,j)=>[k,extreme?1+9*((i+j+seed)%2):1+((Math.imul(i+11,seed+17)+j*7)%10+10)%10])),preferredDistance:Math.max(1000,Math.min(4000,D+((i*7+seed)%9-4)*250)),startRisk:1+(i+seed)%10}));
 }
-export function auditBatch(batch,sensitivitySeed=47){
+export function auditBatch(batch,sensitivitySeed=47,sensitivityGeometry=null){
  const cases=[];
  if(['matrix','matrix-first','matrix-second'].includes(batch)){
   for(let i=0;i<distances.length;i++)for(let j=batch==='matrix-second'?2:0;j<(batch==='matrix-first'?2:4);j++){
@@ -120,7 +120,7 @@ export function auditBatch(batch,sensitivitySeed=47){
    const d=key==='stamina'?3400:key==='start'?1400:2400,seed=sensitivitySeed;
    const overrides=Array.from({length:18},(_,i)=>({...base(d,i),role:roles[i%5]}));
    overrides[8]={...overrides[8],[key]:level,preferredDistance:key==='distance'?1600:d};
-   cases.push({label:key+'-'+level,d,variant:'actual',pace:key==='stamina'?'high':'middle',mode:'real',seed,going:key==='going'?'bad':'good',geometry:['course','hill'].includes(key)?'track':'flat',overrides});
+   cases.push({label:key+'-'+level,d,variant:'actual',pace:key==='stamina'?'high':'middle',mode:'real',seed,going:key==='going'?'bad':'good',geometry:sensitivityGeometry??(['course','hill'].includes(key)?'track':'flat'),overrides});
   }
  }else if(batch==='ability'){
   for(let seed=1;seed<=12;seed++)for(const level of [2,9]){
